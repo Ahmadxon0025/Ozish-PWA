@@ -18,7 +18,7 @@ async function yandexStt(pcm, sampleRate, lang, apiKey) {
     body: new Uint8Array(pcm),
   });
   if (r.status === 401 || r.status === 403 || r.status === 402 || r.status === 429) {
-    return { billing: true };
+    return { billing: true, detail: r.status };
   }
   if (!r.ok) return { error: await r.text().catch(() => 'upstream') };
   const data = await r.json();
@@ -42,7 +42,7 @@ async function googleStt(pcm, sampleRate, lang, apiKey) {
     },
   );
   if (r.status === 401 || r.status === 403 || r.status === 402 || r.status === 429) {
-    return { billing: true };
+    return { billing: true, detail: r.status };
   }
   if (!r.ok) return { error: await r.text().catch(() => 'upstream') };
   const data = await r.json();
@@ -99,7 +99,7 @@ export default async function handler(req, res) {
         : await yandexStt(pcm, sampleRate, lang, apiKey);
 
     if (result.billing) {
-      res.status(200).json({ disabled: true, reason: 'billing' });
+      res.status(200).json({ disabled: true, reason: 'billing', detail: result.detail });
       return;
     }
     if (result.error !== undefined) {

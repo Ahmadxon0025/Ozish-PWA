@@ -91,13 +91,14 @@ export default async function handler(req, res) {
     });
 
     if (r.status === 401 || r.status === 403 || r.status === 402 || r.status === 429) {
-      res.status(200).json({ disabled: true, reason: 'billing' });
+      // detail: 401=key invalid, 402/429=credit or rate limit.
+      res.status(200).json({ disabled: true, reason: 'billing', detail: r.status });
       return;
     }
     if (!r.ok) {
       const detail = await r.text().catch(() => '');
       if (/billing|credit/i.test(detail)) {
-        res.status(200).json({ disabled: true, reason: 'billing' });
+        res.status(200).json({ disabled: true, reason: 'billing', detail: 'credit-low' });
         return;
       }
       res.status(502).json({ error: 'upstream' });

@@ -189,11 +189,12 @@ export default function SmartLogger({
           <button className="btn-ghost py-3" onClick={() => fileRef.current?.click()}>
             📷 Rasm
           </button>
+          {/* No `capture` attribute: lets iOS/Android offer BOTH camera and
+              photo library instead of forcing a new photo every time. */}
           <input
             ref={fileRef}
             type="file"
             accept="image/*"
-            capture="environment"
             className="hidden"
             onChange={(e) => {
               void onPhotoPicked(e.target.files?.[0]);

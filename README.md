@@ -10,7 +10,7 @@ offline** for everything that matters.
 |------|------|-------|
 | **1 — Core** | Logging, macros, balance + burn panel, trends, weight, custom foods, templates, copy-yesterday, favorites/recents, streaks, weekly summary, export | Nothing. No internet, no account, no subscription — forever. |
 | **2 — Convenience** | Meal reminders (local notifications), manual step entry that adjusts daily maintenance | Device permissions only. Free. |
-| **3 — Smart** | Uzbek voice logging (Yandex/Google STT) + AI coach (Claude Haiku) | Two pay-per-use API keys on a serverless backend (see `SETUP.md`). If keys are missing / out of credit / offline, Tier 3 hides itself and Tiers 1–2 are untouched. |
+| **3 — Smart** | Smart logging — type, photograph, or speak your meal (Claude Haiku parses/sees; Yandex/Google STT for voice) + AI coach in Uzbek | Pay-per-use API keys on a serverless backend (see `SETUP.md`). Text + photo + coach need only the Anthropic key; voice additionally needs an STT key. If keys are missing / out of credit / offline, Tier 3 hides itself and Tiers 1–2 are untouched. |
 
 **Subscription independence:** the app never depends on any Claude.ai or other
 subscription. Cancelling Tier 3 keys can never break core tracking.
@@ -36,6 +36,7 @@ api/                 Serverless functions (Vercel) — keys live HERE only
   health.ts            capability probe (which Tier-3 features are configured)
   coach.ts             Claude Haiku coach (Uzbek, prompt-cached, ≤300 tokens)
   parse.ts             Uzbek sentence → structured food items (forced tool call)
+  photo.ts             meal photo → identified foods + portion/macro estimates
   stt.ts               speech-to-text proxy (Yandex default / Google fallback)
 src/
   data/foods.ts        ★ the 117-item seed food database (from food_macros_uz.pdf)
@@ -81,9 +82,10 @@ PCM16/16 kHz audio either way. Adding another provider = one function in
 
 | Action | Provider | Est. cost |
 |--------|----------|-----------|
-| 1 voice log (~10 s audio) | Yandex SpeechKit v1 | ~$0.003–0.005 |
-| 1 parse call | Claude Haiku 4.5 (cached system prompt) | ~$0.001–0.002 |
-| 1 coach message | Claude Haiku 4.5 (cached, ≤300 out tokens) | ~$0.002–0.004 |
+| 1 typed-text log | Claude Haiku 4.5 | ~$0.001–0.002 |
+| 1 photo log | Claude Haiku 4.5 (vision) | ~$0.004–0.006 |
+| 1 voice log (~10 s audio) | Yandex SpeechKit + Claude parse | ~$0.004–0.007 |
+| 1 coach message | Claude Haiku 4.5 (≤300 out tokens) | ~$0.002–0.004 |
 
 At 4 voice logs + 3 coach messages/day ≈ **$0.75–0.95/month** — inside the
 $1/month target. Notes on the math: the coach system prompt is small (~700

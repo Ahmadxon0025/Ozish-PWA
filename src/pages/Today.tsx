@@ -12,7 +12,7 @@ import QuickAddRow from '../components/QuickAddRow';
 import FoodPicker from '../components/FoodPicker';
 import TemplateSheet from '../components/TemplateSheet';
 import WeeklySummaryCard from '../components/WeeklySummaryCard';
-import VoiceLogger from '../components/VoiceLogger';
+import SmartLogger from '../components/SmartLogger';
 
 export default function Today() {
   const settings = useSettings();
@@ -20,6 +20,7 @@ export default function Today() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [toast, setToast] = useState('');
+  const [parseAvailable, setParseAvailable] = useState(false);
   const [voiceAvailable, setVoiceAvailable] = useState(false);
   const [stepsText, setStepsText] = useState('');
 
@@ -34,15 +35,17 @@ export default function Today() {
   // Tier 3 probe — hidden unless backend reports keys present (and we're online).
   useEffect(() => {
     if (!settings.tier3Enabled) {
+      setParseAvailable(false);
       setVoiceAvailable(false);
       return;
     }
-    // Voice needs BOTH the STT key (transcription) and the Anthropic key
-    // (parsing) — showing it with only one would burn STT credit on a
-    // pipeline that can never complete.
-    void tier3Health({ apiBase: settings.apiBase, appToken: settings.appToken }).then((h) =>
-      setVoiceAvailable(h.ok && h.stt && h.coach),
-    );
+    void tier3Health({ apiBase: settings.apiBase, appToken: settings.appToken }).then((h) => {
+      // Text + photo logging need only the Anthropic key. Voice ALSO needs
+      // the STT key — showing it with only one would burn STT credit on a
+      // pipeline that can never complete.
+      setParseAvailable(h.ok && h.coach);
+      setVoiceAvailable(h.ok && h.coach && h.stt);
+    });
   }, [settings.tier3Enabled, settings.apiBase, settings.appToken]);
 
   useEffect(() => {
@@ -144,11 +147,12 @@ export default function Today() {
         </p>
       </div>
 
-      {/* Tier 3: voice logging (hidden when unavailable) */}
-      <VoiceLogger
+      {/* Tier 3: smart logging — voice/text/photo (hidden when unavailable) */}
+      <SmartLogger
         date={date}
         settings={settings}
-        available={voiceAvailable}
+        parseAvailable={parseAvailable}
+        voiceAvailable={voiceAvailable}
         onLogged={(n) => showToast(`${n} ta taom yozildi ✓`)}
       />
 

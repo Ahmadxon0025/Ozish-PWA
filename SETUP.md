@@ -31,9 +31,14 @@ testing instead: copy `.env.example` to `.env` and fill it there.
 
 That's it for Claude. Expected spend at your usage: **under $0.50/month**.
 
+**This one key already unlocks most of Tier 3:** the AI coach, typed-text
+logging ("ikki shix shashlik yedim" → parsed) and photo logging (picture of
+the plate → estimated foods). Sections 2–3 are ONLY needed if you also want
+to speak instead of type — feel free to stop here and add voice later.
+
 ---
 
-## 2) Yandex SpeechKit — Uzbek voice recognition (~15 min)
+## 2) Yandex SpeechKit — Uzbek voice recognition (~15 min, OPTIONAL — voice only)
 
 Yandex has the best Uzbek speech support. You need a Yandex Cloud account
 with a payment method (foreign cards can be an issue from Uzbekistan — if

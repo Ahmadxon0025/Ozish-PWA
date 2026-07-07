@@ -67,6 +67,27 @@ export async function logFood(food: AnyFood, grams: number, date: string): Promi
   return db.entries.add(entry);
 }
 
+/** Log a one-off item that isn't in any database (e.g. photo-estimated dish). */
+export async function logAdhoc(
+  nameUz: string,
+  grams: number,
+  macros: { kcal: number; p: number; f: number; c: number },
+  date: string,
+): Promise<number> {
+  return db.entries.add({
+    date,
+    foodKey: 'adhoc',
+    nameUz,
+    nameEn: nameUz,
+    grams,
+    kcal: macros.kcal,
+    p: macros.p,
+    f: macros.f,
+    c: macros.c,
+    createdAt: Date.now(),
+  });
+}
+
 export async function updateEntryGrams(entry: LogEntry, grams: number): Promise<void> {
   // Rescale from the entry's own snapshot so it works even if the source
   // food was edited or deleted since.

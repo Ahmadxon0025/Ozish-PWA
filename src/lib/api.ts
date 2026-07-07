@@ -28,6 +28,16 @@ export interface ParsedFoodItem {
   note?: string;
 }
 
+/** Photo-estimated dish that isn't in the seed DB — macros are estimates. */
+export interface EstimatedFoodItem {
+  name: string;
+  grams: number;
+  kcal: number;
+  p: number;
+  f: number;
+  c: number;
+}
+
 export type Tier3Error = 'offline' | 'no-backend' | 'billing' | 'error';
 
 export type Tier3Result<T> = { ok: true; data: T } | { ok: false; reason: Tier3Error };
@@ -122,6 +132,14 @@ export async function transcribeAudio(
   sampleRate: number,
 ): Promise<Tier3Result<{ text: string; provider: string }>> {
   return post(cfg, '/api/stt', { audio: pcmBase64, sampleRate, lang: 'uz-UZ' });
+}
+
+export async function parseFoodPhoto(
+  cfg: Tier3Config,
+  imageBase64: string,
+  mime: string,
+): Promise<Tier3Result<{ items: ParsedFoodItem[]; custom: EstimatedFoodItem[]; note?: string }>> {
+  return post(cfg, '/api/photo', { image: imageBase64, mime });
 }
 
 /** Standard small Uzbek notes for degraded states. */

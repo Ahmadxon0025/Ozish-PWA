@@ -88,6 +88,36 @@ export async function logAdhoc(
   });
 }
 
+/**
+ * Persist an AI-estimated food into the user's custom foods (deduped by
+ * name), so future voice/text/photo parsing can match it directly.
+ */
+export async function saveEstimateAsCustomFood(e: {
+  label: string;
+  grams: number;
+  kcal: number;
+  p: number;
+  f: number;
+  c: number;
+}): Promise<void> {
+  const norm = e.label.trim().toLowerCase();
+  if (!norm) return;
+  const existing = await db.customFoods.toArray();
+  if (existing.some((cf) => cf.nameUz.trim().toLowerCase() === norm)) return;
+  await db.customFoods.add({
+    nameUz: e.label.trim(),
+    nameEn: e.label.trim(),
+    category: 'custom',
+    portionLabel: `1 porsiya (~${Math.round(e.grams)} g)`,
+    refGrams: e.grams,
+    kcal: e.kcal,
+    p: e.p,
+    f: e.f,
+    c: e.c,
+    createdAt: Date.now(),
+  });
+}
+
 export async function updateEntryGrams(entry: LogEntry, grams: number): Promise<void> {
   // Rescale from the entry's own snapshot so it works even if the source
   // food was edited or deleted since.

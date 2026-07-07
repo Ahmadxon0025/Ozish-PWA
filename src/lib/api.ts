@@ -28,7 +28,7 @@ export interface ParsedFoodItem {
   note?: string;
 }
 
-/** Photo-estimated dish that isn't in the seed DB — macros are estimates. */
+/** AI-estimated dish that isn't in any database — macros are estimates. */
 export interface EstimatedFoodItem {
   name: string;
   grams: number;
@@ -36,6 +36,15 @@ export interface EstimatedFoodItem {
   p: number;
   f: number;
   c: number;
+}
+
+/** Compact description of a user's saved custom food, sent with parse/photo
+ * requests so the model can match against them (ids look like "custom-12"). */
+export interface CustomFoodHint {
+  id: string;
+  name: string;
+  grams: number;
+  kcal?: number;
 }
 
 export type Tier3Error = 'offline' | 'no-backend' | 'billing' | 'error';
@@ -122,8 +131,11 @@ export async function askCoach(
 export async function parseFoodText(
   cfg: Tier3Config,
   text: string,
-): Promise<Tier3Result<{ items: ParsedFoodItem[]; unmatched: string[] }>> {
-  return post(cfg, '/api/parse', { text });
+  customFoods: CustomFoodHint[] = [],
+): Promise<
+  Tier3Result<{ items: ParsedFoodItem[]; estimated?: EstimatedFoodItem[]; unmatched: string[] }>
+> {
+  return post(cfg, '/api/parse', { text, customFoods });
 }
 
 export async function transcribeAudio(
@@ -138,8 +150,9 @@ export async function parseFoodPhoto(
   cfg: Tier3Config,
   imageBase64: string,
   mime: string,
+  customFoods: CustomFoodHint[] = [],
 ): Promise<Tier3Result<{ items: ParsedFoodItem[]; custom: EstimatedFoodItem[]; note?: string }>> {
-  return post(cfg, '/api/photo', { image: imageBase64, mime });
+  return post(cfg, '/api/photo', { image: imageBase64, mime, customFoods });
 }
 
 /** Standard small Uzbek notes for degraded states. */

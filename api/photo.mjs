@@ -103,6 +103,22 @@ export default async function handler(req, res) {
     return;
   }
 
+  // User's own saved foods (optional) — may be matched via ids "custom-N".
+  const rawCustom = Array.isArray(body.customFoods) ? body.customFoods.slice(0, 100) : [];
+  const customList = rawCustom
+    .map((c) => ({
+      id: String((c && c.id) ?? ''),
+      name: String((c && c.name) ?? '').slice(0, 50),
+      grams: clamp(c && c.grams, 1, 5000),
+    }))
+    .filter((c) => /^custom-\d+$/.test(c.id) && c.name && c.grams !== undefined);
+  const customIds = new Set(customList.map((c) => c.id));
+  const customBlock = customList.length
+    ? `FOYDALANUVCHI BAZASI (id | nomi | porsiya) — bularni ham items'da ishlatishing mumkin:\n${customList
+        .map((c) => `${c.id} | ${c.name} | ${c.grams} g`)
+        .join('\n')}\n\n`
+    : '';
+
   try {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -122,7 +138,7 @@ export default async function handler(req, res) {
             role: 'user',
             content: [
               { type: 'image', source: { type: 'base64', media_type: mime, data: image } },
-              { type: 'text', text: 'Bu rasmda nima yeyilmoqda? Porsiyalarni baholab ber.' },
+              { type: 'text', text: `${customBlock}Bu rasmda nima yeyilmoqda? Porsiyalarni baholab ber.` },
             ],
           },
         ],
@@ -152,7 +168,7 @@ export default async function handler(req, res) {
     const validIds = new Set(FOODS.map((f) => f.id));
 
     const items = (Array.isArray(input.items) ? input.items : [])
-      .filter((i) => i && typeof i.foodId === 'string' && validIds.has(i.foodId))
+      .filter((i) => i && typeof i.foodId === 'string' && (validIds.has(i.foodId) || customIds.has(i.foodId)))
       .map((i) => ({ foodId: i.foodId, grams: clamp(i.grams, 1, 3000) }))
       .filter((i) => i.grams !== undefined)
       .map((i) => ({ foodId: i.foodId, grams: Math.round(i.grams) }))

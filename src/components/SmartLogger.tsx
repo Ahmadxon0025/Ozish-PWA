@@ -1,19 +1,27 @@
 import { useEffect, useRef, useState } from 'react';
 import { FOOD_BY_ID, scaleFood } from '../data/foods';
+import { db } from '../db/db';
 import {
   parseFoodPhoto,
   parseFoodText,
   tier3Note,
   transcribeAudio,
+  type CustomFoodHint,
   type EstimatedFoodItem,
   type ParsedFoodItem,
   type Tier3Error,
 } from '../lib/api';
 import { startRecording, voiceSupported, type Recorder } from '../lib/audio';
 import { prepareImage } from '../lib/image';
-import { logAdhoc, logFood, seedToAny } from '../lib/repo';
+import {
+  customToAny,
+  logAdhoc,
+  logFood,
+  saveEstimateAsCustomFood,
+  seedToAny,
+} from '../lib/repo';
 import { rnd } from '../lib/format';
-import type { Settings } from '../types';
+import type { CustomFood, Settings } from '../types';
 
 interface Props {
   date: string;
@@ -27,11 +35,28 @@ interface Props {
 
 type Phase = 'idle' | 'text' | 'recording' | 'busy' | 'confirm' | 'error';
 
+/** One row in the unified confirm list, whatever its origin. */
+interface ConfirmRow {
+  label: string;
+  grams: number;
+  kcal: number;
+  p: number;
+  f: number;
+  c: number;
+  /** true = AI estimate (shown amber as "taxmin") */
+  est: boolean;
+  action:
+    | { type: 'seed'; id: string }
+    | { type: 'custom'; id: number }
+    | { type: 'adhoc'; save: boolean };
+}
+
 /**
  * Tier 3 — smart logging, three inputs sharing one confirm flow:
- *   🎤 speak (STT → Claude parse)   ⌨️ type (Claude parse)   📷 photo (Claude vision)
- * All matched items map to the seed DB; photo can also return estimated
- * "custom" dishes. Nothing is logged until the user confirms with one tap.
+ *   🎤 speak (STT → Claude parse)   ⌨️ type (Claude parse)   📷 photo (vision)
+ * Matching order: seed DB → the user's own custom foods (sent with each
+ * request) → AI estimate marked (taxmin). Confirmed text/voice estimates are
+ * auto-saved to custom foods so the next mention matches directly.
  * Degrades silently: the parent hides this card entirely when unavailable.
  */
 export default function SmartLogger({
@@ -45,8 +70,7 @@ export default function SmartLogger({
   const [busyLabel, setBusyLabel] = useState('');
   const [transcript, setTranscript] = useState('');
   const [textInput, setTextInput] = useState('');
-  const [items, setItems] = useState<ParsedFoodItem[]>([]);
-  const [custom, setCustom] = useState<EstimatedFoodItem[]>([]);
+  const [rows, setRows] = useState<ConfirmRow[]>([]);
   const [unmatched, setUnmatched] = useState<string[]>([]);
   const [aiNote, setAiNote] = useState('');
   const [errorNote, setErrorNote] = useState('');
@@ -65,14 +89,60 @@ export default function SmartLogger({
     setPhase('error');
   };
 
-  const showConfirm = (
-    matched: ParsedFoodItem[],
-    estimated: EstimatedFoodItem[],
-    missed: string[],
-    note?: string,
-  ) => {
-    setItems(matched.filter((i) => FOOD_BY_ID[i.foodId]));
-    setCustom(estimated);
+  const customHints = async (): Promise<{
+    hints: CustomFoodHint[];
+    map: Map<number, CustomFood>;
+  }> => {
+    const list = await db.customFoods.toArray();
+    return {
+      hints: list.map((cf) => ({
+        id: `custom-${cf.id}`,
+        name: cf.nameUz,
+        grams: cf.refGrams,
+        kcal: Math.round(cf.kcal),
+      })),
+      map: new Map(list.map((cf) => [cf.id!, cf])),
+    };
+  };
+
+  const buildRows = (
+    items: ParsedFoodItem[],
+    estimates: EstimatedFoodItem[],
+    map: Map<number, CustomFood>,
+    saveEstimates: boolean,
+  ): ConfirmRow[] => {
+    const out: ConfirmRow[] = [];
+    for (const it of items) {
+      if (it.foodId.startsWith('custom-')) {
+        const id = Number(it.foodId.slice(7));
+        const cf = map.get(id);
+        if (!cf) continue;
+        const m = scaleFood(cf, it.grams);
+        out.push({ label: cf.nameUz, grams: it.grams, ...m, est: false, action: { type: 'custom', id } });
+      } else {
+        const f = FOOD_BY_ID[it.foodId];
+        if (!f) continue;
+        const m = scaleFood(f, it.grams);
+        out.push({ label: f.nameUz, grams: it.grams, ...m, est: false, action: { type: 'seed', id: f.id } });
+      }
+    }
+    for (const e of estimates) {
+      out.push({
+        label: e.name,
+        grams: e.grams,
+        kcal: e.kcal,
+        p: e.p,
+        f: e.f,
+        c: e.c,
+        est: true,
+        action: { type: 'adhoc', save: saveEstimates },
+      });
+    }
+    return out;
+  };
+
+  const showConfirm = (list: ConfirmRow[], missed: string[], note?: string) => {
+    setRows(list);
     setUnmatched(missed);
     setAiNote(note ?? '');
     setPhase('confirm');
@@ -82,10 +152,11 @@ export default function SmartLogger({
   const startVoice = async () => {
     try {
       stoppingRef.current = false;
+      // Auto-stop at the recording cap so nothing said past it is lost silently.
       recorderRef.current = await startRecording(setLevel, () => void stopVoice());
       setPhase('recording');
     } catch {
-      setErrorNote('Mikrofonga ruxsat berilmadi (microphone permission denied).');
+      setErrorNote("Mikrofonga ruxsat berilmadi (microphone permission denied).");
       setPhase('error');
     }
   };
@@ -117,9 +188,13 @@ export default function SmartLogger({
     setTranscript(text);
     setBusyLabel('Taomlar aniqlanmoqda… (parsing)');
     setPhase('busy');
-    const parsed = await parseFoodText(cfg, text);
+    const { hints, map } = await customHints();
+    const parsed = await parseFoodText(cfg, text, hints);
     if (!parsed.ok) return fail(parsed.reason);
-    showConfirm(parsed.data.items, [], parsed.data.unmatched ?? []);
+    showConfirm(
+      buildRows(parsed.data.items, parsed.data.estimated ?? [], map, true),
+      parsed.data.unmatched ?? [],
+    );
   };
 
   // ── photo ──────────────────────────────────────────────────────────────────
@@ -130,9 +205,15 @@ export default function SmartLogger({
     setPhase('busy');
     try {
       const img = await prepareImage(file);
-      const parsed = await parseFoodPhoto(cfg, img.base64, img.mime);
+      const { hints, map } = await customHints();
+      const parsed = await parseFoodPhoto(cfg, img.base64, img.mime, hints);
       if (!parsed.ok) return fail(parsed.reason);
-      showConfirm(parsed.data.items, parsed.data.custom ?? [], [], parsed.data.note);
+      // Photo estimates are visual guesses — logged but NOT auto-saved.
+      showConfirm(
+        buildRows(parsed.data.items, parsed.data.custom ?? [], map, false),
+        [],
+        parsed.data.note,
+      );
     } catch {
       setErrorNote("Rasmni o'qib bo'lmadi — boshqa rasm bilan urinib ko'ring.");
       setPhase('error');
@@ -142,25 +223,27 @@ export default function SmartLogger({
   // ── confirm ────────────────────────────────────────────────────────────────
   const confirmAll = async () => {
     let n = 0;
-    for (const item of items) {
-      const f = FOOD_BY_ID[item.foodId];
-      if (!f || item.grams <= 0) continue;
-      await logFood(seedToAny(f), item.grams, date);
-      n++;
-    }
-    for (const c of custom) {
-      if (c.grams <= 0) continue;
-      await logAdhoc(c.name, c.grams, c, date);
+    for (const row of rows) {
+      if (row.grams <= 0) continue;
+      if (row.action.type === 'seed') {
+        const f = FOOD_BY_ID[row.action.id];
+        if (!f) continue;
+        await logFood(seedToAny(f), row.grams, date);
+      } else if (row.action.type === 'custom') {
+        const cf = await db.customFoods.get(row.action.id);
+        if (!cf) continue;
+        await logFood(customToAny(cf), row.grams, date);
+      } else {
+        await logAdhoc(row.label, row.grams, row, date);
+        if (row.action.save) await saveEstimateAsCustomFood(row);
+      }
       n++;
     }
     setPhase('idle');
-    setItems([]);
-    setCustom([]);
+    setRows([]);
     setTextInput('');
     onLogged(n);
   };
-
-  const totalCount = items.length + custom.length;
 
   return (
     <div className="card space-y-3">
@@ -241,49 +324,30 @@ export default function SmartLogger({
       {phase === 'confirm' && (
         <div className="space-y-2">
           {transcript && <p className="text-xs text-slate-400 italic">«{transcript}»</p>}
-          {totalCount === 0 ? (
+          {rows.length === 0 ? (
             <p className="text-sm text-slate-400">
               Mos taom topilmadi (nothing recognized).{aiNote && ` ${aiNote}`}
             </p>
           ) : (
             <ul className="space-y-1.5">
-              {items.map((item, i) => {
-                const f = FOOD_BY_ID[item.foodId];
-                const m = scaleFood(f, item.grams);
-                return (
-                  <li
-                    key={`db-${i}`}
-                    className="flex items-center justify-between rounded-lg bg-ink-800 px-3 py-2 text-sm"
-                  >
-                    <span className="min-w-0 truncate">
-                      {f.nameUz} · {rnd(item.grams)} g
-                    </span>
-                    <span className="flex items-center gap-2 shrink-0 pl-2">
-                      <b className="text-emerald-400">{rnd(m.kcal)} kkal</b>
-                      <button
-                        className="text-slate-500"
-                        onClick={() => setItems(items.filter((_, j) => j !== i))}
-                      >
-                        ✕
-                      </button>
-                    </span>
-                  </li>
-                );
-              })}
-              {custom.map((c, i) => (
+              {rows.map((row, i) => (
                 <li
-                  key={`est-${i}`}
-                  className="flex items-center justify-between rounded-lg bg-ink-800 border border-amber-900/40 px-3 py-2 text-sm"
+                  key={i}
+                  className={`flex items-center justify-between rounded-lg bg-ink-800 px-3 py-2 text-sm ${
+                    row.est ? 'border border-amber-900/40' : ''
+                  }`}
                 >
                   <span className="min-w-0 truncate">
-                    {c.name} · {rnd(c.grams)} g{' '}
-                    <span className="text-amber-400/80 text-[10px]">(taxmin / estimate)</span>
+                    {row.label} · {rnd(row.grams)} g{' '}
+                    {row.est && (
+                      <span className="text-amber-400/80 text-[10px]">(taxmin / estimate)</span>
+                    )}
                   </span>
                   <span className="flex items-center gap-2 shrink-0 pl-2">
-                    <b className="text-emerald-400">{rnd(c.kcal)} kkal</b>
+                    <b className="text-emerald-400">{rnd(row.kcal)} kkal</b>
                     <button
                       className="text-slate-500"
-                      onClick={() => setCustom(custom.filter((_, j) => j !== i))}
+                      onClick={() => setRows(rows.filter((_, j) => j !== i))}
                     >
                       ✕
                     </button>
@@ -297,20 +361,20 @@ export default function SmartLogger({
               Topilmadi (unmatched): {unmatched.join(', ')}
             </p>
           )}
-          {aiNote && totalCount > 0 && <p className="text-[11px] text-slate-500">💬 {aiNote}</p>}
+          {aiNote && rows.length > 0 && <p className="text-[11px] text-slate-500">💬 {aiNote}</p>}
           <div className="flex gap-2">
             <button className="btn-ghost flex-1" onClick={() => setPhase('idle')}>
               Bekor (cancel)
             </button>
-            {totalCount > 0 && (
+            {rows.length > 0 && (
               <button className="btn-primary flex-1" onClick={confirmAll}>
-                ✓ Yozish ({totalCount})
+                ✓ Yozish ({rows.length})
               </button>
             )}
           </div>
           <p className="text-[10px] text-slate-600">
-            Grammlarni yozgandan keyin ro'yxatda bosib tahrirlash mumkin. (Grams stay editable
-            after logging.)
+            (taxmin) taomlar tasdiqlashda "Mening taomlarim"ga saqlanadi — keyingi safar to'g'ridan
+            to'g'ri topiladi. Grammlar yozilgandan keyin ham tahrirlanadi.
           </p>
         </div>
       )}

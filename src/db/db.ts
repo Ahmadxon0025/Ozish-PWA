@@ -65,15 +65,22 @@ export const DEFAULT_SETTINGS: Settings = {
   startDate: new Date().toISOString().slice(0, 10),
 };
 
-/** Idempotent first-run seeding: default settings + protocol meal templates. */
+/** Idempotent first-run seeding: default settings + day-menu meal templates. */
 export async function ensureSeeded(): Promise<void> {
   await db.transaction('rw', db.settings, db.templates, async () => {
     const existing = await db.settings.get(1);
     if (!existing) {
       await db.settings.put(DEFAULT_SETTINGS);
     }
-    const templateCount = await db.templates.count();
-    if (templateCount === 0) {
+    // Seed / migrate templates. The "M1 ·" prefix marks the current menu set
+    // (from Ozish-menyular.pdf); if it's absent, replace old SEEDED templates
+    // with the new set. User-created templates (seeded=false) are untouched,
+    // and past log entries are snapshots — history is never affected.
+    const all = await db.templates.toArray();
+    const hasMenuSet = all.some((t) => t.name.startsWith('M1 ·'));
+    if (!hasMenuSet) {
+      const oldSeededIds = all.filter((t) => t.seeded).map((t) => t.id!) as number[];
+      if (oldSeededIds.length > 0) await db.templates.bulkDelete(oldSeededIds);
       await db.templates.bulkAdd(SEED_TEMPLATES as MealTemplate[]);
     }
   });

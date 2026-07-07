@@ -34,7 +34,8 @@ export default function PortionSheet({ food, isFavorite, onToggleFavorite, onCon
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/60" onClick={onClose}>
       <div
-        className="w-full bg-ink-900 rounded-t-3xl border-t border-ink-700 p-4 pb-8 space-y-4"
+        className="w-full bg-ink-900 rounded-t-3xl border-t border-ink-700 p-4 space-y-4"
+        style={{ paddingBottom: 'calc(2rem + env(safe-area-inset-bottom))' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-2">

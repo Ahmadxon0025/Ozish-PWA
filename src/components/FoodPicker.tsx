@@ -43,7 +43,12 @@ export default function FoodPicker({ date, onLogged, onClose }: Props) {
   const showCategories = !query.trim() && !category;
 
   return (
-    <div className="fixed inset-0 z-40 bg-ink-950 flex flex-col">
+    // Full-screen overlay ignores the body's safe-area padding, so add it
+    // here — otherwise the search bar slides under the iPhone status bar.
+    <div
+      className="fixed inset-0 z-40 bg-ink-950 flex flex-col"
+      style={{ paddingTop: 'env(safe-area-inset-top)' }}
+    >
       <div className="p-4 pb-2 space-y-3 border-b border-ink-800">
         <div className="flex items-center gap-2">
           {category && !query ? (

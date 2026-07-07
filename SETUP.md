@@ -102,11 +102,15 @@ supported; quality is decent, slightly below Yandex for Uzbek.
    | `YANDEX_API_KEY` | key from §2 (skip if using Google) |
    | `GOOGLE_SPEECH_API_KEY` | `AIza…` from §3 (skip if using Yandex) |
    | `STT_PROVIDER` | `yandex` or `google` |
+   | `APP_TOKEN` | *(optional but recommended)* any long random string you invent — e.g. 30 random letters/digits. Protects your credit: only devices that know this token can use the paid endpoints. |
 
 3. Click **Save**, then **Deployments** tab → ⋯ on the latest deployment →
    **Redeploy** (env changes need a redeploy).
 4. Open the app → **Sozlash (Settings)** → Tier 3 → **Tekshirish (test
    connection)**. Both lines should show ✓.
+5. If you set `APP_TOKEN` in step 2: in the same Settings section paste the
+   identical value into **"Himoya tokeni"**. Without it the paid features
+   show as disabled — that's the protection working.
 
 No other action is needed — the app detects the keys through `/api/health`
 and shows the voice button + coach tab automatically.

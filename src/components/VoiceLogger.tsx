@@ -28,6 +28,8 @@ export default function VoiceLogger({ date, settings, available, onLogged }: Pro
   const [errorNote, setErrorNote] = useState('');
   const [level, setLevel] = useState(0);
   const recorderRef = useRef<Recorder | null>(null);
+  const stoppingRef = useRef(false);
+  const cfg = { apiBase: settings.apiBase, appToken: settings.appToken };
 
   useEffect(() => () => recorderRef.current?.cancel(), []);
 
@@ -40,7 +42,9 @@ export default function VoiceLogger({ date, settings, available, onLogged }: Pro
 
   const start = async () => {
     try {
-      recorderRef.current = await startRecording(setLevel);
+      stoppingRef.current = false;
+      // Auto-stop at the recording cap so nothing said past it is lost silently.
+      recorderRef.current = await startRecording(setLevel, () => void stop());
       setPhase('recording');
     } catch {
       setErrorNote("Mikrofonga ruxsat berilmadi (microphone permission denied).");
@@ -50,14 +54,15 @@ export default function VoiceLogger({ date, settings, available, onLogged }: Pro
 
   const stop = async () => {
     const rec = recorderRef.current;
-    if (!rec) return;
+    if (!rec || stoppingRef.current) return;
+    stoppingRef.current = true;
     setPhase('transcribing');
     const { pcmBase64, seconds } = await rec.stop();
     if (seconds < 0.5) {
       setPhase('idle');
       return;
     }
-    const stt = await transcribeAudio(settings.apiBase, pcmBase64, 16000);
+    const stt = await transcribeAudio(cfg, pcmBase64, 16000);
     if (!stt.ok) return fail(stt.reason);
     const text = stt.data.text.trim();
     if (!text) {
@@ -67,7 +72,7 @@ export default function VoiceLogger({ date, settings, available, onLogged }: Pro
     }
     setTranscript(text);
     setPhase('parsing');
-    const parsed = await parseFoodText(settings.apiBase, text);
+    const parsed = await parseFoodText(cfg, text);
     if (!parsed.ok) return fail(parsed.reason);
     setItems(parsed.data.items.filter((i) => FOOD_BY_ID[i.foodId]));
     setUnmatched(parsed.data.unmatched ?? []);

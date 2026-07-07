@@ -1,5 +1,5 @@
 import { db } from '../db/db';
-import { todayISO } from './dates';
+import { toISODate, todayISO } from './dates';
 import type { Settings } from '../types';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -8,11 +8,15 @@ import type { Settings } from '../types';
 //     worker wakes periodically, reads meal times from IndexedDB and shows a
 //     notification if a meal time has passed without one today (see sw.ts).
 //  2. In-app timers: while the app is open, we schedule the next reminder
-//     with setTimeout as a fallback that works in every browser.
+//     with setTimeout as a fallback that works in every browser. The chain
+//     looks at today AND tomorrow so it survives midnight, and re-reads
+//     settings from the DB at every step so disabling takes effect instantly.
 // Dedup is shared through the `notifLog` table (key `${date}:${meal}`).
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type MealKey = 'breakfast' | 'lunch' | 'dinner';
+
+const MEALS: MealKey[] = ['breakfast', 'lunch', 'dinner'];
 
 export const MEAL_LABELS: Record<MealKey, { uz: string; en: string; emoji: string }> = {
   breakfast: { uz: 'Nonushta', en: 'Breakfast', emoji: '🍳' },
@@ -49,20 +53,28 @@ export async function registerPeriodicSync(): Promise<boolean> {
   }
 }
 
-function mealDateToday(hhmm: string): Date {
+function mealDateOn(dayOffset: number, hhmm: string): Date {
   const [h, m] = hhmm.split(':').map(Number);
   const d = new Date();
+  d.setDate(d.getDate() + dayOffset);
   d.setHours(h, m, 0, 0);
   return d;
 }
 
-async function alreadyNotified(meal: MealKey): Promise<boolean> {
-  const key = `${todayISO()}:${meal}`;
-  return !!(await db.notifLog.get(key));
+async function alreadyNotified(dateISO: string, meal: MealKey): Promise<boolean> {
+  return !!(await db.notifLog.get(`${dateISO}:${meal}`));
 }
 
-export async function markNotified(meal: MealKey): Promise<void> {
-  await db.notifLog.put({ key: `${todayISO()}:${meal}`, ts: Date.now() });
+export async function markNotified(dateISO: string, meal: MealKey): Promise<void> {
+  await db.notifLog.put({ key: `${dateISO}:${meal}`, ts: Date.now() });
+}
+
+async function readSettings(): Promise<Settings | undefined> {
+  try {
+    return await db.settings.get(1);
+  } catch {
+    return undefined;
+  }
 }
 
 async function showMealNotification(meal: MealKey): Promise<void> {
@@ -76,7 +88,7 @@ async function showMealNotification(meal: MealKey): Promise<void> {
       tag: `meal-${meal}`,
       data: { url: '/' },
     });
-    await markNotified(meal);
+    await markNotified(todayISO(), meal);
   } catch {
     // Notification failed (e.g. permission revoked) — never crash the app.
   }
@@ -84,41 +96,58 @@ async function showMealNotification(meal: MealKey): Promise<void> {
 
 let inAppTimer: ReturnType<typeof setTimeout> | undefined;
 
-/**
- * (Re)schedule the in-app fallback timer for the next upcoming meal today.
- * Call on app start and whenever settings change.
- */
-export async function scheduleInAppReminders(settings: Settings): Promise<void> {
+export function cancelInAppReminders(): void {
   if (inAppTimer) clearTimeout(inAppTimer);
-  if (!settings.remindersEnabled) return;
+  inAppTimer = undefined;
+}
+
+/**
+ * (Re)schedule the in-app fallback timer for the next upcoming meal — today
+ * or tomorrow, so the chain survives midnight in a long-lived tab/PWA.
+ * Reads settings fresh from the DB, so calling this after ANY settings change
+ * (including disabling) leaves exactly the right state behind.
+ */
+export async function scheduleInAppReminders(): Promise<void> {
+  cancelInAppReminders();
+  const settings = await readSettings();
+  if (!settings?.remindersEnabled) return;
   if (!notificationsSupported() || Notification.permission !== 'granted') return;
 
   const now = new Date();
-  const meals: MealKey[] = ['breakfast', 'lunch', 'dinner'];
   let next: { meal: MealKey; at: Date } | undefined;
-  for (const meal of meals) {
-    const at = mealDateToday(settings.mealTimes[meal]);
-    if (at > now && !(await alreadyNotified(meal))) {
+  for (const dayOffset of [0, 1]) {
+    for (const meal of MEALS) {
+      const at = mealDateOn(dayOffset, settings.mealTimes[meal]);
+      if (at <= now) continue;
+      if (await alreadyNotified(toISODate(at), meal)) continue;
       if (!next || at < next.at) next = { meal, at };
     }
+    if (next) break; // earliest candidate today wins; only roll to tomorrow if empty
   }
   if (!next) return;
+
   const delay = Math.min(next.at.getTime() - now.getTime(), 2 ** 31 - 1);
   const meal = next.meal;
   inAppTimer = setTimeout(async () => {
-    if (!(await alreadyNotified(meal))) await showMealNotification(meal);
-    void scheduleInAppReminders(settings); // chain to the following meal
+    // Re-check state at fire time — the user may have disabled reminders
+    // since this timer was armed.
+    const fresh = await readSettings();
+    if (fresh?.remindersEnabled && !(await alreadyNotified(todayISO(), meal))) {
+      await showMealNotification(meal);
+    }
+    void scheduleInAppReminders(); // chain to the following meal / next day
   }, delay);
 }
 
 /** Called on app start when reminders are on: catch up a missed reminder (≤90 min late). */
-export async function catchUpMissedReminder(settings: Settings): Promise<void> {
-  if (!settings.remindersEnabled) return;
+export async function catchUpMissedReminder(): Promise<void> {
+  const settings = await readSettings();
+  if (!settings?.remindersEnabled) return;
   if (!notificationsSupported() || Notification.permission !== 'granted') return;
   const now = Date.now();
-  for (const meal of ['breakfast', 'lunch', 'dinner'] as MealKey[]) {
-    const at = mealDateToday(settings.mealTimes[meal]).getTime();
-    if (at <= now && now - at < 90 * 60 * 1000 && !(await alreadyNotified(meal))) {
+  for (const meal of MEALS) {
+    const at = mealDateOn(0, settings.mealTimes[meal]).getTime();
+    if (at <= now && now - at < 90 * 60 * 1000 && !(await alreadyNotified(todayISO(), meal))) {
       await showMealNotification(meal);
     }
   }

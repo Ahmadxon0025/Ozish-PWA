@@ -86,8 +86,17 @@ PCM16/16 kHz audio either way. Adding another provider = one function in
 | 1 coach message | Claude Haiku 4.5 (cached, ≤300 out tokens) | ~$0.002–0.004 |
 
 At 4 voice logs + 3 coach messages/day ≈ **$0.75–0.95/month** — inside the
-$1/month target. Prompt caching matters: the food list + system prompt are
-constant, so repeat calls bill ~10× less input.
+$1/month target. Notes on the math: the coach system prompt is small (~700
+tokens ≈ $0.0007 input even uncached — Haiku's 2048-token cache minimum means
+it isn't cached, which is fine), and the parse endpoint's food-list prompt is
+near that threshold, so caching helps there when it applies. The estimates
+above assume **no** caching, i.e. they're the worst case.
+
+**Protecting your credit:** the /api endpoints are public URLs. Optionally set
+an `APP_TOKEN` env var on Vercel and paste the same value in Sozlash → Aqlli
+funksiyalar — then only your devices can spend your credit. Also set the
+provider-side spend caps in `SETUP.md`/`MANAGE.md` (those are the hard
+backstop either way).
 
 ## Docs
 

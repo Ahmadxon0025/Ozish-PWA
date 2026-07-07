@@ -77,8 +77,7 @@ export default function Settings() {
     }
     await saveSettings({ remindersEnabled: true });
     const periodic = await registerPeriodicSync();
-    const s = { ...settings, remindersEnabled: true };
-    await scheduleInAppReminders(s);
+    await scheduleInAppReminders();
     setNotifStatus(
       periodic
         ? 'Eslatmalar yoqildi ✓ (fonda ham ishlaydi / works in background)'
@@ -250,9 +249,27 @@ export default function Settings() {
             onChange={(e) => patch({ apiBase: e.target.value.trim() })}
           />
         </div>
+        <div>
+          <label className="label">
+            Himoya tokeni (optional) — serverdagi APP_TOKEN bilan bir xil
+          </label>
+          <input
+            className="input"
+            placeholder="ixtiyoriy (protects your credit)"
+            value={settings.appToken ?? ''}
+            onChange={(e) => patch({ appToken: e.target.value.trim() })}
+          />
+        </div>
         <button
           className="btn-ghost w-full"
-          onClick={async () => setHealth(await tier3Health(settings.apiBase, true))}
+          onClick={async () =>
+            setHealth(
+              await tier3Health(
+                { apiBase: settings.apiBase, appToken: settings.appToken },
+                true,
+              ),
+            )
+          }
         >
           Tekshirish (test connection)
         </button>
@@ -270,6 +287,11 @@ export default function Settings() {
                   Ovoz (STT{health.sttProvider ? ` · ${health.sttProvider}` : ''}):{' '}
                   {health.stt ? 'tayyor ✓' : "kalit yo'q ✗"}
                 </p>
+                {health.authRequired && !settings.appToken && (
+                  <p className="text-amber-400">
+                    Server himoya tokeni talab qiladi — yuqoridagi maydonga APP_TOKEN kiriting.
+                  </p>
+                )}
               </>
             )}
           </div>

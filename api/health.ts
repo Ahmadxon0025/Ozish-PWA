@@ -18,5 +18,7 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     coach: Boolean(process.env.ANTHROPIC_API_KEY),
     stt: Boolean(sttKey),
     sttProvider: provider,
+    // Tells the client the paid endpoints expect an x-app-token header.
+    authRequired: Boolean(process.env.APP_TOKEN),
   });
 }

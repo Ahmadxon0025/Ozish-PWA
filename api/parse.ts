@@ -58,6 +58,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(405).json({ error: 'method' });
     return;
   }
+  const requiredToken = process.env.APP_TOKEN;
+  if (requiredToken && req.headers['x-app-token'] !== requiredToken) {
+    res.status(401).json({ error: 'unauthorized' });
+    return;
+  }
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     res.status(200).json({ disabled: true, reason: 'no-key' });

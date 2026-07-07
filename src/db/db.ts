@@ -60,6 +60,7 @@ export const DEFAULT_SETTINGS: Settings = {
   mealTimes: { breakfast: '08:00', lunch: '13:00', dinner: '19:00' },
   remindersEnabled: false,
   apiBase: '',
+  appToken: '',
   tier3Enabled: true,
   startDate: new Date().toISOString().slice(0, 10),
 };

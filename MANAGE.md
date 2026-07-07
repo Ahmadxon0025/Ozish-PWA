@@ -85,6 +85,10 @@ Yandex has budget alerts rather than hard caps:
 - If a key dies mid-use (quota/billing error), the same graceful path runs.
 - Turn Tier 3 off yourself anytime: **Sozlash → Aqlli funksiyalar → Yoqilgan**
   toggle — no account action needed.
+- Worried someone found your app URL and is using your credit? Set the
+  `APP_TOKEN` env var on Vercel (SETUP.md §4) — from that moment only devices
+  where you've entered the same token in Settings can use the paid endpoints.
+  Changing the token instantly locks everyone else out.
 - Your data never leaves the phone except: (a) voice clips → STT provider,
   (b) the day's log + question → Claude, only at the moment you use those
   features. Delete the keys and nothing is ever sent again.

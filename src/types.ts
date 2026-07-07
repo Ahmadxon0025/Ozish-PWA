@@ -23,6 +23,8 @@ export interface Settings {
   remindersEnabled: boolean;
   /** Base URL of the Tier-3 backend ('' = same origin). */
   apiBase: string;
+  /** Optional shared secret matching the server's APP_TOKEN env (abuse guard). */
+  appToken: string;
   /** Client-side switch to hide Tier 3 entirely. */
   tier3Enabled: boolean;
   startDate: string; // YYYY-MM-DD — used for accumulated-deficit stats

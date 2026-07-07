@@ -1,33 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db/db';
-import { currentStreak, shareableWeeklyText, weeklySummary, type WeeklySummary } from '../lib/stats';
+import { currentStreak, shareableWeeklyText, weeklySummary } from '../lib/stats';
 import { rnd } from '../lib/format';
 import type { Settings } from '../types';
 
-/** Accountability loop: this week's numbers + streak + shareable text. */
+/**
+ * Accountability loop: this week's numbers + streak + shareable text.
+ * Computed inside useLiveQuery so Dexie re-runs it on ANY change to the
+ * entries/steps/weights tables it reads — including in-place gram edits,
+ * which a row-count signal would miss.
+ */
 export default function WeeklySummaryCard({ settings }: { settings: Settings }) {
-  const [summary, setSummary] = useState<WeeklySummary | null>(null);
-  const [streak, setStreak] = useState(0);
   const [copied, setCopied] = useState(false);
-
-  // Recompute when entries or weights change.
-  const entryCount = useLiveQuery(() => db.entries.count(), [], 0);
-  const weightCount = useLiveQuery(() => db.weights.count(), [], 0);
-
-  useEffect(() => {
-    let alive = true;
-    void (async () => {
-      const [s, st] = await Promise.all([weeklySummary(settings), currentStreak(settings)]);
-      if (alive) {
-        setSummary(s);
-        setStreak(st);
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [entryCount, weightCount, settings]);
+  const summary = useLiveQuery(() => weeklySummary(settings), [settings]);
+  const streak = useLiveQuery(() => currentStreak(settings), [settings]) ?? 0;
 
   if (!summary) return null;
 

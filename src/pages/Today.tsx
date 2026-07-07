@@ -37,8 +37,13 @@ export default function Today() {
       setVoiceAvailable(false);
       return;
     }
-    void tier3Health(settings.apiBase).then((h) => setVoiceAvailable(h.ok && h.stt));
-  }, [settings.tier3Enabled, settings.apiBase]);
+    // Voice needs BOTH the STT key (transcription) and the Anthropic key
+    // (parsing) — showing it with only one would burn STT credit on a
+    // pipeline that can never complete.
+    void tier3Health({ apiBase: settings.apiBase, appToken: settings.appToken }).then((h) =>
+      setVoiceAvailable(h.ok && h.stt && h.coach),
+    );
+  }, [settings.tier3Enabled, settings.apiBase, settings.appToken]);
 
   useEffect(() => {
     setStepsText(stepsRow?.steps ? String(stepsRow.steps) : '');

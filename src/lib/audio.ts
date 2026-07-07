@@ -13,7 +13,10 @@ export interface Recorder {
   cancel(): void;
 }
 
-export async function startRecording(onLevel?: (rms: number) => void): Promise<Recorder> {
+export async function startRecording(
+  onLevel?: (rms: number) => void,
+  onMaxDuration?: () => void,
+): Promise<Recorder> {
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
   });
@@ -22,6 +25,7 @@ export async function startRecording(onLevel?: (rms: number) => void): Promise<R
   const processor = ctx.createScriptProcessor(4096, 1, 1);
   const chunks: Float32Array[] = [];
   let stopped = false;
+  let maxFired = false;
 
   processor.onaudioprocess = (e) => {
     if (stopped) return;
@@ -33,7 +37,15 @@ export async function startRecording(onLevel?: (rms: number) => void): Promise<R
       onLevel(Math.sqrt(sum / (data.length / 16)));
     }
     const seconds = (chunks.length * 4096) / ctx.sampleRate;
-    if (seconds > MAX_RECORD_SECONDS) stopped = true;
+    if (seconds > MAX_RECORD_SECONDS) {
+      stopped = true;
+      // Tell the caller so the UI stops immediately instead of silently
+      // discarding everything said past the cap.
+      if (!maxFired) {
+        maxFired = true;
+        onMaxDuration?.();
+      }
+    }
   };
   source.connect(processor);
   processor.connect(ctx.destination);

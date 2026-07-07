@@ -23,6 +23,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(405).json({ error: 'method' });
     return;
   }
+  // Optional abuse guard: when APP_TOKEN is set, require the matching header
+  // so strangers can't spend your credit through the public URL.
+  const requiredToken = process.env.APP_TOKEN;
+  if (requiredToken && req.headers['x-app-token'] !== requiredToken) {
+    res.status(401).json({ error: 'unauthorized' });
+    return;
+  }
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     res.status(200).json({ disabled: true, reason: 'no-key' });
@@ -37,7 +44,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const history = Array.isArray(body.history) ? body.history.slice(-6) : [];
-  const contextBlock = `BUGUNGI HOLAT (today's data, JSON):\n${JSON.stringify(body.context ?? {}, null, 0)}`;
+  // The app's own context is ~1-3 KB; the cap only stops crafted oversized
+  // payloads from producing an expensive billed request.
+  const contextJson = JSON.stringify(body.context ?? {}).slice(0, 8000);
+  const contextBlock = `BUGUNGI HOLAT (today's data, JSON):\n${contextJson}`;
 
   const messages = [
     ...history.map((m) => ({
@@ -58,7 +68,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       body: JSON.stringify({
         model: MODEL,
         max_tokens: MAX_TOKENS,
-        // Cache the constant system prompt → repeat messages cost ~10× less input.
+        // cache_control on the constant system prompt: a no-op today (the
+        // prompt is below Haiku's 2048-token cache minimum, so it just bills
+        // normally — still only ~$0.001/msg input) but free insurance if the
+        // prompt ever grows past the threshold.
         system: [
           {
             type: 'text',

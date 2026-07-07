@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   Bar,
   BarChart,
@@ -10,9 +10,8 @@ import {
   YAxis,
 } from 'recharts';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db/db';
 import { useSettings } from '../hooks/useSettings';
-import { dayStats, groupByPeriod, summarize, type DayStat, type SummaryStats } from '../lib/stats';
+import { dayStats, groupByPeriod, summarize, type DayStat } from '../lib/stats';
 import { baseMaintenance } from '../lib/calc';
 import { formatShort, lastNDates } from '../lib/dates';
 import { rnd } from '../lib/format';
@@ -35,46 +34,36 @@ interface ChartRow {
 export default function Trends() {
   const settings = useSettings();
   const [mode, setMode] = useState<Mode>('daily');
-  const [rows, setRows] = useState<ChartRow[]>([]);
-  const [summary, setSummary] = useState<SummaryStats | null>(null);
 
-  const entryCount = useLiveQuery(() => db.entries.count(), [], 0);
-
-  useEffect(() => {
-    let alive = true;
-    void (async () => {
-      const cfg = MODES.find((m) => m.id === mode)!;
-      const dates = lastNDates(cfg.days);
-      const stats = await dayStats(dates, settings);
-      let out: ChartRow[];
-      if (mode === 'daily') {
-        out = stats.map((s: DayStat) => ({
-          label: formatShort(s.date),
-          kcal: rnd(s.kcal),
-          maintenance: rnd(s.maintenance),
+  // Computed inside useLiveQuery so any change to the entries/steps/weights
+  // tables (including in-place edits) re-renders the chart.
+  const data = useLiveQuery(async () => {
+    const cfg = MODES.find((m) => m.id === mode)!;
+    const dates = lastNDates(cfg.days);
+    const stats = await dayStats(dates, settings);
+    let rows: ChartRow[];
+    if (mode === 'daily') {
+      rows = stats.map((s: DayStat) => ({
+        label: formatShort(s.date),
+        kcal: rnd(s.kcal),
+        maintenance: rnd(s.maintenance),
+      }));
+    } else {
+      const grouped = groupByPeriod(stats, mode === 'weekly' ? 'week' : mode === 'monthly' ? 'month' : 'year');
+      rows = grouped
+        .filter((g) => g.loggedDays > 0)
+        .map((g) => ({
+          label: mode === 'weekly' ? formatShort(g.label) : g.label,
+          kcal: rnd(g.kcal),
+          maintenance: rnd(g.maintenance),
         }));
-      } else {
-        const grouped = groupByPeriod(stats, mode === 'weekly' ? 'week' : mode === 'monthly' ? 'month' : 'year');
-        out = grouped
-          .filter((g) => g.loggedDays > 0)
-          .map((g) => ({
-            label: mode === 'weekly' ? formatShort(g.label) : g.label,
-            kcal: rnd(g.kcal),
-            maintenance: rnd(g.maintenance),
-          }));
-      }
-      // Only stats over days that exist in the app's lifetime matter; summary
-      // uses the same window as the chart.
-      const sum = summarize(stats, settings);
-      if (alive) {
-        setRows(out);
-        setSummary(sum);
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [mode, settings, entryCount]);
+    }
+    // Summary uses the same window as the chart.
+    return { rows, summary: summarize(stats, settings) };
+  }, [mode, settings]);
+
+  const rows = data?.rows ?? [];
+  const summary = data?.summary ?? null;
 
   const maint = rnd(baseMaintenance(settings));
 

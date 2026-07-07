@@ -67,6 +67,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(405).json({ error: 'method' });
     return;
   }
+  const requiredToken = process.env.APP_TOKEN;
+  if (requiredToken && req.headers['x-app-token'] !== requiredToken) {
+    res.status(401).json({ error: 'unauthorized' });
+    return;
+  }
   const provider = (process.env.STT_PROVIDER || 'yandex').toLowerCase();
   const apiKey =
     provider === 'google' ? process.env.GOOGLE_SPEECH_API_KEY : process.env.YANDEX_API_KEY;

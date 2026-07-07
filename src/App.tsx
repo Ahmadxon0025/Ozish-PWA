@@ -25,12 +25,15 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('today');
   const settings = useSettings();
 
-  // Tier 2 — reminders: catch up + schedule in-app timers + periodic sync.
+  // Tier 2 — reminders. Runs on every settings change; scheduleInAppReminders
+  // reads the fresh state itself, so this also CANCELS the armed timer the
+  // moment reminders are disabled.
   useEffect(() => {
-    if (!settings.remindersEnabled) return;
-    void catchUpMissedReminder(settings);
-    void scheduleInAppReminders(settings);
-    void registerPeriodicSync();
+    void scheduleInAppReminders();
+    if (settings.remindersEnabled) {
+      void catchUpMissedReminder();
+      void registerPeriodicSync();
+    }
   }, [settings]);
 
   return (

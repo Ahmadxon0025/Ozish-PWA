@@ -27,8 +27,10 @@ export default function Coach() {
       setAvailable(false);
       return;
     }
-    void tier3Health(settings.apiBase).then((h) => setAvailable(h.ok && h.coach));
-  }, [settings.tier3Enabled, settings.apiBase]);
+    void tier3Health({ apiBase: settings.apiBase, appToken: settings.appToken }).then((h) =>
+      setAvailable(h.ok && h.coach),
+    );
+  }, [settings.tier3Enabled, settings.apiBase, settings.appToken]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -79,7 +81,12 @@ export default function Coach() {
     await db.coachMessages.add({ role: 'user', text: q, ts: Date.now() });
     const history = (messages ?? []).slice(-6).map((m) => ({ role: m.role, text: m.text }));
     const context = await buildContext();
-    const res = await askCoach(settings.apiBase, q, context, history);
+    const res = await askCoach(
+      { apiBase: settings.apiBase, appToken: settings.appToken },
+      q,
+      context,
+      history,
+    );
     if (res.ok) {
       await db.coachMessages.add({ role: 'assistant', text: res.data.reply, ts: Date.now() });
     } else {

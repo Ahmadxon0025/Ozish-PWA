@@ -27,9 +27,14 @@ export default function Coach() {
       setAvailable(false);
       return;
     }
-    void tier3Health({ apiBase: settings.apiBase, appToken: settings.appToken }).then((h) =>
-      setAvailable(h.ok && h.coach),
-    );
+    const probe = () => {
+      void tier3Health({ apiBase: settings.apiBase, appToken: settings.appToken }).then((h) =>
+        setAvailable(h.ok && h.coach),
+      );
+    };
+    probe();
+    window.addEventListener('online', probe);
+    return () => window.removeEventListener('online', probe);
   }, [settings.tier3Enabled, settings.apiBase, settings.appToken]);
 
   useEffect(() => {

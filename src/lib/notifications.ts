@@ -77,7 +77,7 @@ async function readSettings(): Promise<Settings | undefined> {
   }
 }
 
-async function showMealNotification(meal: MealKey): Promise<void> {
+async function showMealNotification(meal: MealKey, dateISO: string): Promise<void> {
   const label = MEAL_LABELS[meal];
   try {
     const reg = await navigator.serviceWorker.ready;
@@ -88,7 +88,10 @@ async function showMealNotification(meal: MealKey): Promise<void> {
       tag: `meal-${meal}`,
       data: { url: '/' },
     });
-    await markNotified(todayISO(), meal);
+    // Dedup by the SCHEDULED date, not the fire date — iOS can suspend
+    // timers and fire them after midnight, which must not suppress the
+    // NEXT day's real reminder.
+    await markNotified(dateISO, meal);
   } catch {
     // Notification failed (e.g. permission revoked) — never crash the app.
   }
@@ -128,12 +131,22 @@ export async function scheduleInAppReminders(): Promise<void> {
 
   const delay = Math.min(next.at.getTime() - now.getTime(), 2 ** 31 - 1);
   const meal = next.meal;
+  const atMs = next.at.getTime();
+  const atISO = toISODate(next.at);
   inAppTimer = setTimeout(async () => {
     // Re-check state at fire time — the user may have disabled reminders
-    // since this timer was armed.
+    // since this timer was armed. iOS also suspends timers and fires them
+    // late (even after midnight): skip stale firings (>90 min late) and
+    // dedup by the SCHEDULED date so a stale timer can't consume the next
+    // day's reminder.
     const fresh = await readSettings();
-    if (fresh?.remindersEnabled && !(await alreadyNotified(todayISO(), meal))) {
-      await showMealNotification(meal);
+    const lateMs = Date.now() - atMs;
+    if (
+      fresh?.remindersEnabled &&
+      lateMs < 90 * 60 * 1000 &&
+      !(await alreadyNotified(atISO, meal))
+    ) {
+      await showMealNotification(meal, atISO);
     }
     void scheduleInAppReminders(); // chain to the following meal / next day
   }, delay);
@@ -148,7 +161,7 @@ export async function catchUpMissedReminder(): Promise<void> {
   for (const meal of MEALS) {
     const at = mealDateOn(0, settings.mealTimes[meal]).getTime();
     if (at <= now && now - at < 90 * 60 * 1000 && !(await alreadyNotified(todayISO(), meal))) {
-      await showMealNotification(meal);
+      await showMealNotification(meal, todayISO());
     }
   }
 }

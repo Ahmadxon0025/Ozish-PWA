@@ -75,8 +75,10 @@ export default function SmartLogger({
   const [aiNote, setAiNote] = useState('');
   const [errorNote, setErrorNote] = useState('');
   const [level, setLevel] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
   const recorderRef = useRef<Recorder | null>(null);
   const stoppingRef = useRef(false);
+  const submittingRef = useRef(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const cfg = { apiBase: settings.apiBase, appToken: settings.appToken };
 
@@ -222,27 +224,36 @@ export default function SmartLogger({
 
   // ── confirm ────────────────────────────────────────────────────────────────
   const confirmAll = async () => {
-    let n = 0;
-    for (const row of rows) {
-      if (row.grams <= 0) continue;
-      if (row.action.type === 'seed') {
-        const f = FOOD_BY_ID[row.action.id];
-        if (!f) continue;
-        await logFood(seedToAny(f), row.grams, date);
-      } else if (row.action.type === 'custom') {
-        const cf = await db.customFoods.get(row.action.id);
-        if (!cf) continue;
-        await logFood(customToAny(cf), row.grams, date);
-      } else {
-        await logAdhoc(row.label, row.grams, row, date);
-        if (row.action.save) await saveEstimateAsCustomFood(row);
+    // Double-tap guard: a second tap mid-write would log every row twice.
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
+    try {
+      let n = 0;
+      for (const row of rows) {
+        if (row.grams <= 0) continue;
+        if (row.action.type === 'seed') {
+          const f = FOOD_BY_ID[row.action.id];
+          if (!f) continue;
+          await logFood(seedToAny(f), row.grams, date);
+        } else if (row.action.type === 'custom') {
+          const cf = await db.customFoods.get(row.action.id);
+          if (!cf) continue;
+          await logFood(customToAny(cf), row.grams, date);
+        } else {
+          await logAdhoc(row.label, row.grams, row, date);
+          if (row.action.save) await saveEstimateAsCustomFood(row);
+        }
+        n++;
       }
-      n++;
+      setPhase('idle');
+      setRows([]);
+      setTextInput('');
+      onLogged(n);
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
     }
-    setPhase('idle');
-    setRows([]);
-    setTextInput('');
-    onLogged(n);
   };
 
   return (
@@ -367,15 +378,23 @@ export default function SmartLogger({
               Bekor (cancel)
             </button>
             {rows.length > 0 && (
-              <button className="btn-primary flex-1" onClick={confirmAll}>
-                ✓ Yozish ({rows.length})
+              <button
+                className="btn-primary flex-1 disabled:opacity-40"
+                disabled={submitting}
+                onClick={confirmAll}
+              >
+                {submitting ? 'Yozilmoqda…' : `✓ Yozish (${rows.length})`}
               </button>
             )}
           </div>
-          <p className="text-[10px] text-slate-600">
-            (taxmin) taomlar tasdiqlashda "Mening taomlarim"ga saqlanadi — keyingi safar to'g'ridan
-            to'g'ri topiladi. Grammlar yozilgandan keyin ham tahrirlanadi.
-          </p>
+          {rows.some((r) => r.est) && (
+            <p className="text-[10px] text-slate-600">
+              {rows.some((r) => r.action.type === 'adhoc' && r.action.save)
+                ? '(taxmin) taomlar tasdiqlashda "Mening taomlarim"ga saqlanadi — keyingi safar to\'g\'ridan to\'g\'ri topiladi.'
+                : "Rasm taxminlari faqat kunga yoziladi (bazaga saqlanmaydi) — doimiy taomingiz bo'lsa, Sozlamalarda o'zingiz qo'shing."}{' '}
+              Grammlar yozilgandan keyin ham tahrirlanadi.
+            </p>
+          )}
         </div>
       )}
 

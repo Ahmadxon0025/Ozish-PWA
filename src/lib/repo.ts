@@ -46,8 +46,16 @@ export async function resolveFood(key: FoodKey): Promise<AnyFood | undefined> {
     const f = FOOD_BY_ID[id];
     return f ? seedToAny(f) : undefined;
   }
-  const cf = await db.customFoods.get(Number(id));
-  return cf ? customToAny(cf) : undefined;
+  if (kind === 'custom') {
+    const n = Number(id);
+    if (!Number.isFinite(n)) return undefined;
+    const cf = await db.customFoods.get(n);
+    return cf ? customToAny(cf) : undefined;
+  }
+  // 'adhoc' (AI-estimated one-offs) and anything unknown: not resolvable —
+  // callers (recents/favorites) simply skip these entries. Passing NaN to
+  // IndexedDB would throw and kill the whole quick-add strip.
+  return undefined;
 }
 
 export async function logFood(food: AnyFood, grams: number, date: string): Promise<number> {
@@ -211,12 +219,20 @@ export async function favoriteFoods(): Promise<AnyFood[]> {
   return out;
 }
 
-/** Apply a meal template: logs all items to `date`. Returns count. */
-export async function applyTemplate(templateId: number, date: string): Promise<number> {
+/**
+ * Apply a meal template: logs all items to `date`. Returns count.
+ * `baseTs` lets a whole-day apply give each meal a distinct time range so
+ * meals never interleave in the day log.
+ */
+export async function applyTemplate(
+  templateId: number,
+  date: string,
+  baseTs?: number,
+): Promise<number> {
   const t = await db.templates.get(templateId);
   if (!t) return 0;
   let n = 0;
-  const now = Date.now();
+  const now = baseTs ?? Date.now();
   for (const item of t.items) {
     const f = FOOD_BY_ID[item.foodId];
     if (!f) continue;
@@ -248,9 +264,9 @@ export async function latestWeightKg(date = todayISO()): Promise<number | undefi
   return best ?? all[0]?.kg;
 }
 
-/** Full-history export (backup) as a JSON string. */
+/** Full-history export (backup) as a JSON string — every table in the schema. */
 export async function exportAll(): Promise<string> {
-  const [settings, entries, customFoods, favorites, weights, steps, templates] =
+  const [settings, entries, customFoods, favorites, weights, steps, templates, coachMessages, notifLog] =
     await Promise.all([
       db.settings.toArray(),
       db.entries.toArray(),
@@ -259,9 +275,11 @@ export async function exportAll(): Promise<string> {
       db.weights.toArray(),
       db.steps.toArray(),
       db.templates.toArray(),
+      db.coachMessages.toArray(),
+      db.notifLog.toArray(),
     ]);
   return JSON.stringify(
-    { version: 1, exportedAt: new Date().toISOString(), settings, entries, customFoods, favorites, weights, steps, templates },
+    { version: 1, exportedAt: new Date().toISOString(), settings, entries, customFoods, favorites, weights, steps, templates, coachMessages, notifLog },
     null,
     2,
   );

@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { FOOD_BY_ID, scaleFood } from '../data/foods';
@@ -31,6 +32,21 @@ function templateTotals(t: MealTemplate) {
  */
 export default function TemplateSheet({ date, onApplied, onClose }: Props) {
   const templates = useLiveQuery(() => db.templates.toArray(), [], []);
+  const busyRef = useRef(false);
+  const [busy, setBusy] = useState(false);
+
+  /** Double-tap guard shared by every apply button in the sheet. */
+  const guarded = async (fn: () => Promise<void>) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    try {
+      await fn();
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  };
 
   // Group by the "M1" prefix; anything unprefixed goes to "Boshqa".
   const groups = new Map<string, MealTemplate[]>();
@@ -43,7 +59,12 @@ export default function TemplateSheet({ date, onApplied, onClose }: Props) {
 
   const applyGroup = async (list: MealTemplate[]) => {
     let n = 0;
-    for (const t of list) n += await applyTemplate(t.id!, date);
+    // Give each meal a well-separated createdAt base so the day log keeps
+    // breakfast → dinner order even when the writes are faster than 1 ms.
+    const base = Date.now();
+    for (let i = 0; i < list.length; i++) {
+      n += await applyTemplate(list[i].id!, date, base + i * 1000);
+    }
     return n;
   };
 
@@ -83,11 +104,14 @@ export default function TemplateSheet({ date, onApplied, onClose }: Props) {
                   </div>
                 </div>
                 <button
-                  className="btn-primary py-1.5 px-3 shrink-0"
-                  onClick={async () => {
-                    const n = await applyGroup(list);
-                    onApplied(key, n);
-                  }}
+                  className="btn-primary py-1.5 px-3 shrink-0 disabled:opacity-40"
+                  disabled={busy}
+                  onClick={() =>
+                    void guarded(async () => {
+                      const n = await applyGroup(list);
+                      onApplied(key, n);
+                    })
+                  }
                 >
                   + Kun
                 </button>
@@ -99,11 +123,14 @@ export default function TemplateSheet({ date, onApplied, onClose }: Props) {
                   return (
                     <li key={t.id} className="border-t border-ink-800">
                       <button
-                        className="w-full flex items-center justify-between px-3 py-2.5 text-left active:bg-ink-800"
-                        onClick={async () => {
-                          const n = await applyTemplate(t.id!, date);
-                          onApplied(t.name, n);
-                        }}
+                        className="w-full flex items-center justify-between px-3 py-2.5 text-left active:bg-ink-800 disabled:opacity-40"
+                        disabled={busy}
+                        onClick={() =>
+                          void guarded(async () => {
+                            const n = await applyTemplate(t.id!, date);
+                            onApplied(t.name, n);
+                          })
+                        }
                       >
                         <span className="text-sm min-w-0 truncate">
                           {t.emoji} {mealName}

@@ -23,6 +23,7 @@ export default function Today() {
   const [parseAvailable, setParseAvailable] = useState(false);
   const [voiceAvailable, setVoiceAvailable] = useState(false);
   const [stepsText, setStepsText] = useState('');
+  const [copying, setCopying] = useState(false);
 
   const entries = useLiveQuery(() => db.entries.where('date').equals(date).sortBy('createdAt'), [date], []);
   const stepsRow = useLiveQuery(() => db.steps.get(date), [date]);
@@ -32,20 +33,27 @@ export default function Today() {
     void latestWeightKg(date).then((w) => setWeightKg(w ?? settings.startWeightKg));
   }, [date, settings.startWeightKg]);
 
-  // Tier 3 probe — hidden unless backend reports keys present (and we're online).
+  // Tier 3 probe — hidden unless backend reports keys present (and we're
+  // online). Re-probes when connectivity returns so opening the app offline
+  // doesn't hide smart logging for the whole session.
   useEffect(() => {
     if (!settings.tier3Enabled) {
       setParseAvailable(false);
       setVoiceAvailable(false);
       return;
     }
-    void tier3Health({ apiBase: settings.apiBase, appToken: settings.appToken }).then((h) => {
-      // Text + photo logging need only the Anthropic key. Voice ALSO needs
-      // the STT key — showing it with only one would burn STT credit on a
-      // pipeline that can never complete.
-      setParseAvailable(h.ok && h.coach);
-      setVoiceAvailable(h.ok && h.coach && h.stt);
-    });
+    const probe = () => {
+      void tier3Health({ apiBase: settings.apiBase, appToken: settings.appToken }).then((h) => {
+        // Text + photo logging need only the Anthropic key. Voice ALSO needs
+        // the STT key — showing it with only one would burn STT credit on a
+        // pipeline that can never complete.
+        setParseAvailable(h.ok && h.coach);
+        setVoiceAvailable(h.ok && h.coach && h.stt);
+      });
+    };
+    probe();
+    window.addEventListener('online', probe);
+    return () => window.removeEventListener('online', probe);
   }, [settings.tier3Enabled, settings.apiBase, settings.appToken]);
 
   useEffect(() => {
@@ -96,10 +104,17 @@ export default function Today() {
           📋 Shablon
         </button>
         <button
-          className="btn-ghost py-3"
+          className="btn-ghost py-3 disabled:opacity-40"
+          disabled={copying}
           onClick={async () => {
-            const n = await copyYesterday(date);
-            showToast(n > 0 ? `Kechagi ${n} ta yozuv nusxalandi ✓` : "Kecha yozuv yo'q");
+            if (copying) return;
+            setCopying(true);
+            try {
+              const n = await copyYesterday(date);
+              showToast(n > 0 ? `Kechagi ${n} ta yozuv nusxalandi ✓` : "Kecha yozuv yo'q");
+            } finally {
+              setCopying(false);
+            }
           }}
         >
           ⏪ Kechagidek

@@ -32,11 +32,15 @@ export default function QuickAddRow({ date, onLogged }: Props) {
   useEffect(() => {
     let alive = true;
     void (async () => {
-      const favs = await favoriteFoods();
-      const recents = await recentFoods(8);
-      const seen = new Set(favs.map((f) => f.key));
-      const merged = [...favs, ...recents.filter((r) => !seen.has(r.key))].slice(0, 12);
-      if (alive) setFoods(merged);
+      try {
+        const favs = await favoriteFoods();
+        const recents = await recentFoods(8);
+        const seen = new Set(favs.map((f) => f.key));
+        const merged = [...favs, ...recents.filter((r) => !seen.has(r.key))].slice(0, 12);
+        if (alive) setFoods(merged);
+      } catch {
+        // Never let a bad entry kill the quick-add strip.
+      }
     })();
     return () => {
       alive = false;

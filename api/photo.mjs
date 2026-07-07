@@ -20,10 +20,14 @@ const SYSTEM = `Sen oziq-ovqat rasmlarini tahlil qiluvchi yordamchisan. Rasmdagi
 
 QOIDALAR:
 - Avval quyidagi bazadan mos mahsulotni qidir — mos kelsa items ro'yxatiga id va umumiy gramm bilan qo'sh.
-- Bazada yo'q taom bo'lsa, custom ro'yxatiga qo'sh: nomi (o'zbekcha), gramm, va shu porsiya uchun kkal/protein/yog'/uglevod BAHOSI.
+- MUHIM: bazada YO'Q taomni (masalan avokado, pitsa, sushi) hech qachon bazadagi "o'xshash" mahsulotga almashtirMA — uni custom ro'yxatiga o'z nomi va baholangan kkal/protein/yog'/uglevod bilan yoz. Ko'rinishi o'xshasa ham mazmuni boshqa bo'lishi mumkin.
+- Bir xil taomni items VA custom'ga ikkalasiga yozma — faqat bittasiga.
 - Porsiyani idish o'lchamiga qarab baholab ber (piyola ~350 g, tovoq ~400 g, non ~80-100 g bo'lak).
+- Agar rasmda juda KO'P ovqat ko'rinsa (tandir to'la non, dasturxon, do'kon peshtaxtasi) — bu yeyiladigan porsiya emas: 1 kishilik porsiyani yoz va note'da tushuntir.
+- Qorong'i yoki xira rasmda ham diqqat bilan qara: mangal ustidagi shixlar, kosadagi taom kabi. Taxminingga ishonching past bo'lsa, baribir eng ehtimoliy javobni yoz va note'da shubhangni ayt.
 - Konservativ bo'l: shubhalansang kichikroq porsiya yoz.
 - Rasm ovqat emasligi aniq bo'lsa, ikkala ro'yxatni bo'sh qoldir va note maydoniga qisqa izoh yoz.
+- Note qisqa bo'lsin (1-2 jumla).
 - Har doim analyze_photo toolini chaqir.
 
 BAZA (id | nomi | porsiya):
@@ -109,7 +113,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 700,
+        max_tokens: 1000,
         system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
         tools: [TOOL],
         tool_choice: { type: 'tool', name: 'analyze_photo' },

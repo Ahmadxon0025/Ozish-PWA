@@ -17,8 +17,10 @@ const SYSTEM = `Sen oziq-ovqat log parserisan. Foydalanuvchi o'zbek tilida nima 
 QOIDALAR:
 - Faqat bazadagi id'larni ishlat.
 - "bir piyola osh" = 1 porsiya osh-palov (350 g). "yarim" = 0.5 porsiya. "ikki shix" = 2 × 80 g.
+- "katta" porsiya/kosa = ~1.5 × standart gramm; "kichik" yoki "ozgina" = ~0.6 × standart.
 - Miqdor aytilmasa, 1 standart porsiya (bazadagi gramm) deb ol.
-- Bazada yo'q taomlarni unmatched ro'yxatiga qo'sh.
+- Sinonimlarni taniy ol: "kartoshka fri" yoki "fri" = kartoshka-qovurilgan; "kofe" = qahva; "qaynatilgan tuxum" = tuxum; "gazak salat" (pomidor-bodring) = pomidor + bodring.
+- MUHIM: bazada haqiqatan YO'Q taomni (masalan: lavash, burger, pitsa, hot-dog, sushi, shaurma) hech qachon "o'xshash" mahsulotga almashtirMA — uni unmatched ro'yxatiga qo'sh. Noto'g'ri kaloriyadan ko'ra "topilmadi" yaxshiroq.
 - Har doim log_foods toolini chaqir.
 
 BAZA (id | nomi | porsiya):

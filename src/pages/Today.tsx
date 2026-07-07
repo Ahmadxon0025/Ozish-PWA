@@ -106,6 +106,15 @@ export default function Today() {
         </button>
       </div>
 
+      {/* Tier 3: smart logging — voice/text/photo (hidden when unavailable) */}
+      <SmartLogger
+        date={date}
+        settings={settings}
+        parseAvailable={parseAvailable}
+        voiceAvailable={voiceAvailable}
+        onLogged={(n) => showToast(`${n} ta taom yozildi ✓`)}
+      />
+
       {/* Macro progress vs targets */}
       <div className="card">
         <MacroBars totals={totals} settings={settings} />
@@ -146,15 +155,6 @@ export default function Today() {
           taxmin emas. (Steps above baseline raise your day's burn.)
         </p>
       </div>
-
-      {/* Tier 3: smart logging — voice/text/photo (hidden when unavailable) */}
-      <SmartLogger
-        date={date}
-        settings={settings}
-        parseAvailable={parseAvailable}
-        voiceAvailable={voiceAvailable}
-        onLogged={(n) => showToast(`${n} ta taom yozildi ✓`)}
-      />
 
       {/* Weekly summary + streak */}
       <WeeklySummaryCard settings={settings} />

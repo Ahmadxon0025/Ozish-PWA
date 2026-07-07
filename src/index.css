@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  height: 100%;
+  overscroll-behavior-y: none;
+}
+
+body {
+  @apply bg-ink-950 text-slate-100 antialiased select-none;
+  -webkit-tap-highlight-color: transparent;
+  padding-top: env(safe-area-inset-top);
+}
+
+input,
+textarea {
+  @apply select-text;
+  font-size: 16px; /* prevents iOS zoom-on-focus */
+}
+
+@layer components {
+  .card {
+    @apply bg-ink-900 rounded-2xl border border-ink-800 p-4;
+  }
+  .btn {
+    @apply rounded-xl px-4 py-2.5 font-semibold text-sm active:scale-[0.97] transition-transform;
+  }
+  .btn-primary {
+    @apply btn bg-emerald-500 text-ink-950;
+  }
+  .btn-ghost {
+    @apply btn bg-ink-800 text-slate-200;
+  }
+  .chip {
+    @apply shrink-0 rounded-full bg-ink-800 border border-ink-700 px-3 py-1.5 text-sm active:scale-95 transition-transform;
+  }
+  .input {
+    @apply w-full rounded-xl bg-ink-800 border border-ink-700 px-3 py-2.5 text-slate-100 outline-none focus:border-emerald-500;
+  }
+  .label {
+    @apply block text-xs text-slate-400 mb-1;
+  }
+}
+
+/* Hide scrollbars on horizontal quick-add rows */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

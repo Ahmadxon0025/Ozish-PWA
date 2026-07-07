@@ -1,13 +1,11 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { FOODS } from '../src/data/foods';
+import { FOODS } from './_lib/data.mjs';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Photo → food log. Claude Haiku 4.5 (vision) looks at a meal photo, matches
 // what it sees to the seed food DB where possible (items[]) and estimates
-// name+grams+macros for dishes it can't match (custom[]). A forced tool call
-// keeps the output valid JSON. Photo portion estimates are inherently rough
-// (±20–30%) — the client shows everything for confirmation before logging.
-// Cost: ~1k image tokens + food-list prompt + ≤700 out ≈ $0.004–0.006/photo.
+// name+grams+macros for dishes it can't match (custom[]). Estimates are
+// rough (±20–30%) — the client shows everything for confirmation before
+// logging. Plain .mjs — see coach.mjs for why.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const MODEL = 'claude-haiku-4-5-20251001';
@@ -33,9 +31,9 @@ ${FOOD_LIST}`;
 
 const TOOL = {
   name: 'analyze_photo',
-  description: "Rasmda aniqlangan taomlarni strukturali qaytaradi",
+  description: 'Rasmda aniqlangan taomlarni strukturali qaytaradi',
   input_schema: {
-    type: 'object' as const,
+    type: 'object',
     properties: {
       items: {
         type: 'array',
@@ -65,19 +63,19 @@ const TOOL = {
           required: ['name', 'grams', 'kcal', 'p', 'f', 'c'],
         },
       },
-      note: { type: 'string', description: "Qisqa izoh (ishonch darajasi, ogohlantirish)" },
+      note: { type: 'string', description: 'Qisqa izoh (ishonch darajasi, ogohlantirish)' },
     },
     required: ['items', 'custom'],
   },
 };
 
-const clamp = (n: unknown, lo: number, hi: number): number | undefined => {
+const clamp = (n, lo, hi) => {
   const v = typeof n === 'number' && isFinite(n) ? n : NaN;
   if (isNaN(v)) return undefined;
   return Math.min(hi, Math.max(lo, v));
 };
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'method' });
     return;
@@ -93,7 +91,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  const body = (req.body ?? {}) as { image?: string; mime?: string };
+  const body = req.body ?? {};
   const mime = ALLOWED_MIME.has(String(body.mime)) ? String(body.mime) : 'image/jpeg';
   const image = typeof body.image === 'string' ? body.image : '';
   if (!image || image.length > MAX_IMAGE_BASE64) {
@@ -119,10 +117,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           {
             role: 'user',
             content: [
-              {
-                type: 'image',
-                source: { type: 'base64', media_type: mime, data: image },
-              },
+              { type: 'image', source: { type: 'base64', media_type: mime, data: image } },
               { type: 'text', text: 'Bu rasmda nima yeyilmoqda? Porsiyalarni baholab ber.' },
             ],
           },
@@ -144,40 +139,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
 
-    const data = (await r.json()) as {
-      content?: {
-        type: string;
-        name?: string;
-        input?: { items?: unknown; custom?: unknown; note?: unknown };
-      }[];
-    };
+    const data = await r.json();
     const toolUse = (data.content ?? []).find(
       (b) => b.type === 'tool_use' && b.name === 'analyze_photo',
     );
+    const input = (toolUse && toolUse.input) || {};
     const validIds = new Set(FOODS.map((f) => f.id));
 
-    const rawItems = Array.isArray(toolUse?.input?.items) ? (toolUse!.input!.items as unknown[]) : [];
-    const items = rawItems
-      .map((i) => i as { foodId?: unknown; grams?: unknown })
-      .filter((i) => typeof i.foodId === 'string' && validIds.has(i.foodId))
-      .map((i) => ({ foodId: i.foodId as string, grams: clamp(i.grams, 1, 3000) }))
-      .filter((i): i is { foodId: string; grams: number } => i.grams !== undefined)
-      .map((i) => ({ ...i, grams: Math.round(i.grams) }))
+    const items = (Array.isArray(input.items) ? input.items : [])
+      .filter((i) => i && typeof i.foodId === 'string' && validIds.has(i.foodId))
+      .map((i) => ({ foodId: i.foodId, grams: clamp(i.grams, 1, 3000) }))
+      .filter((i) => i.grams !== undefined)
+      .map((i) => ({ foodId: i.foodId, grams: Math.round(i.grams) }))
       .slice(0, 12);
 
-    const rawCustom = Array.isArray(toolUse?.input?.custom) ? (toolUse!.input!.custom as unknown[]) : [];
-    const custom = rawCustom
-      .map((i) => i as { name?: unknown; grams?: unknown; kcal?: unknown; p?: unknown; f?: unknown; c?: unknown })
+    const custom = (Array.isArray(input.custom) ? input.custom : [])
       .map((i) => ({
-        name: String(i.name ?? '').slice(0, 60).trim(),
-        grams: clamp(i.grams, 1, 3000),
-        kcal: clamp(i.kcal, 0, 4000),
-        p: clamp(i.p, 0, 300),
-        f: clamp(i.f, 0, 300),
-        c: clamp(i.c, 0, 500),
+        name: String((i && i.name) ?? '').slice(0, 60).trim(),
+        grams: clamp(i && i.grams, 1, 3000),
+        kcal: clamp(i && i.kcal, 0, 4000),
+        p: clamp(i && i.p, 0, 300),
+        f: clamp(i && i.f, 0, 300),
+        c: clamp(i && i.c, 0, 500),
       }))
       .filter(
-        (i): i is { name: string; grams: number; kcal: number; p: number; f: number; c: number } =>
+        (i) =>
           i.name.length > 0 &&
           i.grams !== undefined &&
           i.kcal !== undefined &&
@@ -188,7 +174,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .map((i) => ({ ...i, grams: Math.round(i.grams), kcal: Math.round(i.kcal) }))
       .slice(0, 12);
 
-    const note = typeof toolUse?.input?.note === 'string' ? toolUse.input.note.slice(0, 200) : undefined;
+    const note =
+      typeof input.note === 'string' ? input.note.slice(0, 200) : undefined;
 
     res.status(200).json({ items, custom, note });
   } catch {

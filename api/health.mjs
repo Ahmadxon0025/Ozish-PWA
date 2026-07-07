@@ -1,10 +1,6 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-
-/**
- * Capability probe for Tier 3. Reports only WHICH features are configured —
- * never the keys themselves. The client uses this to show/hide voice + coach.
- */
-export default function handler(req: VercelRequest, res: VercelResponse) {
+// Capability probe for Tier 3. Reports only WHICH features are configured —
+// never the keys themselves. The client uses this to show/hide voice + coach.
+export default function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'GET') {
     res.status(405).json({ error: 'method' });

@@ -1,10 +1,10 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { coachSystemPrompt } from '../src/data/coachPrompt';
+import { coachSystemPrompt } from './_lib/data.mjs';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AI coach — Claude Haiku 4.5, Uzbek, ≤300 output tokens.
-// Cost control: prompt caching on the (constant) system prompt, small model,
-// capped output. ~$0.002–0.004 per message.
+// Plain .mjs on purpose: the repo is ESM ("type":"module") and Vercel's
+// function runtime failed to resolve extension-less TS imports across
+// directories — plain JS with explicit './_lib/data.mjs' imports cannot break.
 // Spend safety: any auth/billing/quota error returns {disabled:true} and the
 // client hides the feature with a small note. Never throws at the client.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -12,13 +12,7 @@ import { coachSystemPrompt } from '../src/data/coachPrompt';
 const MODEL = 'claude-haiku-4-5-20251001';
 const MAX_TOKENS = 300;
 
-interface CoachBody {
-  question?: string;
-  context?: unknown;
-  history?: { role: 'user' | 'assistant'; text: string }[];
-}
-
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'method' });
     return;
@@ -36,7 +30,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  const body = (req.body ?? {}) as CoachBody;
+  const body = req.body ?? {};
   const question = String(body.question ?? '').slice(0, 1000);
   if (!question.trim()) {
     res.status(400).json({ error: 'empty' });
@@ -51,10 +45,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const messages = [
     ...history.map((m) => ({
-      role: m.role === 'assistant' ? ('assistant' as const) : ('user' as const),
-      content: String(m.text).slice(0, 1500),
+      role: m && m.role === 'assistant' ? 'assistant' : 'user',
+      content: String((m && m.text) ?? '').slice(0, 1500),
     })),
-    { role: 'user' as const, content: `${contextBlock}\n\nSAVOL: ${question}` },
+    { role: 'user', content: `${contextBlock}\n\nSAVOL: ${question}` },
   ];
 
   try {
@@ -68,17 +62,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       body: JSON.stringify({
         model: MODEL,
         max_tokens: MAX_TOKENS,
-        // cache_control on the constant system prompt: a no-op today (the
-        // prompt is below Haiku's 2048-token cache minimum, so it just bills
-        // normally — still only ~$0.001/msg input) but free insurance if the
-        // prompt ever grows past the threshold.
-        system: [
-          {
-            type: 'text',
-            text: coachSystemPrompt,
-            cache_control: { type: 'ephemeral' },
-          },
-        ],
+        // cache_control: a no-op below Haiku's 2048-token cache minimum, but
+        // free insurance if the prompt ever grows past the threshold.
+        system: [{ type: 'text', text: coachSystemPrompt, cache_control: { type: 'ephemeral' } }],
         messages,
       }),
     });
@@ -90,7 +76,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     if (!r.ok) {
       const detail = await r.text().catch(() => '');
-      // Billing problems can also surface as 400 invalid_request from proxies.
       if (/billing|credit/i.test(detail)) {
         res.status(200).json({ disabled: true, reason: 'billing' });
         return;
@@ -99,7 +84,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
 
-    const data = (await r.json()) as { content?: { type: string; text?: string }[] };
+    const data = await r.json();
     const reply =
       (data.content ?? [])
         .filter((b) => b.type === 'text')

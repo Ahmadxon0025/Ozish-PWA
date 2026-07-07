@@ -1,15 +1,13 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { FOODS } from '../src/data/foods';
+import { FOODS } from './_lib/data.mjs';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Uzbek sentence → structured food log. Claude Haiku 4.5 with a forced tool
-// call, so the output is always valid JSON matching our schema. The compact
-// food list rides in the (cached) system prompt — repeat calls are cheap.
+// call, so the output is always valid JSON matching our schema. Plain .mjs —
+// see coach.mjs for why.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const MODEL = 'claude-haiku-4-5-20251001';
 
-// Compact food list for the prompt: id | name | portion label | grams
 const FOOD_LIST = FOODS.map(
   (f) => `${f.id} | ${f.nameUz} (${f.nameEn}) | ${f.portionLabel} = ${f.refGrams} g`,
 ).join('\n');
@@ -30,7 +28,7 @@ const TOOL = {
   name: 'log_foods',
   description: 'Aniqlangan taomlarni strukturali ravishda qaytaradi',
   input_schema: {
-    type: 'object' as const,
+    type: 'object',
     properties: {
       items: {
         type: 'array',
@@ -53,7 +51,7 @@ const TOOL = {
   },
 };
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'method' });
     return;
@@ -68,7 +66,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(200).json({ disabled: true, reason: 'no-key' });
     return;
   }
-  const text = String((req.body as { text?: string } | undefined)?.text ?? '').slice(0, 500);
+  const text = String((req.body && req.body.text) ?? '').slice(0, 500);
   if (!text.trim()) {
     res.status(400).json({ error: 'empty' });
     return;
@@ -106,26 +104,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
 
-    const data = (await r.json()) as {
-      content?: { type: string; name?: string; input?: { items?: unknown; unmatched?: unknown } }[];
-    };
+    const data = await r.json();
     const toolUse = (data.content ?? []).find((b) => b.type === 'tool_use' && b.name === 'log_foods');
-    const rawItems = Array.isArray(toolUse?.input?.items) ? (toolUse!.input!.items as unknown[]) : [];
+    const input = (toolUse && toolUse.input) || {};
     const validIds = new Set(FOODS.map((f) => f.id));
-    const items = rawItems
-      .map((i) => i as { foodId?: unknown; grams?: unknown })
+    const items = (Array.isArray(input.items) ? input.items : [])
       .filter(
         (i) =>
+          i &&
           typeof i.foodId === 'string' &&
           validIds.has(i.foodId) &&
           typeof i.grams === 'number' &&
           i.grams > 0 &&
           i.grams < 5000,
       )
-      .map((i) => ({ foodId: i.foodId as string, grams: Math.round(i.grams as number) }));
-    const unmatched = Array.isArray(toolUse?.input?.unmatched)
-      ? (toolUse!.input!.unmatched as unknown[]).filter((u): u is string => typeof u === 'string').slice(0, 10)
-      : [];
+      .map((i) => ({ foodId: i.foodId, grams: Math.round(i.grams) }));
+    const unmatched = (Array.isArray(input.unmatched) ? input.unmatched : [])
+      .filter((u) => typeof u === 'string')
+      .slice(0, 10);
 
     res.status(200).json({ items, unmatched });
   } catch {

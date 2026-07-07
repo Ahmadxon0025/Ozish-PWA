@@ -32,12 +32,15 @@ deploy together on Vercel (see `DEPLOY.md`).
 ## Project structure
 
 ```
-api/                 Serverless functions (Vercel) — keys live HERE only
-  health.ts            capability probe (which Tier-3 features are configured)
-  coach.ts             Claude Haiku coach (Uzbek, prompt-cached, ≤300 tokens)
-  parse.ts             Uzbek sentence → structured food items (forced tool call)
-  photo.ts             meal photo → identified foods + portion/macro estimates
-  stt.ts               speech-to-text proxy (Yandex default / Google fallback)
+api/                 Serverless functions (Vercel) — keys live HERE only.
+                     Plain ESM .mjs on purpose: extension-less TS imports
+                     from api/ into src/ crash Vercel's ESM function runtime.
+  health.mjs           capability probe (which Tier-3 features are configured)
+  coach.mjs            Claude Haiku coach (Uzbek, ≤300 tokens)
+  parse.mjs            Uzbek sentence → structured food items (forced tool call)
+  photo.mjs            meal photo → identified foods + portion/macro estimates
+  stt.mjs              speech-to-text proxy (Yandex default / Google fallback)
+  _lib/data.mjs        GENERATED food list + coach prompt (npm run gen:api)
 src/
   data/foods.ts        ★ the 117-item seed food database (from food_macros_uz.pdf)
   data/templates.ts    meal templates seeded from protocol_detailed.pdf
@@ -67,8 +70,8 @@ Open [src/data/foods.ts](src/data/foods.ts). Each row:
 - New categories: add to `CATEGORIES` in the same file.
 - One-off dishes are easier to add in-app: Settings → "Mening taomlarim".
 
-After editing, the parse API picks the change up automatically (it imports the
-same file).
+After editing, run `npm run gen:api` once (regenerates `api/_lib/data.mjs`,
+the copy the serverless parse/photo functions use) and commit both files.
 
 ## How to swap the STT provider
 
@@ -76,7 +79,7 @@ Set one env var on the server: `STT_PROVIDER=yandex` (default) or
 `STT_PROVIDER=google`, plus that provider's key (`YANDEX_API_KEY` /
 `GOOGLE_SPEECH_API_KEY`). No client changes — the client sends the same
 PCM16/16 kHz audio either way. Adding another provider = one function in
-[api/stt.ts](api/stt.ts).
+[api/stt.mjs](api/stt.mjs).
 
 ## Estimated per-use API cost (Tier 3)
 

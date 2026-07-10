@@ -175,8 +175,8 @@ table.ledger{width:100%;border-collapse:collapse;min-width:620px;background:var(
 /* ---------- hire ---------- */
 .hire{padding:90px 0}
 .hire .card{padding:56px 54px}
-.hire-grid{display:grid;grid-template-columns:400px 1fr;gap:56px;align-items:center}
-@media(max-width:900px){.hire-grid{grid-template-columns:1fr;gap:40px}.hire .card{padding:32px 24px}}
+.hire-grid{display:block;max-width:780px;margin:0 auto}
+@media(max-width:900px){.hire .card{padding:32px 24px}}
 .hire .eyebrow{font-size:12.5px;font-weight:800;letter-spacing:.24em;text-transform:uppercase;color:var(--blue);margin-bottom:14px}
 .hire h2{font-family:'Montserrat',sans-serif;font-weight:900;font-size:clamp(28px,4vw,40px);letter-spacing:-.015em;line-height:1.12;margin-bottom:16px}
 .hire .sub{color:var(--gray);font-size:16px;margin-bottom:26px}
@@ -542,12 +542,6 @@ footer .socials a:hover{border-color:var(--blue);color:var(--blue)}
   <div class="wrap">
     <div class="card reveal">
       <div class="hire-grid">
-        <div style="text-align:center">
-          <div class="polaroid">
-            <img class="js-portrait" src="data:," alt="Аҳмадхон Абдурашидов" width="380" height="380">
-            <div class="cap" data-i18n="pol_cap">Аҳмадхон · Наманган</div>
-          </div>
-        </div>
         <div>
           <div class="eyebrow" data-i18n="hire_eyebrow">Бошқарувчи шерик</div>
           <h2 data-i18n="hire_h">Мени лойиҳангизга шерик қилиб олинг</h2>

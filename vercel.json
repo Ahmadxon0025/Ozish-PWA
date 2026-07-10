@@ -2,7 +2,16 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "installCommand": "echo no-install-needed",
-  "buildCommand": "rm -rf .vercel_static && mkdir -p .vercel_static && cp portfolio/index.html .vercel_static/index.html",
+  "buildCommand": "rm -rf .vercel_static && mkdir -p .vercel_static && cp portfolio/index.html .vercel_static/index.html && cp docs/sw.js .vercel_static/sw.js",
   "outputDirectory": ".vercel_static",
-  "cleanUrls": true
+  "cleanUrls": true,
+  "headers": [
+    {
+      "source": "/sw.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
+        { "key": "Service-Worker-Allowed", "value": "/" }
+      ]
+    }
+  ]
 }

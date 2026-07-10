@@ -1,7 +1,7 @@
 name: Deploy portfolio to Pages
 on:
   push:
-    branches: [claude/portfolio-redesign-reference-az34e5]
+    branches: [main]
     paths: ['docs/**', '.github/workflows/pages.yml']
   workflow_dispatch:
 permissions:

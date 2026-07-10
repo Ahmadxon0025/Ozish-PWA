@@ -181,6 +181,25 @@ table.ledger{width:100%;border-collapse:collapse;min-width:620px;background:var(
 .ledger tfoot .proj{color:var(--blue);text-transform:uppercase;letter-spacing:.1em}
 .ledger tfoot td.r{color:var(--blue);font-weight:700;font-size:15.5px}
 .ledger-note{font-size:12.5px;color:var(--gray-2);margin-top:14px;line-height:1.6}
+.ml{display:none}
+@media(max-width:560px){
+  .ledger-scroll{overflow:visible;border:none;background:transparent;border-radius:0;margin-top:20px}
+  table.ledger{min-width:0;background:transparent}
+  .ledger thead{display:none}
+  .ledger tbody{display:block}
+  .ledger tbody tr{display:flex;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:14px;margin-bottom:12px;padding:15px 16px}
+  .ledger tbody tr:hover{background:var(--card)}
+  .ledger td{display:block;border:none!important;padding:0;white-space:normal}
+  .ledger td:first-child{width:100%;margin-bottom:12px}
+  .ledger td.r{width:50%;min-width:0;overflow-wrap:break-word;white-space:normal;text-align:left;font-size:15px}
+  .ledger td.r .ml{display:block;font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--gray-2);margin-bottom:3px}
+  .ledger tfoot{display:block}
+  .ledger tfoot tr{display:flex;flex-wrap:wrap;background:var(--blue-soft);border-radius:14px;padding:15px 16px}
+  .ledger tfoot td{border:none!important;padding:0}
+  .ledger tfoot td:first-child{width:100%;margin-bottom:8px}
+  .ledger tfoot td.r{width:50%;font-size:17px}
+  .ledger tfoot td.r .ml{display:block;font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:rgba(47,91,232,.7);margin-bottom:3px}
+}
 
 /* ---------- polaroid ---------- */
 .polaroid{
@@ -584,16 +603,16 @@ footer .socials a:hover{border-color:var(--blue);color:var(--blue)}
               </tr>
             </thead>
             <tbody>
-              <tr><td><div class="proj">SP Invest</div><div class="role2" data-i18n="rl_sp">Асосчи / Бош директор</div></td><td class="r" data-i18n="v_sp_s">6,60 млрд</td><td class="r" data-i18n="v_sp_c">4,40 млрд</td></tr>
-              <tr><td><div class="proj" data-i18n="pj_qur">Қурилиш компанияси</div><div class="role2" data-i18n="rl_qur">Реклама бўйича раҳбар</div></td><td class="r" data-i18n="v_qur_s">12,46 млрд</td><td class="r"><span class="dash">—</span></td></tr>
-              <tr><td><div class="proj">Money Makers</div><div class="role2" data-i18n="rl_mm">Бош директор (CEO)</div></td><td class="r" data-i18n="v_mm_s">2,33 млрд</td><td class="r" data-i18n="v_mm_c">2,33 млрд</td></tr>
-              <tr><td><div class="proj" data-i18n="pj_inv">Сармоя жалб қилиш</div><div class="role2" data-i18n="rl_inv">Молия раҳбари</div></td><td class="r" data-i18n="v_inv_s">1,20 млрд</td><td class="r" data-i18n="v_inv_c">1,10 млрд</td></tr>
-              <tr><td><div class="proj" data-i18n="pj_non">Нонвойхона</div><div class="role2" data-i18n="rl_non">Асосчи · $3K→$6K (2× чиқиш)</div></td><td class="r" data-i18n="v_non_s">120 млн</td><td class="r" data-i18n="v_non_c">120 млн + $6 000 (2023)</td></tr>
-              <tr><td><div class="proj">Jahongir English</div><div class="role2" data-i18n="rl_je">Шерик / Раҳбар</div></td><td class="r" data-i18n="v_je_s">750 млн</td><td class="r" data-i18n="v_je_c">720 млн</td></tr>
-              <tr><td><div class="proj" data-i18n="pj_pk">Пишириқ курси (Ya.Kumush)</div><div class="role2" data-i18n="rl_pk">Шерик / Раҳбар</div></td><td class="r" data-i18n="v_pk_s">250 млн</td><td class="r" data-i18n="v_pk_c">200 млн</td></tr>
+              <tr><td><div class="proj">SP Invest</div><div class="role2" data-i18n="rl_sp">Асосчи / Бош директор</div></td><td class="r"><span class="ml" data-i18n="ml_sales">Савдо</span><span data-i18n="v_sp_s">6,60 млрд</span></td><td class="r"><span class="ml" data-i18n="ml_cash">Реал нақд</span><span data-i18n="v_sp_c">4,40 млрд</span></td></tr>
+              <tr><td><div class="proj" data-i18n="pj_qur">Қурилиш компанияси</div><div class="role2" data-i18n="rl_qur">Реклама бўйича раҳбар</div></td><td class="r"><span class="ml" data-i18n="ml_sales">Савдо</span><span data-i18n="v_qur_s">12,46 млрд</span></td><td class="r"><span class="ml" data-i18n="ml_cash">Реал нақд</span><span class="dash">—</span></td></tr>
+              <tr><td><div class="proj">Money Makers</div><div class="role2" data-i18n="rl_mm">Бош директор (CEO)</div></td><td class="r"><span class="ml" data-i18n="ml_sales">Савдо</span><span data-i18n="v_mm_s">2,33 млрд</span></td><td class="r"><span class="ml" data-i18n="ml_cash">Реал нақд</span><span data-i18n="v_mm_c">2,33 млрд</span></td></tr>
+              <tr><td><div class="proj" data-i18n="pj_inv">Сармоя жалб қилиш</div><div class="role2" data-i18n="rl_inv">Молия раҳбари</div></td><td class="r"><span class="ml" data-i18n="ml_sales">Савдо</span><span data-i18n="v_inv_s">1,20 млрд</span></td><td class="r"><span class="ml" data-i18n="ml_cash">Реал нақд</span><span data-i18n="v_inv_c">1,10 млрд</span></td></tr>
+              <tr><td><div class="proj" data-i18n="pj_non">Нонвойхона</div><div class="role2" data-i18n="rl_non">Асосчи · $3K→$6K (2× чиқиш)</div></td><td class="r"><span class="ml" data-i18n="ml_sales">Савдо</span><span data-i18n="v_non_s">120 млн</span></td><td class="r"><span class="ml" data-i18n="ml_cash">Реал нақд</span><span data-i18n="v_non_c">120 млн + $6 000 (2023)</span></td></tr>
+              <tr><td><div class="proj">Jahongir English</div><div class="role2" data-i18n="rl_je">Шерик / Раҳбар</div></td><td class="r"><span class="ml" data-i18n="ml_sales">Савдо</span><span data-i18n="v_je_s">750 млн</span></td><td class="r"><span class="ml" data-i18n="ml_cash">Реал нақд</span><span data-i18n="v_je_c">720 млн</span></td></tr>
+              <tr><td><div class="proj" data-i18n="pj_pk">Пишириқ курси (Ya.Kumush)</div><div class="role2" data-i18n="rl_pk">Шерик / Раҳбар</div></td><td class="r"><span class="ml" data-i18n="ml_sales">Савдо</span><span data-i18n="v_pk_s">250 млн</span></td><td class="r"><span class="ml" data-i18n="ml_cash">Реал нақд</span><span data-i18n="v_pk_c">200 млн</span></td></tr>
             </tbody>
             <tfoot>
-              <tr><td><div class="proj" data-i18n="th_total">Жами</div></td><td class="r" data-i18n="v_tot_s">23,9 млрд</td><td class="r" data-i18n="v_tot_c">9,0 млрд</td></tr>
+              <tr><td><div class="proj" data-i18n="th_total">Жами</div></td><td class="r"><span class="ml" data-i18n="ml_sales">Савдо</span><span data-i18n="v_tot_s">23,9 млрд</span></td><td class="r"><span class="ml" data-i18n="ml_cash">Реал нақд</span><span data-i18n="v_tot_c">9,0 млрд</span></td></tr>
             </tfoot>
           </table>
         </div>
@@ -751,7 +770,7 @@ const I18N = {
     tg_premium:"Премиум маҳсулот", tg_price:"Нарх сиёсати", tg_traffic:"Трафик",
     t4_time:"13+ лойиҳа", n4:"9,0 млрд реал касса",
     led_h:"ПОРТФЕЛЬ — РАҚАМЛАРДА", led_sub:"Барча рақамлар — сўмда · Гаплар эмас, касса",
-    th_proj:"Лойиҳа", th_sales:"Савдо · шартнома", th_cash:"Реал нақд", th_total:"Жами",
+    th_proj:"Лойиҳа", th_sales:"Савдо · шартнома", th_cash:"Реал нақд", th_total:"Жами", ml_sales:"Савдо", ml_cash:"Реал нақд",
     rl_sp:"Асосчи / Бош директор", pj_qur:"Қурилиш компанияси", rl_qur:"Реклама бўйича раҳбар",
     rl_mm:"Бош директор (CEO)", pj_inv:"Сармоя жалб қилиш", rl_inv:"Молия раҳбари",
     pj_non:"Нонвойхона", rl_non:"Асосчи · $3K→$6K (2× чиқиш)", rl_je:"Шерик / Раҳбар",
@@ -825,7 +844,7 @@ const I18N = {
     tg_premium:"Premium product", tg_price:"Pricing strategy", tg_traffic:"Traffic",
     t4_time:"13+ ventures", n4:"9.0B real cash",
     led_h:"THE PORTFOLIO, IN NUMBERS", led_sub:"All figures in UZS · Not claims — cash",
-    th_proj:"Project", th_sales:"Sales · contract", th_cash:"Real cash", th_total:"Total",
+    th_proj:"Project", th_sales:"Sales · contract", th_cash:"Real cash", th_total:"Total", ml_sales:"Sales", ml_cash:"Real cash",
     rl_sp:"Founder / CEO", pj_qur:"Construction developer", rl_qur:"Head of marketing",
     rl_mm:"CEO", pj_inv:"Capital raising", rl_inv:"Finance lead",
     pj_non:"Bakery", rl_non:"Founder · $3K→$6K (2× exit)", rl_je:"Partner / Lead",
@@ -899,7 +918,7 @@ const I18N = {
     tg_premium:"Премиум-продукт", tg_price:"Ценовая политика", tg_traffic:"Трафик",
     t4_time:"13+ проектов", n4:"9,0 млрд реальная касса",
     led_h:"ПОРТФЕЛЬ В ЦИФРАХ", led_sub:"Все цифры — в сумах · Не слова, а касса",
-    th_proj:"Проект", th_sales:"Продажи · контракт", th_cash:"Реальная касса", th_total:"Итого",
+    th_proj:"Проект", th_sales:"Продажи · контракт", th_cash:"Реальная касса", th_total:"Итого", ml_sales:"Продажи", ml_cash:"Реальная касса",
     rl_sp:"Основатель / CEO", pj_qur:"Строительная компания", rl_qur:"Руководитель рекламы",
     rl_mm:"Генеральный директор (CEO)", pj_inv:"Привлечение инвестиций", rl_inv:"Финансовый руководитель",
     pj_non:"Пекарня", rl_non:"Основатель · $3K→$6K (2× выход)", rl_je:"Партнёр / Руководитель",

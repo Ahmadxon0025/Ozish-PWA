@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Аҳмадхон Абдурашидов — Бошқарувчи шерик</title>
+<meta name="description" content="24,6 млрд сўмлик савдо, 13+ лойиҳа, 1,2 млрд сўм жалб қилинган сармоя. Пулингиз ишласин.">
+<meta property="og:title" content="Аҳмадхон Абдурашидов — Бошқарувчи шерик">
+<meta property="og:description" content="216 млн ажратилди. 14 млн ишлатилди. 4,4 млрд қайтди. Портфель: 24,6 млрд сўм савдо, 13+ лойиҳа.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23171a1f'/%3E%3Ctext x='32' y='43' font-family='Arial,sans-serif' font-weight='900' font-size='28' fill='%23c9a227' text-anchor='middle'%3EAA%3C/text%3E%3C/svg%3E">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800;900&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&family=Caveat:wght@600;700&display=swap');
+
+:root{
+  --paper:#f7f5f0;--card:#ffffff;--ink:#171a1f;--gray:#5b6472;--gray-2:#98a0ac;
+  --blue:#2f5be8;--blue-dark:#2148c9;--blue-shadow:#1b3a9e;--blue-soft:#e9efff;
+  --gold:#b8912f;--gold-soft:#f4ead1;--line:rgba(23,26,31,.09);--note:#f0e9d8;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  font-family:'Inter',sans-serif;color:var(--ink);line-height:1.6;
+  background:var(--paper);
+  background-image:radial-gradient(rgba(23,26,31,.075) 1.2px,transparent 1.3px);
+  background-size:26px 26px;
+  -webkit-font-smoothing:antialiased;overflow-x:hidden;
+}
+.wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+.display{font-family:'Montserrat',sans-serif;font-weight:900;letter-spacing:-.02em;text-transform:uppercase;line-height:.95}
+.script{font-family:'Caveat',cursive;font-weight:700}
+.mono{font-family:'JetBrains Mono',monospace}
+a{color:inherit}
+
+/* ---------- buttons ---------- */
+.pill{
+  display:inline-flex;align-items:center;gap:12px;text-decoration:none;cursor:pointer;
+  font-family:'Inter',sans-serif;font-weight:800;font-size:15px;letter-spacing:.14em;text-transform:uppercase;
+  background:var(--blue);color:#fff;border-radius:999px;padding:20px 44px;
+  box-shadow:0 7px 0 var(--blue-shadow);transition:transform .15s,box-shadow .15s,background .15s;
+}
+.pill:hover{background:var(--blue-dark);transform:translateY(3px);box-shadow:0 4px 0 var(--blue-shadow)}
+.pill .arw{font-size:17px}
+.pill-outline{
+  display:inline-flex;align-items:center;gap:10px;text-decoration:none;
+  font-weight:800;font-size:12.5px;letter-spacing:.12em;text-transform:uppercase;
+  border:2px solid var(--ink);color:var(--ink);border-radius:999px;padding:12px 24px;
+  background:var(--card);transition:background .15s,color .15s;
+}
+.pill-outline:hover{background:var(--ink);color:#fff}
+
+/* ---------- topbar ---------- */
+.topbar{position:sticky;top:0;z-index:60;background:rgba(247,245,240,.88);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+.topbar .wrap{display:flex;align-items:center;justify-content:space-between;height:78px;position:relative;gap:14px}
+.who{display:flex;align-items:center;gap:13px;text-decoration:none}
+.who img{width:46px;height:46px;border-radius:50%}
+.who .nm{font-weight:800;font-size:16.5px;line-height:1.2}
+.who .rl{font-size:10.5px;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--gray-2)}
+.laurel{position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px}
+.laurel svg{width:38px;height:50px}
+.laurel .t{text-align:center;font-weight:800;font-size:13.5px;letter-spacing:.16em;text-transform:uppercase;line-height:1.4;background:linear-gradient(180deg,#c99f3d,#a07c28);-webkit-background-clip:text;background-clip:text;color:transparent}
+.topbar .right{display:flex;align-items:center;gap:12px}
+.lang{display:flex;border:1.5px solid var(--line);border-radius:999px;overflow:hidden;background:var(--card)}
+.lang button{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;padding:8px 11px;border:none;background:transparent;color:var(--gray-2);cursor:pointer;transition:all .15s}
+.lang button.active{background:var(--ink);color:#fff}
+@media(max-width:1020px){.laurel{display:none}}
+@media(max-width:640px){.topbar .cta-top{display:none}.who .nm{font-size:14.5px}}
+
+/* ---------- hero ---------- */
+.hero{padding:96px 0 72px;text-align:center;overflow:hidden}
+.hero .script-line{font-family:'Caveat',cursive;font-weight:700;font-size:clamp(34px,5vw,54px);color:var(--ink);transform:rotate(-2.5deg);display:inline-block;margin-bottom:10px;opacity:0;animation:pop .6s .05s forwards}
+.mega{transform:rotate(-3deg);margin:6px 0 40px}
+.mega .l{display:block;font-size:clamp(34px,6.5vw,86px);white-space:nowrap;opacity:0;animation:pop .6s forwards}
+.mega .l1{animation-delay:.12s}
+.mega .l2{animation-delay:.2s}
+@keyframes pop{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:none}}
+.typebox{
+  display:inline-block;max-width:760px;background:#eeebe3;position:relative;
+  padding:26px 34px;transform:rotate(-.5deg);margin-bottom:44px;
+  box-shadow:0 14px 30px rgba(23,26,31,.10);
+  clip-path:polygon(0 6%,3% 0,97% 2%,100% 8%,99% 94%,96% 100%,4% 98%,0 92%);
+  opacity:0;animation:pop .6s .3s forwards;
+}
+.typebox p{font-family:'JetBrains Mono',monospace;font-size:15px;line-height:1.85;color:#565d68;text-align:center}
+.typebox b{color:#0c0e11;font-weight:700}
+.typebox .hl{background:linear-gradient(transparent 52%,rgba(250,204,66,.65) 52%,rgba(250,204,66,.65) 94%,transparent 94%);padding:0 2px}
+.hero .cta-row{opacity:0;animation:pop .6s .38s forwards}
+.hero .checks{display:flex;flex-wrap:wrap;justify-content:center;gap:12px;margin-top:52px;opacity:0;animation:pop .6s .46s forwards}
+.chip{
+  display:inline-flex;align-items:center;gap:9px;background:var(--card);border:1px solid var(--line);
+  border-radius:12px;padding:12px 18px;font-size:13px;font-weight:600;color:var(--gray);
+  box-shadow:0 2px 6px rgba(23,26,31,.05);max-width:100%;text-align:left;
+}
+.chip b{color:var(--ink);font-weight:800}
+.chip .ck{color:var(--blue);font-weight:900;font-size:14px}
+
+/* ---------- timeline ---------- */
+.timeline{padding:40px 0 30px}
+.trow{display:grid;grid-template-columns:150px 1fr;gap:26px;margin-bottom:64px;align-items:start}
+.trow>*{min-width:0}
+.tmark{position:sticky;top:104px;text-align:left;padding-top:6px}
+.tmark .big{font-family:'Montserrat',sans-serif;font-weight:900;font-size:44px;letter-spacing:-.02em;line-height:1}
+.tmark .sm{display:flex;align-items:center;gap:7px;color:var(--gray-2);font-weight:700;font-size:14px;margin-top:8px}
+.tmark .sm .up{color:var(--blue)}
+.tmark .dot{width:11px;height:11px;border-radius:50%;background:var(--ink);margin-top:16px}
+@media(max-width:800px){
+  .trow{grid-template-columns:1fr;gap:14px}
+  .tmark{position:static;display:flex;align-items:baseline;gap:14px;padding-top:0}
+  .tmark .big{font-size:34px}
+  .tmark .dot{display:none}
+}
+
+.card{
+  background:var(--card);border:1px solid var(--line);border-radius:22px;
+  box-shadow:0 3px 14px rgba(23,26,31,.05);padding:44px 46px;position:relative;
+}
+@media(max-width:640px){.card{padding:28px 22px;border-radius:18px}}
+.card .co{font-family:'Montserrat',sans-serif;font-weight:900;font-size:clamp(26px,3.6vw,36px);letter-spacing:-.01em;line-height:1.05}
+.card .role{font-size:12px;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--gray-2);margin-top:8px}
+.card .rule{width:56px;height:4px;background:var(--blue);border-radius:2px;margin:16px 0 6px}
+.card .intro{color:var(--gray);font-size:15.5px;max-width:56ch;margin-top:14px}
+
+.stage{display:grid;grid-template-columns:56px 1fr;gap:20px;padding:26px 0;border-bottom:1px solid var(--line)}
+.stage:last-of-type{border-bottom:none}
+.stage .ico{width:52px;height:52px;border-radius:50%;background:var(--blue-soft);display:grid;place-items:center;color:var(--blue)}
+.stage .ico svg{width:22px;height:22px;stroke:var(--blue);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.stage h4{font-size:13.5px;font-weight:800;letter-spacing:.2em;text-transform:uppercase;color:var(--blue);margin:4px 0 10px}
+.stage ul{list-style:none}
+.stage li{position:relative;padding-left:20px;color:var(--gray);font-size:15px;margin-bottom:8px}
+.stage li::before{content:"";position:absolute;left:2px;top:9px;width:7px;height:7px;border-radius:50%;background:var(--blue);opacity:.75}
+.stage li b{color:var(--ink);font-weight:700}
+@media(max-width:560px){.stage{grid-template-columns:42px 1fr;gap:13px}.stage .ico{width:40px;height:40px}.stage .ico svg{width:17px;height:17px}}
+
+.statrow{display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin-top:28px;padding-top:28px;border-top:1px solid var(--line)}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px 26px;box-shadow:0 2px 8px rgba(23,26,31,.05)}
+.stat .v{font-family:'Montserrat',sans-serif;font-weight:900;font-size:30px;letter-spacing:-.01em;line-height:1}
+.stat .k{font-size:12.5px;color:var(--gray-2);font-weight:600;margin-top:5px}
+.tags{display:flex;flex-wrap:wrap;gap:10px;margin-left:auto}
+.tag{border:1.5px solid var(--blue);color:var(--blue);font-weight:700;font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;border-radius:999px;padding:9px 16px;background:var(--card)}
+@media(max-width:760px){.tags{margin-left:0}}
+.checkline{display:flex;flex-wrap:wrap;gap:12px;margin-top:22px}
+
+.note{
+  position:absolute;top:-16px;right:34px;background:var(--note);padding:14px 20px;
+  transform:rotate(4deg);box-shadow:0 8px 20px rgba(23,26,31,.12);
+  font-weight:800;font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink);
+}
+.note::before{content:"";position:absolute;top:-9px;left:50%;transform:translateX(-50%) rotate(-2deg);width:56px;height:18px;background:rgba(226,215,185,.85)}
+@media(max-width:640px){.note{right:16px;padding:10px 14px;font-size:11px}}
+
+/* ledger */
+.ledger-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:16px;margin-top:26px}
+table.ledger{width:100%;border-collapse:collapse;min-width:620px;background:var(--card)}
+.ledger th{font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--gray-2);text-align:left;padding:15px 20px;border-bottom:2px solid var(--ink)}
+.ledger th.r,.ledger td.r{text-align:right}
+.ledger td{padding:13px 20px;border-bottom:1px solid var(--line);font-size:14.5px;vertical-align:top}
+.ledger .proj{font-weight:800;font-size:14.5px}
+.ledger .role2{color:var(--gray-2);font-size:12px;margin-top:1px}
+.ledger td.r{font-family:'JetBrains Mono',monospace;font-size:13.5px;font-weight:600;white-space:nowrap}
+.ledger .dash{color:var(--gray-2)}
+.ledger tfoot td{border-bottom:none;border-top:2px solid var(--ink);background:var(--blue-soft);padding:16px 20px}
+.ledger tfoot .proj{color:var(--blue);text-transform:uppercase;letter-spacing:.1em}
+.ledger tfoot td.r{color:var(--blue);font-weight:700;font-size:15.5px}
+.ledger-note{font-size:12.5px;color:var(--gray-2);margin-top:14px;line-height:1.6}
+
+/* ---------- polaroid ---------- */
+.polaroid{
+  background:#fff;padding:12px 12px 16px;box-shadow:0 16px 36px rgba(23,26,31,.16);
+  transform:rotate(-2.5deg);display:inline-block;position:relative;border:1px solid rgba(23,26,31,.05);
+}
+.polaroid::before{content:"";position:absolute;top:-12px;left:50%;transform:translateX(-50%) rotate(-1deg);width:84px;height:24px;background:rgba(226,215,185,.9);box-shadow:0 2px 5px rgba(23,26,31,.08)}
+.polaroid img{display:block;width:100%;max-width:380px;height:auto}
+.polaroid .cap{font-family:'Caveat',cursive;font-weight:600;font-size:21px;color:var(--gray);text-align:center;padding-top:10px}
+
+/* ---------- hire ---------- */
+.hire{padding:90px 0}
+.hire .card{padding:56px 54px}
+.hire-grid{display:block;max-width:780px;margin:0 auto}
+@media(max-width:900px){.hire .card{padding:32px 24px}}
+.hire .eyebrow{font-size:12.5px;font-weight:800;letter-spacing:.24em;text-transform:uppercase;color:var(--blue);margin-bottom:14px}
+.hire h2{font-family:'Montserrat',sans-serif;font-weight:900;font-size:clamp(28px,4vw,40px);letter-spacing:-.015em;line-height:1.12;margin-bottom:16px}
+.hire .sub{color:var(--gray);font-size:16px;margin-bottom:26px}
+.edge{display:flex;flex-direction:column;gap:12px;margin-bottom:26px}
+.edge-row{display:flex;gap:16px;align-items:center;background:#fafbff;border:1px solid var(--line);border-radius:14px;padding:16px 20px}
+.edge-row .ico{width:44px;height:44px;border-radius:50%;background:var(--blue-soft);display:grid;place-items:center;flex-shrink:0}
+.edge-row .ico svg{width:20px;height:20px;stroke:var(--blue);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.edge-row p{font-size:15px;color:var(--gray)}
+.edge-row b{color:var(--blue);font-weight:800;font-size:17px}
+.hire .pitch{font-size:16.5px;color:var(--gray);margin-bottom:26px}
+.hire .pitch b{color:var(--ink)}
+.hire .facts{margin-top:30px;padding-top:22px;border-top:1px solid var(--line);font-size:13px;color:var(--gray-2);line-height:1.9}
+.hire .facts b{color:var(--gray);font-weight:700}
+
+/* ---------- quote ---------- */
+.quote{padding:80px 0 90px;text-align:center}
+.quote .qchip{display:inline-block;background:#ece7dc;color:var(--gray);font-size:13.5px;font-weight:600;border-radius:999px;padding:10px 22px;margin-bottom:36px}
+.quote blockquote{font-size:clamp(20px,3vw,30px);font-style:italic;font-weight:500;color:#3c434d;line-height:1.5;max-width:26em;margin:0 auto;position:relative}
+.quote blockquote::before{content:"“";position:absolute;left:-.6em;top:-.25em;font-size:2.6em;color:var(--ink);font-family:Georgia,serif;font-style:normal}
+.quote blockquote b{color:var(--ink);font-weight:700}
+.quote .sig{font-family:'Caveat',cursive;font-weight:700;font-size:38px;margin-top:30px;transform:rotate(-2deg);display:inline-block}
+
+/* ---------- big cta ---------- */
+.bigcta{padding:70px 0 130px;text-align:center;overflow:hidden}
+.bigcta .mega2{transform:rotate(-2.5deg);margin-bottom:56px}
+.bigcta .mega2 .l{display:block;font-size:clamp(44px,9vw,110px)}
+.bigcta .contacts{display:flex;flex-wrap:wrap;justify-content:center;gap:14px;margin-top:52px}
+.ct{
+  display:inline-flex;align-items:center;gap:10px;text-decoration:none;background:var(--card);
+  border:1px solid var(--line);border-radius:999px;padding:13px 24px;font-size:14.5px;font-weight:600;color:var(--gray);
+  box-shadow:0 2px 6px rgba(23,26,31,.05);transition:border-color .15s,color .15s;
+}
+.ct:hover{border-color:var(--blue);color:var(--blue)}
+.ct .k{font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:700;color:var(--blue);letter-spacing:.08em}
+
+/* ---------- footer ---------- */
+footer{border-top:1px solid var(--line);padding:36px 0;background:rgba(255,255,255,.5)}
+footer .wrap{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px}
+footer p{font-size:13px;color:var(--gray-2)}
+footer .socials{display:flex;gap:10px}
+footer .socials a{width:42px;height:42px;border-radius:50%;border:1px solid var(--line);background:var(--card);display:grid;place-items:center;text-decoration:none;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--gray);transition:all .15s}
+footer .socials a:hover{border-color:var(--blue);color:var(--blue)}
+
+/* ---------- phone polish ---------- */
+@media(max-width:560px){
+  .hero{padding:56px 0 44px}
+  .hero .script-line{font-size:30px}
+  .mega{margin:4px 0 28px}
+  .typebox{padding:20px 16px;margin-bottom:32px}
+  .typebox p{font-size:12.5px;line-height:1.75}
+  .pill{padding:17px 32px;font-size:13.5px}
+  .hero .checks{gap:8px;margin-top:36px}
+  .chip{padding:10px 13px;font-size:12px;border-radius:10px}
+  .timeline{padding:16px 0 10px}
+  .trow{margin-bottom:44px}
+  .card .co{font-size:24px}
+  .card .intro{font-size:14px}
+  .stage{padding:20px 0}
+  .stage li{font-size:14px}
+  .statrow{gap:10px;margin-top:20px;padding-top:20px}
+  .stat{padding:13px 18px}
+  .stat .v{font-size:23px}
+  .tag{padding:7px 12px;font-size:10.5px}
+  .hire{padding:48px 0}
+  .hire h2{font-size:25px}
+  .edge-row{padding:13px 15px}
+  .edge-row p{font-size:13.5px}
+  .quote{padding:52px 0 60px}
+  .quote blockquote{font-size:18.5px}
+  .quote .sig{font-size:30px}
+  .bigcta{padding:44px 0 84px}
+  .bigcta .mega2{margin-bottom:36px}
+  .bigcta .contacts{flex-direction:column;align-items:center;gap:10px;margin-top:36px}
+  .ct{width:100%;max-width:340px;justify-content:center}
+  footer .wrap{justify-content:center;text-align:center}
+}
+.reveal{opacity:0;transform:translateY(26px);transition:opacity .7s,transform .7s}
+.reveal.in{opacity:1;transform:none}
+@media(prefers-reduced-motion:reduce){
+  .reveal{opacity:1;transform:none;transition:none}
+  .hero .script-line,.mega .l,.typebox,.hero .cta-row,.hero .checks{animation:none;opacity:1}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="wrap">
+    <a class="who" href="#top">
+      <img class="js-portrait" src="data:," alt="Аҳмадхон Абдурашидов">
+      <span>
+        <span class="nm">Аҳмадхон Абдурашидов</span><br>
+        <span class="rl" data-i18n="top_role">Бошқарувчи шерик</span>
+      </span>
+    </a>
+    <div class="laurel" aria-hidden="true">
+      <svg viewBox="0 0 36 48">
+        <defs>
+          <linearGradient id="gld" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#f9e29b"/>
+            <stop offset=".45" stop-color="#d9ab4a"/>
+            <stop offset="1" stop-color="#8f6b23"/>
+          </linearGradient>
+        </defs>
+        <path d="M30 3 C18 14 13 28 18 46" fill="none" stroke="url(#gld)" stroke-width="2.4" stroke-linecap="round"/>
+        <g fill="url(#gld)" stroke="#7c5c20" stroke-width=".5">
+          <ellipse cx="26" cy="7" rx="2.7" ry="6.5" transform="rotate(35 26 7)"/>
+          <ellipse cx="21" cy="14" rx="2.9" ry="7" transform="rotate(52 21 14)"/>
+          <ellipse cx="17.5" cy="22" rx="3.1" ry="7.5" transform="rotate(68 17.5 22)"/>
+          <ellipse cx="16" cy="30" rx="3.2" ry="7.8" transform="rotate(84 16 30)"/>
+          <ellipse cx="16.5" cy="38" rx="3.2" ry="7.8" transform="rotate(100 16.5 38)"/>
+        </g>
+        <g fill="#ffffff" opacity=".28">
+          <ellipse cx="25" cy="6" rx="1" ry="3" transform="rotate(35 25 6)"/>
+          <ellipse cx="20" cy="13" rx="1" ry="3.2" transform="rotate(52 20 13)"/>
+          <ellipse cx="16.5" cy="21" rx="1.1" ry="3.4" transform="rotate(68 16.5 21)"/>
+          <ellipse cx="15" cy="29" rx="1.1" ry="3.5" transform="rotate(84 15 29)"/>
+          <ellipse cx="15.5" cy="37" rx="1.1" ry="3.5" transform="rotate(100 15.5 37)"/>
+        </g>
+      </svg>
+      <div class="t"><span data-i18n="laurel_1">24,6 млрд сўм</span><br><span data-i18n="laurel_2">савдо бошқаруви</span></div>
+      <svg viewBox="0 0 36 48" style="transform:scaleX(-1)">
+        <path d="M30 3 C18 14 13 28 18 46" fill="none" stroke="url(#gld)" stroke-width="2.4" stroke-linecap="round"/>
+        <g fill="url(#gld)" stroke="#7c5c20" stroke-width=".5">
+          <ellipse cx="26" cy="7" rx="2.7" ry="6.5" transform="rotate(35 26 7)"/>
+          <ellipse cx="21" cy="14" rx="2.9" ry="7" transform="rotate(52 21 14)"/>
+          <ellipse cx="17.5" cy="22" rx="3.1" ry="7.5" transform="rotate(68 17.5 22)"/>
+          <ellipse cx="16" cy="30" rx="3.2" ry="7.8" transform="rotate(84 16 30)"/>
+          <ellipse cx="16.5" cy="38" rx="3.2" ry="7.8" transform="rotate(100 16.5 38)"/>
+        </g>
+        <g fill="#ffffff" opacity=".28">
+          <ellipse cx="25" cy="6" rx="1" ry="3" transform="rotate(35 25 6)"/>
+          <ellipse cx="20" cy="13" rx="1" ry="3.2" transform="rotate(52 20 13)"/>
+          <ellipse cx="16.5" cy="21" rx="1.1" ry="3.4" transform="rotate(68 16.5 21)"/>
+          <ellipse cx="15" cy="29" rx="1.1" ry="3.5" transform="rotate(84 15 29)"/>
+          <ellipse cx="15.5" cy="37" rx="1.1" ry="3.5" transform="rotate(100 15.5 37)"/>
+        </g>
+      </svg>
+    </div>
+    <div class="right">
+      <div class="lang">
+        <button data-lang="uz" class="active">UZ</button>
+        <button data-lang="en">EN</button>
+        <button data-lang="ru">RU</button>
+      </div>
+      <a class="pill-outline cta-top" href="https://t.me/axmadxonabdurashidov2" target="_blank" rel="noopener"><span data-i18n="top_cta">Учрашув</span> <span>↗</span></a>
+    </div>
+  </div>
+</div>
+
+<header class="hero" id="top">
+  <div class="wrap">
+    <div class="script-line" data-i18n="hero_script">Бизнесингизни</div>
+    <h1 class="mega display">
+      <span class="l l1" data-i18n="hero_l1">Тезроқ ўсишига</span>
+      <span class="l l2" data-i18n="hero_l2">ёрдам бераман.</span>
+    </h1>
+    <div class="typebox">
+      <p data-i18n-html="hero_type">Ҳозиргача 13+ бизнесда <b>24,6 млрд сўм</b> савдони бошқардим. Охирги лойиҳада 216 млн сармоядан атиги <b>14 млн ишлатиб</b>, <span class="hl"><b>4,4 млрд сўм нақд</b></span> қайтардим.</p>
+    </div>
+    <div class="cta-row">
+      <a class="pill" href="https://t.me/axmadxonabdurashidov2" target="_blank" rel="noopener"><span data-i18n="cta_call">Учрашув белгилаш</span> <span class="arw">↗</span></a>
+    </div>
+    <div class="checks">
+      <span class="chip"><span class="ck">✓</span><span data-i18n-html="hc1"><b>24,6 млрд</b>&nbsp;сўм савдо</span></span>
+      <span class="chip"><span class="ck">✓</span><span data-i18n-html="hc2"><b>1,2 млрд</b>&nbsp;сармоя жалб қилинган</span></span>
+      <span class="chip"><span class="ck">✓</span><span data-i18n-html="hc3"><b>13+</b>&nbsp;лойиҳа</span></span>
+      <span class="chip"><span class="ck">✓</span><span data-i18n-html="hc4"><b>200+</b>&nbsp;ходим бошқаруви</span></span>
+    </div>
+  </div>
+</header>
+
+<div class="timeline">
+  <div class="wrap">
+
+    <!-- CASE 01 · SP INVEST -->
+    <div class="trow reveal">
+      <div class="tmark">
+        <div class="big">01</div>
+        <div class="sm"><span class="up">↑</span><span data-i18n="t1_time">10 ой</span></div>
+        <div class="dot"></div>
+      </div>
+      <div class="card">
+        <div class="note" data-i18n="n1">1 000+ ўқувчи</div>
+        <div class="co">SP INVEST</div>
+        <div class="role" data-i18n="c1_role">Асосчи / Бош директор</div>
+        <div class="rule"></div>
+        <p class="intro" data-i18n="c1_intro">Онлайн инвестиция академияси. Бозордаги «5–10 йил кут» тушунчаси ўрнига 6 ой – 2 йилда фойда берадиган стратегияни олиб кирдик.</p>
+
+        <div class="stage">
+          <div class="ico"><svg viewBox="0 0 24 24"><path d="M4 21V4m0 0l7 3 9-3v10l-9 3-7-3"/></svg></div>
+          <div>
+            <h4 data-i18n="st_start">Бошлаш</h4>
+            <ul>
+              <li data-i18n-html="c1_s1a"><b>216 млн сўм</b> сармоя ажратилди — атиги <b>14 млн ишлатилди</b>, қолгани компаниянинг ўз айланмасидан қопланди</li>
+              <li data-i18n-html="c1_s1b">Молия, ўқув, маркетинг, сотув ва HR — <b>30 кишилик жамоа нолдан</b> қурилди</li>
+            </ul>
+          </div>
+        </div>
+        <div class="stage">
+          <div class="ico"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8m0 0h-5m5 0v5"/></svg></div>
+          <div>
+            <h4 data-i18n="st_scale">Ўсиш</h4>
+            <ul>
+              <li data-i18n-html="c1_s2a">Ушбу нишада <b>янги маркетинг воронкаси</b> яратилди</li>
+              <li data-i18n-html="c1_s2b">Ойлик кирим 7 ойда: <b>53 млн → 986 млн сўм</b> (~20 баробар)</li>
+            </ul>
+          </div>
+        </div>
+        <div class="stage">
+          <div class="ico"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L12 7l3 10 4-4M12 3v4"/></svg></div>
+          <div>
+            <h4 data-i18n="st_result">Натижа</h4>
+            <ul>
+              <li data-i18n-html="c1_s3a">10 ойда <b>4,4 млрд сўм нақд тушум</b> (жами савдо — 6,6 млрд)</li>
+              <li data-i18n-html="c1_s3b">Атиги <b>$65 300</b> реклама харажати билан <b>1 000+ ўқувчи</b></li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="statrow">
+          <div class="stat"><div class="v">~20×</div><div class="k" data-i18n="c1_k1">ойлик кирим ўсиши</div></div>
+          <div class="stat"><div class="v">4,4<span style="font-size:18px"> </span><span style="font-size:20px" data-i18n="u_bn">млрд</span></div><div class="k" data-i18n="c1_k2">нақд тушум (сўм)</div></div>
+          <div class="tags">
+            <span class="tag" data-i18n="tg_funnel">Маркетинг воронкаси</span>
+            <span class="tag" data-i18n="tg_fin">Молия тизими</span>
+            <span class="tag" data-i18n="tg_team">Жамоа қуриш</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CASE 02 · MONEY MAKERS -->
+    <div class="trow reveal">
+      <div class="tmark">
+        <div class="big">02</div>
+        <div class="sm"><span class="up">↑</span><span data-i18n="t2_time">3 ой</span></div>
+        <div class="dot"></div>
+      </div>
+      <div class="card">
+        <div class="note" data-i18n="n2">Кирим $182K</div>
+        <div class="co">MONEY MAKERS</div>
+        <div class="role" data-i18n="c2_role">Бош директор (CEO) · Молия бозори IT</div>
+        <div class="rule"></div>
+        <p class="intro" data-i18n="c2_intro">Молия бозори бўйича IT компания. Ёлланма раҳбар сифатида ишладим.</p>
+
+        <div class="stage">
+          <div class="ico"><svg viewBox="0 0 24 24"><path d="M4 21V4m0 0l7 3 9-3v10l-9 3-7-3"/></svg></div>
+          <div>
+            <h4 data-i18n="st_arrive">Келиш</h4>
+            <ul>
+              <li data-i18n-html="c2_s1a">Компанияда <b>13 ходим</b> бор эди; маркетинг, HR, молия ва бухгалтерия <b>нолдан</b> ташкил қилинди</li>
+              <li data-i18n-html="c2_s1b">Жамоа <b>13 → 23</b> кишига етказилди, барчаси расмий штатда</li>
+            </ul>
+          </div>
+        </div>
+        <div class="stage">
+          <div class="ico"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8m0 0h-5m5 0v5"/></svg></div>
+          <div>
+            <h4 data-i18n="st_build">Қуриш</h4>
+            <ul>
+              <li data-i18n-html="c2_s2a">Пули бор бўла туриб сотиб олмаётган мижозлар учун жамоа билан янги, қимматроқ маҳсулот чиқардик — ўртача чек <b>18 млн → 35 млн сўм</b></li>
+              <li data-i18n-html="c2_s2b">Янги сотув воронкаси: конверсия <b>1–3% → 10%</b></li>
+            </ul>
+          </div>
+        </div>
+        <div class="stage">
+          <div class="ico"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L12 7l3 10 4-4M12 3v4"/></svg></div>
+          <div>
+            <h4 data-i18n="st_result">Натижа</h4>
+            <ul>
+              <li data-i18n-html="c2_s3a">Ойлик айланма 3 ойда <b>240 млн → 1 млрд сўм</b> (~4×)</li>
+              <li data-i18n-html="c2_s3b">Лойиҳадан жами кирим — <b>$182 000</b></li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="statrow">
+          <div class="stat"><div class="v">10×</div><div class="k" data-i18n="c2_k1">воронка самараси</div></div>
+          <div class="stat"><div class="v">~4×</div><div class="k" data-i18n="c2_k2">ойлик айланма ўсиши</div></div>
+          <div class="tags">
+            <span class="tag" data-i18n="tg_sales">Сотув воронкаси</span>
+            <span class="tag">HR</span>
+            <span class="tag" data-i18n="tg_acc">Бухгалтерия</span>
+            <span class="tag">KPI</span>
+          </div>
+        </div>
+        <div class="checkline">
+          <span class="chip"><span class="ck">✓</span><span data-i18n-html="c2_ch1"><b>Жамоа 13 → 23</b></span></span>
+          <span class="chip"><span class="ck">✓</span><span data-i18n-html="c2_ch2"><b>100%</b>&nbsp;расмий штат</span></span>
+          <span class="chip"><span class="ck">✓</span><span data-i18n-html="c2_ch3"><b>Чек 18 → 35 млн</b></span></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- CASE 03 · JAHONGIR ENGLISH -->
+    <div class="trow reveal">
+      <div class="tmark">
+        <div class="big">03</div>
+        <div class="sm"><span class="up">↑</span><span data-i18n="t3_time">2 ой</span></div>
+        <div class="dot"></div>
+      </div>
+      <div class="card">
+        <div class="note" data-i18n="n3">$2 300 реклама</div>
+        <div class="co">JAHONGIR ENGLISH</div>
+        <div class="role" data-i18n="c3_role">Шерик / Раҳбар · Тил ўргатиш</div>
+        <div class="rule"></div>
+        <p class="intro" data-i18n="c3_intro">Инглиз тили ўқув маркази. Money Makers билан параллел равишда, алоҳида жамоа орқали бошқарилди.</p>
+
+        <div class="stage">
+          <div class="ico"><svg viewBox="0 0 24 24"><path d="M4 21V4m0 0l7 3 9-3v10l-9 3-7-3"/></svg></div>
+          <div>
+            <h4 data-i18n="st_strategy">Стратегия</h4>
+            <ul>
+              <li data-i18n-html="c3_s1a">Премиум таклиф қурилди: курс нархи <b>500 минг → 3,5 млн сўм</b> (7 баробар)</li>
+              <li data-i18n-html="c3_s1b">Юқори нархда ҳам <b>юқори ҳажмдаги сотув</b> сақлаб қолинди</li>
+            </ul>
+          </div>
+        </div>
+        <div class="stage">
+          <div class="ico"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L12 7l3 10 4-4M12 3v4"/></svg></div>
+          <div>
+            <h4 data-i18n="st_result">Натижа</h4>
+            <ul>
+              <li data-i18n-html="c3_s2a"><b>750 млн сўм савдо</b>, 720 млн нақд тушум — атиги <b>$2 300</b> реклама билан</li>
+              <li data-i18n-html="c3_s2b">2 ойда <b>2 та ўқув маркази биноси</b> тўлди — <b>600+ ўқувчи</b></li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="statrow">
+          <div class="stat"><div class="v">7×</div><div class="k" data-i18n="c3_k1">нарх ўсиши</div></div>
+          <div class="stat"><div class="v">750<span style="font-size:20px"> </span><span style="font-size:20px" data-i18n="u_mn">млн</span></div><div class="k" data-i18n="c3_k2">савдо (сўм)</div></div>
+          <div class="tags">
+            <span class="tag" data-i18n="tg_premium">Премиум маҳсулот</span>
+            <span class="tag" data-i18n="tg_price">Нарх сиёсати</span>
+            <span class="tag" data-i18n="tg_traffic">Трафик</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PORTFOLIO LEDGER -->
+    <div class="trow reveal">
+      <div class="tmark">
+        <div class="big">Σ</div>
+        <div class="sm"><span class="up">↑</span><span data-i18n="t4_time">13+ лойиҳа</span></div>
+        <div class="dot"></div>
+      </div>
+      <div class="card">
+        <div class="note" data-i18n="n4">9,7 млрд реал касса</div>
+        <div class="co" data-i18n="led_h">ПОРТФЕЛЬ — РАҚАМЛАРДА</div>
+        <div class="role" data-i18n="led_sub">Барча рақамлар — сўмда · Гаплар эмас, касса</div>
+        <div class="rule"></div>
+
+        <div class="ledger-scroll">
+          <table class="ledger">
+            <thead>
+              <tr>
+                <th data-i18n="th_proj">Лойиҳа</th>
+                <th class="r" data-i18n="th_sales">Савдо · шартнома</th>
+                <th class="r" data-i18n="th_cash">Реал нақд</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td><div class="proj">SP Invest</div><div class="role2" data-i18n="rl_sp">Асосчи / Бош директор</div></td><td class="r" data-i18n="v_sp_s">6,60 млрд</td><td class="r" data-i18n="v_sp_c">4,40 млрд</td></tr>
+              <tr><td><div class="proj" data-i18n="pj_qur">Қурилиш компанияси</div><div class="role2" data-i18n="rl_qur">Реклама бўйича раҳбар</div></td><td class="r" data-i18n="v_qur_s">12,46 млрд *</td><td class="r"><span class="dash">—</span></td></tr>
+              <tr><td><div class="proj">Money Makers</div><div class="role2" data-i18n="rl_mm">Бош директор (CEO)</div></td><td class="r" data-i18n="v_mm_s">2,33 млрд</td><td class="r" data-i18n="v_mm_c">2,33 млрд</td></tr>
+              <tr><td><div class="proj" data-i18n="pj_inv">Сармоя жалб қилиш</div><div class="role2" data-i18n="rl_inv">Молия раҳбари</div></td><td class="r" data-i18n="v_inv_s">1,20 млрд</td><td class="r" data-i18n="v_inv_c">1,10 млрд</td></tr>
+              <tr><td><div class="proj" data-i18n="pj_non">Нонвойхона</div><div class="role2" data-i18n="rl_non">Инвестор / Раҳбар</div></td><td class="r" data-i18n="v_non_s">793,5 млн</td><td class="r" data-i18n="v_non_c">793,5 млн</td></tr>
+              <tr><td><div class="proj">Jahongir English</div><div class="role2" data-i18n="rl_je">Шерик / Раҳбар</div></td><td class="r" data-i18n="v_je_s">750 млн</td><td class="r" data-i18n="v_je_c">720 млн</td></tr>
+              <tr><td><div class="proj" data-i18n="pj_pk">Пишириқ курси (Ya.Kumush)</div><div class="role2" data-i18n="rl_pk">Шерик / Раҳбар</div></td><td class="r" data-i18n="v_pk_s">250 млн</td><td class="r" data-i18n="v_pk_c">200 млн</td></tr>
+              <tr><td><div class="proj">Wall Street English</div><div class="role2" data-i18n="rl_ws">Реклама бўйича раҳбар</div></td><td class="r" data-i18n="v_ws_s">200 млн</td><td class="r" data-i18n="v_ws_c">31 млн</td></tr>
+              <tr><td><div class="proj" data-i18n="pj_rus">Рус тили курси (Indira)</div><div class="role2" data-i18n="rl_rus">Шерик / Раҳбар</div></td><td class="r" data-i18n="v_rus_s">134,3 млн</td><td class="r" data-i18n="v_rus_c">103,6 млн</td></tr>
+              <tr><td><div class="proj" data-i18n="pj_ped">Педиатр курси</div><div class="role2" data-i18n="rl_ped">Шерик / Раҳбар</div></td><td class="r" data-i18n="v_ped_s">20 млн</td><td class="r" data-i18n="v_ped_c">18 млн</td></tr>
+            </tbody>
+            <tfoot>
+              <tr><td><div class="proj" data-i18n="th_total">Жами</div></td><td class="r" data-i18n="v_tot_s">24,6 млрд</td><td class="r" data-i18n="v_tot_c">9,7 млрд</td></tr>
+            </tfoot>
+          </table>
+        </div>
+        <p class="ledger-note" data-i18n="ledger_note">* Қурилиш: биринчи ойнинг ўзида реклама орқали 22 та бошланғич тўлов — $975 000 шартнома қиймати (2025 й. май). Кейинги тушумлар сотув бўлими орқали давом этган.</p>
+        <div class="checkline">
+          <span class="chip"><span class="ck">✓</span><span data-i18n-html="l_ch1"><b>16+</b>&nbsp;молия тизими нолдан</span></span>
+          <span class="chip"><span class="ck">✓</span><span data-i18n-html="l_ch2"><b>160 минг+</b>&nbsp;аудитория йиғилган</span></span>
+          <span class="chip"><span class="ck">✓</span><span data-i18n-html="l_ch3"><b>4</b>&nbsp;соҳа: таълим · молия · озиқ-овқат · қурилиш</span></span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- HIRE ME -->
+<section class="hire">
+  <div class="wrap">
+    <div class="card reveal">
+      <div class="hire-grid">
+        <div>
+          <div class="eyebrow" data-i18n="hire_eyebrow">Бошқарувчи шерик</div>
+          <h2 data-i18n="hire_h">Сизга ишни битирадиган одам керак.</h2>
+          <p class="sub" data-i18n="hire_sub">Пулингиз ва лойиҳангизни ишончли, ҳисоботли қўлларга топширинг.</p>
+          <div class="edge">
+            <div class="edge-row">
+              <div class="ico"><svg viewBox="0 0 24 24"><path d="M12 3v18M5 8h14M5 16h14"/></svg></div>
+              <p><b>16+</b>&nbsp;<span data-i18n="e1">бизнесда молиявий ҳисоботлар қурилган</span></p>
+            </div>
+            <div class="edge-row">
+              <div class="ico"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5M16 5a3.5 3.5 0 010 6.6M18 14.7c2 .8 3.2 2.6 3.6 5.3"/></svg></div>
+              <p><b>200+</b>&nbsp;<span data-i18n="e2">ходим бошқаруви тажрибаси — бир ташкилотда 30 кишигача</span></p>
+            </div>
+            <div class="edge-row">
+              <div class="ico"><svg viewBox="0 0 24 24"><path d="M12 2l2.9 6.3 6.6.6-5 4.5 1.5 6.6L12 16.5 6 20l1.5-6.6-5-4.5 6.6-.6z"/></svg></div>
+              <p><b>15+</b>&nbsp;<span data-i18n="e3">корхонага молиявий маслаҳат — айланмаси 60 млн дан 60 млрд сўмгача</span></p>
+            </div>
+          </div>
+          <p class="pitch" data-i18n-html="hire_pitch">Эҳтимол, сизнинг бизнесингизга ўхшашини аллақачон кўрганман. <b>Муаммони топаман, ечим харитасини тузаман ва уни бирга қураман.</b></p>
+          <div class="tags" style="margin-left:0">
+            <span class="tag" data-i18n="hg1">Музораба / Шартнома</span>
+            <span class="tag">P&amp;L · Cash Flow</span>
+            <span class="tag" data-i18n="hg2">90 кунлик прогноз</span>
+            <span class="tag">Burn Rate · Runway</span>
+            <span class="tag" data-i18n="hg3">Захира касса</span>
+            <span class="tag" data-i18n="hg4">KPI тизими</span>
+          </div>
+          <p class="facts" data-i18n-html="hire_facts"><b>Таълим:</b> TEAM &amp; South Bank University — маркетинг ва тадбиркорлик (2021–2024) · Молия, маркетинг ва сотув бўйича топ-курсларга ~$15 000 сарфланган<br><b>Тиллар:</b> Ўзбек — она тили · Инглиз — эркин · Рус — мулоқот</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- QUOTE -->
+<section class="quote">
+  <div class="wrap reveal">
+    <div class="qchip" data-i18n="q_chip">Шериклар қочганда — 103,4 млн сўм қарз шахсан тўланган</div>
+    <blockquote data-i18n-html="q_text">13 лойиҳадан 3 таси зарар билан ёпилди. Раҳбар сифатида барча мажбуриятни бўйнимга олдим ва қарзни ўзим ёпдим. <b>Инвестор пули мен учун ўз пулимдан қимматроқ.</b></blockquote>
+    <div class="sig">— Аҳмадхон Абдурашидов</div>
+  </div>
+</section>
+
+<!-- BIG CTA -->
+<section class="bigcta">
+  <div class="wrap">
+    <h2 class="mega2 display reveal">
+      <span class="l" data-i18n="cta_l1">Пулингиз</span>
+      <span class="l" data-i18n="cta_l2">ишласинми?</span>
+    </h2>
+    <a class="pill" href="https://t.me/axmadxonabdurashidov2" target="_blank" rel="noopener"><span data-i18n="cta_call">Учрашув белгилаш</span> <span class="arw">↗</span></a>
+    <div class="contacts">
+      <a class="ct" href="https://t.me/axmadxonabdurashidov2" target="_blank" rel="noopener"><span class="k">TG</span>@axmadxonabdurashidov2</a>
+      <a class="ct" href="tel:+998902790025"><span class="k">TEL</span>+998 90 279 00 25</a>
+      <a class="ct" href="mailto:akhmadkhon0025@gmail.com"><span class="k">MAIL</span>akhmadkhon0025@gmail.com</a>
+      <a class="ct" href="https://instagram.com/axmadxonabdurashidov2" target="_blank" rel="noopener"><span class="k">IG</span>@axmadxonabdurashidov2</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p data-i18n="footer_l">Аҳмадхон Абдурашидов · Наманган, Ўзбекистон</p>
+    <div class="socials">
+      <a href="https://t.me/axmadxonabdurashidov2" target="_blank" rel="noopener" title="Telegram">TG</a>
+      <a href="https://instagram.com/axmadxonabdurashidov2" target="_blank" rel="noopener" title="Instagram">IG</a>
+      <a href="mailto:akhmadkhon0025@gmail.com" title="Email">@</a>
+    </div>
+    <p data-i18n="footer_r">Бошқарувчи шерик · 2026</p>
+  </div>
+</footer>
+
+<script>
+const I18N = {
+  uz: {
+    top_role:"Бошқарувчи шерик", top_cta:"Учрашув",
+    laurel_1:"24,6 млрд сўм", laurel_2:"савдо бошқаруви",
+    hero_script:"Бизнесингизни",
+    hero_l1:"Тезроқ ўсишига", hero_l2:"ёрдам бераман.",
+    hero_type:"Ҳозиргача 13+ бизнесда <b>24,6 млрд сўм</b> савдони бошқардим. Охирги лойиҳада 216 млн сармоядан атиги <b>14 млн ишлатиб</b>, <span class='hl'><b>4,4 млрд сўм нақд</b></span> қайтардим.",
+    cta_call:"Учрашув белгилаш",
+    hc1:"<b>24,6 млрд</b>&nbsp;сўм савдо", hc2:"<b>1,2 млрд</b>&nbsp;сармоя жалб қилинган", hc3:"<b>13+</b>&nbsp;лойиҳа", hc4:"<b>200+</b>&nbsp;ходим бошқаруви",
+    u_bn:"млрд", u_mn:"млн",
+    st_start:"Бошлаш", st_scale:"Ўсиш", st_result:"Натижа", st_arrive:"Келиш", st_build:"Қуриш", st_strategy:"Стратегия",
+    t1_time:"10 ой", n1:"1 000+ ўқувчи",
+    c1_role:"Асосчи / Бош директор",
+    c1_intro:"Онлайн инвестиция академияси. Бозордаги «5–10 йил кут» тушунчаси ўрнига 6 ой – 2 йилда фойда берадиган стратегияни олиб кирдик.",
+    c1_s1a:"<b>216 млн сўм</b> сармоя ажратилди — атиги <b>14 млн ишлатилди</b>, қолгани компаниянинг ўз айланмасидан қопланди",
+    c1_s1b:"Молия, ўқув, маркетинг, сотув ва HR — <b>30 кишилик жамоа нолдан</b> қурилди",
+    c1_s2a:"Ушбу нишада <b>янги маркетинг воронкаси</b> яратилди",
+    c1_s2b:"Ойлик кирим 7 ойда: <b>53 млн → 986 млн сўм</b> (~20 баробар)",
+    c1_s3a:"10 ойда <b>4,4 млрд сўм нақд тушум</b> (жами савдо — 6,6 млрд)",
+    c1_s3b:"Атиги <b>$65 300</b> реклама харажати билан <b>1 000+ ўқувчи</b>",
+    c1_k1:"ойлик кирим ўсиши", c1_k2:"нақд тушум (сўм)",
+    tg_funnel:"Маркетинг воронкаси", tg_fin:"Молия тизими", tg_team:"Жамоа қуриш",
+    t2_time:"3 ой", n2:"Кирим $182K",
+    c2_role:"Бош директор (CEO) · Молия бозори IT",
+    c2_intro:"Молия бозори бўйича IT компания. Ёлланма раҳбар сифатида ишладим.",
+    c2_s1a:"Компанияда <b>13 ходим</b> бор эди; маркетинг, HR, молия ва бухгалтерия <b>нолдан</b> ташкил қилинди",
+    c2_s1b:"Жамоа <b>13 → 23</b> кишига етказилди, барчаси расмий штатда",
+    c2_s2a:"Пули бор бўла туриб сотиб олмаётган мижозлар учун жамоа билан янги, қимматроқ маҳсулот чиқардик — ўртача чек <b>18 млн → 35 млн сўм</b>",
+    c2_s2b:"Янги сотув воронкаси: конверсия <b>1–3% → 10%</b>",
+    c2_s3a:"Ойлик айланма 3 ойда <b>240 млн → 1 млрд сўм</b> (~4×)",
+    c2_s3b:"Лойиҳадан жами кирим — <b>$182 000</b>",
+    c2_k1:"воронка самараси", c2_k2:"ойлик айланма ўсиши",
+    tg_sales:"Сотув воронкаси", tg_acc:"Бухгалтерия",
+    c2_ch1:"<b>Жамоа 13 → 23</b>", c2_ch2:"<b>100%</b>&nbsp;расмий штат", c2_ch3:"<b>Чек 18 → 35 млн</b>",
+    t3_time:"2 ой", n3:"$2 300 реклама",
+    c3_role:"Шерик / Раҳбар · Тил ўргатиш",
+    c3_intro:"Инглиз тили ўқув маркази. Money Makers билан параллел равишда, алоҳида жамоа орқали бошқарилди.",
+    c3_s1a:"Премиум таклиф қурилди: курс нархи <b>500 минг → 3,5 млн сўм</b> (7 баробар)",
+    c3_s1b:"Юқори нархда ҳам <b>юқори ҳажмдаги сотув</b> сақлаб қолинди",
+    c3_s2a:"<b>750 млн сўм савдо</b>, 720 млн нақд тушум — атиги <b>$2 300</b> реклама билан",
+    c3_s2b:"2 ойда <b>2 та ўқув маркази биноси</b> тўлди — <b>600+ ўқувчи</b>",
+    c3_k1:"нарх ўсиши", c3_k2:"савдо (сўм)",
+    tg_premium:"Премиум маҳсулот", tg_price:"Нарх сиёсати", tg_traffic:"Трафик",
+    t4_time:"13+ лойиҳа", n4:"9,7 млрд реал касса",
+    led_h:"ПОРТФЕЛЬ — РАҚАМЛАРДА", led_sub:"Барча рақамлар — сўмда · Гаплар эмас, касса",
+    th_proj:"Лойиҳа", th_sales:"Савдо · шартнома", th_cash:"Реал нақд", th_total:"Жами",
+    rl_sp:"Асосчи / Бош директор", pj_qur:"Қурилиш компанияси", rl_qur:"Реклама бўйича раҳбар",
+    rl_mm:"Бош директор (CEO)", pj_inv:"Сармоя жалб қилиш", rl_inv:"Молия раҳбари",
+    pj_non:"Нонвойхона", rl_non:"Инвестор / Раҳбар", rl_je:"Шерик / Раҳбар",
+    pj_pk:"Пишириқ курси (Ya.Kumush)", rl_pk:"Шерик / Раҳбар", rl_ws:"Реклама бўйича раҳбар",
+    pj_rus:"Рус тили курси (Indira)", rl_rus:"Шерик / Раҳбар", pj_ped:"Педиатр курси", rl_ped:"Шерик / Раҳбар",
+    v_sp_s:"6,60 млрд", v_sp_c:"4,40 млрд", v_qur_s:"12,46 млрд *", v_mm_s:"2,33 млрд", v_mm_c:"2,33 млрд",
+    v_inv_s:"1,20 млрд", v_inv_c:"1,10 млрд", v_non_s:"793,5 млн", v_non_c:"793,5 млн",
+    v_je_s:"750 млн", v_je_c:"720 млн", v_pk_s:"250 млн", v_pk_c:"200 млн",
+    v_ws_s:"200 млн", v_ws_c:"31 млн", v_rus_s:"134,3 млн", v_rus_c:"103,6 млн",
+    v_ped_s:"20 млн", v_ped_c:"18 млн", v_tot_s:"24,6 млрд", v_tot_c:"9,7 млрд",
+    ledger_note:"* Қурилиш: биринчи ойнинг ўзида реклама орқали 22 та бошланғич тўлов — $975 000 шартнома қиймати (2025 й. май). Кейинги тушумлар сотув бўлими орқали давом этган.",
+    l_ch1:"<b>16+</b>&nbsp;молия тизими нолдан", l_ch2:"<b>160 минг+</b>&nbsp;аудитория йиғилган", l_ch3:"<b>4</b>&nbsp;соҳа: таълим · молия · озиқ-овқат · қурилиш",
+    pol_cap:"Аҳмадхон · Наманган",
+    hire_eyebrow:"Бошқарувчи шерик", hire_h:"Сизга ишни битирадиган одам керак.",
+    hire_sub:"Пулингиз ва лойиҳангизни ишончли, ҳисоботли қўлларга топширинг.",
+    e1:"бизнесда молиявий ҳисоботлар қурилган",
+    e2:"ходим бошқаруви тажрибаси — бир ташкилотда 30 кишигача",
+    e3:"корхонага молиявий маслаҳат — айланмаси 60 млн дан 60 млрд сўмгача",
+    hire_pitch:"Эҳтимол, сизнинг бизнесингизга ўхшашини аллақачон кўрганман. <b>Муаммони топаман, ечим харитасини тузаман ва уни бирга қураман.</b>",
+    hg1:"Музораба / Шартнома", hg2:"90 кунлик прогноз", hg3:"Захира касса", hg4:"KPI тизими",
+    hire_facts:"<b>Таълим:</b> TEAM & South Bank University — маркетинг ва тадбиркорлик (2021–2024) · Молия, маркетинг ва сотув бўйича топ-курсларга ~$15 000 сарфланган<br><b>Тиллар:</b> Ўзбек — она тили · Инглиз — эркин · Рус — мулоқот",
+    q_chip:"Шериклар қочганда — 103,4 млн сўм қарз шахсан тўланган",
+    q_text:"13 лойиҳадан 3 таси зарар билан ёпилди. Раҳбар сифатида барча мажбуриятни бўйнимга олдим ва қарзни ўзим ёпдим. <b>Инвестор пули мен учун ўз пулимдан қимматроқ.</b>",
+    cta_l1:"Пулингиз", cta_l2:"ишласинми?",
+    footer_l:"Аҳмадхон Абдурашидов · Наманган, Ўзбекистон", footer_r:"Бошқарувчи шерик · 2026"
+  },
+  en: {
+    top_role:"Managing Partner", top_cta:"Book a call",
+    laurel_1:"24.6B UZS in sales", laurel_2:"under management",
+    hero_script:"I help your business",
+    hero_l1:"Grow", hero_l2:"faster.",
+    hero_type:"So far, across 13+ businesses, I've managed <b>24.6 billion UZS</b> in sales. In my latest venture I spent just <b>14M of the 216M</b> allocated — and returned <span class='hl'><b>4.4 billion UZS in cash</b></span>.",
+    cta_call:"Book a call",
+    hc1:"<b>24.6B</b>&nbsp;UZS in sales", hc2:"<b>1.2B</b>&nbsp;UZS investment raised", hc3:"<b>13+</b>&nbsp;ventures", hc4:"<b>200+</b>&nbsp;people managed",
+    u_bn:"B", u_mn:"M",
+    st_start:"Start", st_scale:"Scale", st_result:"Result", st_arrive:"Arrive", st_build:"Build", st_strategy:"Strategy",
+    t1_time:"10 months", n1:"1,000+ students",
+    c1_role:"Founder / CEO",
+    c1_intro:"An online investing academy. We replaced the market's “wait 5–10 years” mindset with a strategy that pays back in 6 months to 2 years.",
+    c1_s1a:"<b>216M UZS</b> was allocated — only <b>14M was spent</b>; the rest of the growth was funded by the company's own turnover",
+    c1_s1b:"Finance, education, marketing, sales and HR — a <b>30-person team built from zero</b>",
+    c1_s2a:"Created a <b>new marketing funnel</b> for this niche",
+    c1_s2b:"Monthly revenue in 7 months: <b>53M → 986M UZS</b> (~20×)",
+    c1_s3a:"<b>4.4B UZS in cash</b> collected in 10 months (6.6B in total sales)",
+    c1_s3b:"<b>1,000+ students</b> acquired on just <b>$65,300</b> of ad spend",
+    c1_k1:"monthly revenue growth", c1_k2:"cash collected (UZS)",
+    tg_funnel:"Marketing funnel", tg_fin:"Finance system", tg_team:"Team building",
+    t2_time:"3 months", n2:"$182K income",
+    c2_role:"CEO · Fintech IT",
+    c2_intro:"A financial-markets IT company. I worked there as a hired executive.",
+    c2_s1a:"The company had <b>13 employees</b>; marketing, HR, finance and accounting were built <b>from zero</b>",
+    c2_s1b:"Team grew <b>13 → 23</b>, everyone on official payroll",
+    c2_s2a:"For clients who had the money but weren't buying, we built a new, higher-end product with the team — average check <b>18M → 35M UZS</b>",
+    c2_s2b:"New sales funnel: conversion <b>1–3% → 10%</b>",
+    c2_s3a:"Monthly turnover in 3 months: <b>240M → 1B UZS</b> (~4×)",
+    c2_s3b:"Total project income — <b>$182,000</b>",
+    c2_k1:"funnel efficiency", c2_k2:"monthly turnover growth",
+    tg_sales:"Sales funnel", tg_acc:"Accounting",
+    c2_ch1:"<b>Team 13 → 23</b>", c2_ch2:"<b>100%</b>&nbsp;official payroll", c2_ch3:"<b>Check 18 → 35M</b>",
+    t3_time:"2 months", n3:"$2,300 ad spend",
+    c3_role:"Partner / Lead · Language education",
+    c3_intro:"An English-language school. Run in parallel with Money Makers, through a separate team.",
+    c3_s1a:"Built a premium offer: course price <b>500K → 3.5M UZS</b> (7×)",
+    c3_s1b:"Kept <b>sales volume high</b> even at the premium price",
+    c3_s2a:"<b>750M UZS in sales</b>, 720M in cash — on just <b>$2,300</b> of ads",
+    c3_s2b:"<b>2 training-center buildings</b> filled in 2 months — <b>600+ students</b>",
+    c3_k1:"price increase", c3_k2:"sales (UZS)",
+    tg_premium:"Premium product", tg_price:"Pricing strategy", tg_traffic:"Traffic",
+    t4_time:"13+ ventures", n4:"9.7B real cash",
+    led_h:"THE PORTFOLIO, IN NUMBERS", led_sub:"All figures in UZS · Not claims — cash",
+    th_proj:"Project", th_sales:"Sales · contract", th_cash:"Real cash", th_total:"Total",
+    rl_sp:"Founder / CEO", pj_qur:"Construction developer", rl_qur:"Head of marketing",
+    rl_mm:"CEO", pj_inv:"Capital raising", rl_inv:"Finance lead",
+    pj_non:"Bakery", rl_non:"Investor / Lead", rl_je:"Partner / Lead",
+    pj_pk:"Baking course (Ya.Kumush)", rl_pk:"Partner / Lead", rl_ws:"Head of marketing",
+    pj_rus:"Russian course (Indira)", rl_rus:"Partner / Lead", pj_ped:"Pediatrician course", rl_ped:"Partner / Lead",
+    v_sp_s:"6.60B", v_sp_c:"4.40B", v_qur_s:"12.46B *", v_mm_s:"2.33B", v_mm_c:"2.33B",
+    v_inv_s:"1.20B", v_inv_c:"1.10B", v_non_s:"793.5M", v_non_c:"793.5M",
+    v_je_s:"750M", v_je_c:"720M", v_pk_s:"250M", v_pk_c:"200M",
+    v_ws_s:"200M", v_ws_c:"31M", v_rus_s:"134.3M", v_rus_c:"103.6M",
+    v_ped_s:"20M", v_ped_c:"18M", v_tot_s:"24.6B", v_tot_c:"9.7B",
+    ledger_note:"* Construction: 22 down payments from ads in the very first month — $975,000 in contract value (May 2025). Later collections continued through the in-house sales team.",
+    l_ch1:"<b>16+</b>&nbsp;finance systems from zero", l_ch2:"<b>160K+</b>&nbsp;audience built", l_ch3:"<b>4</b>&nbsp;industries: education · finance · food · construction",
+    pol_cap:"Ahmadxon · Namangan",
+    hire_eyebrow:"Managing Partner", hire_h:"You need a proven operator.",
+    hire_sub:"Put your capital and your venture in accountable, transparent hands.",
+    e1:"businesses got their financial reporting built",
+    e2:"people managed — up to 30 in a single organization",
+    e3:"companies advised on finance — turnover from 60M to 60B UZS",
+    hire_pitch:"Odds are I've already seen a business like yours. <b>I spot the bottleneck, map the fix, and help build it.</b>",
+    hg1:"Mudaraba / Contract", hg2:"90-day forecast", hg3:"Reserve fund", hg4:"KPI system",
+    hire_facts:"<b>Education:</b> TEAM & South Bank University — Marketing & Entrepreneurship (2021–2024) · ~$15,000 invested in top finance, marketing and sales courses<br><b>Languages:</b> Uzbek — native · English — fluent · Russian — conversational",
+    q_chip:"When partners walked away — a 103.4M UZS debt, paid personally",
+    q_text:"3 of my 13 ventures closed at a loss. As the leader I took on every obligation and paid the debt myself. <b>Investor money is worth more to me than my own.</b>",
+    cta_l1:"Want your money", cta_l2:"working?",
+    footer_l:"Ahmadxon Abdurashidov · Namangan, Uzbekistan", footer_r:"Managing Partner · 2026"
+  },
+  ru: {
+    top_role:"Управляющий партнёр", top_cta:"Встреча",
+    laurel_1:"24,6 млрд сум", laurel_2:"продаж под управлением",
+    hero_script:"Помогаю вашему бизнесу —",
+    hero_l1:"Расти", hero_l2:"быстрее.",
+    hero_type:"На сегодня в 13+ бизнесах я управлял продажами на <b>24,6 млрд сум</b>. В последнем проекте из выделенных 216 млн потратил всего <b>14 млн</b> — и вернул <span class='hl'><b>4,4 млрд сум наличными</b></span>.",
+    cta_call:"Назначить встречу",
+    hc1:"<b>24,6 млрд</b>&nbsp;сум продаж", hc2:"<b>1,2 млрд</b>&nbsp;привлечённых инвестиций", hc3:"<b>13+</b>&nbsp;проектов", hc4:"<b>200+</b>&nbsp;человек в управлении",
+    u_bn:"млрд", u_mn:"млн",
+    st_start:"Старт", st_scale:"Рост", st_result:"Результат", st_arrive:"Приход", st_build:"Строительство", st_strategy:"Стратегия",
+    t1_time:"10 месяцев", n1:"1 000+ учеников",
+    c1_role:"Основатель / CEO",
+    c1_intro:"Онлайн-академия инвестиций. Мы заменили рыночную установку «жди 5–10 лет» стратегией, окупающейся за 6 месяцев – 2 года.",
+    c1_s1a:"Выделено <b>216 млн сум</b> — потрачено всего <b>14 млн</b>; остальной рост профинансирован оборотом самой компании",
+    c1_s1b:"Финансы, обучение, маркетинг, продажи и HR — <b>команда из 30 человек с нуля</b>",
+    c1_s2a:"Создана <b>новая маркетинговая воронка</b> в этой нише",
+    c1_s2b:"Месячный доход за 7 месяцев: <b>53 млн → 986 млн сум</b> (~20×)",
+    c1_s3a:"За 10 месяцев — <b>4,4 млрд сум кассовых поступлений</b> (продажи — 6,6 млрд)",
+    c1_s3b:"<b>1 000+ учеников</b> всего за <b>$65 300</b> рекламного бюджета",
+    c1_k1:"рост месячного дохода", c1_k2:"касса (сум)",
+    tg_funnel:"Маркетинговая воронка", tg_fin:"Финансовая система", tg_team:"Построение команды",
+    t2_time:"3 месяца", n2:"Доход $182K",
+    c2_role:"Генеральный директор (CEO) · Финтех IT",
+    c2_intro:"IT-компания финансового рынка. Работал наёмным руководителем.",
+    c2_s1a:"В компании было <b>13 сотрудников</b>; маркетинг, HR, финансы и бухгалтерия построены <b>с нуля</b>",
+    c2_s1b:"Команда выросла <b>13 → 23</b>, все оформлены официально",
+    c2_s2a:"Для клиентов, у которых деньги были, но они не покупали, выпустили с командой новый, более дорогой продукт — средний чек <b>18 млн → 35 млн сум</b>",
+    c2_s2b:"Новая воронка продаж: конверсия <b>1–3% → 10%</b>",
+    c2_s3a:"Месячный оборот за 3 месяца: <b>240 млн → 1 млрд сум</b> (~4×)",
+    c2_s3b:"Общий доход проекта — <b>$182 000</b>",
+    c2_k1:"эффективность воронки", c2_k2:"рост месячного оборота",
+    tg_sales:"Воронка продаж", tg_acc:"Бухгалтерия",
+    c2_ch1:"<b>Команда 13 → 23</b>", c2_ch2:"<b>100%</b>&nbsp;официальный штат", c2_ch3:"<b>Чек 18 → 35 млн</b>",
+    t3_time:"2 месяца", n3:"$2 300 рекламы",
+    c3_role:"Партнёр / руководитель · Обучение языкам",
+    c3_intro:"Центр английского языка. Управлялся параллельно с Money Makers, отдельной командой.",
+    c3_s1a:"Построено премиум-предложение: цена курса <b>500 тыс. → 3,5 млн сум</b> (7×)",
+    c3_s1b:"Даже при премиум-цене сохранён <b>высокий объём продаж</b>",
+    c3_s2a:"<b>750 млн сум продаж</b>, 720 млн наличными — всего на <b>$2 300</b> рекламы",
+    c3_s2b:"За 2 месяца заполнены <b>2 здания учебных центров</b> — <b>600+ учеников</b>",
+    c3_k1:"рост цены", c3_k2:"продажи (сум)",
+    tg_premium:"Премиум-продукт", tg_price:"Ценовая политика", tg_traffic:"Трафик",
+    t4_time:"13+ проектов", n4:"9,7 млрд реальная касса",
+    led_h:"ПОРТФЕЛЬ В ЦИФРАХ", led_sub:"Все цифры — в сумах · Не слова, а касса",
+    th_proj:"Проект", th_sales:"Продажи · контракт", th_cash:"Реальная касса", th_total:"Итого",
+    rl_sp:"Основатель / CEO", pj_qur:"Строительная компания", rl_qur:"Руководитель рекламы",
+    rl_mm:"Генеральный директор (CEO)", pj_inv:"Привлечение инвестиций", rl_inv:"Финансовый руководитель",
+    pj_non:"Пекарня", rl_non:"Инвестор / Руководитель", rl_je:"Партнёр / Руководитель",
+    pj_pk:"Курс выпечки (Ya.Kumush)", rl_pk:"Партнёр / Руководитель", rl_ws:"Руководитель рекламы",
+    pj_rus:"Курс русского языка (Indira)", rl_rus:"Партнёр / Руководитель", pj_ped:"Курс педиатра", rl_ped:"Партнёр / Руководитель",
+    v_sp_s:"6,60 млрд", v_sp_c:"4,40 млрд", v_qur_s:"12,46 млрд *", v_mm_s:"2,33 млрд", v_mm_c:"2,33 млрд",
+    v_inv_s:"1,20 млрд", v_inv_c:"1,10 млрд", v_non_s:"793,5 млн", v_non_c:"793,5 млн",
+    v_je_s:"750 млн", v_je_c:"720 млн", v_pk_s:"250 млн", v_pk_c:"200 млн",
+    v_ws_s:"200 млн", v_ws_c:"31 млн", v_rus_s:"134,3 млн", v_rus_c:"103,6 млн",
+    v_ped_s:"20 млн", v_ped_c:"18 млн", v_tot_s:"24,6 млрд", v_tot_c:"9,7 млрд",
+    ledger_note:"* Строительство: 22 первоначальных взноса с рекламы в первый же месяц — $975 000 контрактной стоимости (май 2025). Дальнейшие поступления шли через отдел продаж.",
+    l_ch1:"<b>16+</b>&nbsp;финансовых систем с нуля", l_ch2:"<b>160 тыс.+</b>&nbsp;собранная аудитория", l_ch3:"<b>4</b>&nbsp;отрасли: образование · финансы · продукты · строительство",
+    pol_cap:"Ахмадхон · Наманган",
+    hire_eyebrow:"Управляющий партнёр", hire_h:"Вам нужен человек дела.",
+    hire_sub:"Доверьте капитал и проект подотчётным, прозрачным рукам.",
+    e1:"бизнесам построена финансовая отчётность",
+    e2:"человек в управлении — до 30 в одной организации",
+    e3:"компаний получили финансовый консалтинг — оборот от 60 млн до 60 млрд сум",
+    hire_pitch:"Скорее всего, я уже видел бизнес, похожий на ваш. <b>Найду узкое место, составлю карту решения и построю его вместе с вами.</b>",
+    hg1:"Мудараба / Договор", hg2:"90-дневный прогноз", hg3:"Резервная касса", hg4:"Система KPI",
+    hire_facts:"<b>Образование:</b> TEAM & South Bank University — маркетинг и предпринимательство (2021–2024) · ~$15 000 вложено в топовые курсы по финансам, маркетингу и продажам<br><b>Языки:</b> Узбекский — родной · Английский — свободно · Русский — разговорный",
+    q_chip:"Когда партнёры ушли — долг 103,4 млн сум выплачен лично",
+    q_text:"3 из 13 проектов закрылись с убытком. Как руководитель я взял все обязательства на себя и сам закрыл долг. <b>Деньги инвестора для меня дороже собственных.</b>",
+    cta_l1:"Пусть деньги", cta_l2:"работают.",
+    footer_l:"Ахмадхон Абдурашидов · Наманган, Узбекистан", footer_r:"Управляющий партнёр · 2026"
+  }
+};
+
+function setLang(lang){
+  const dict = I18N[lang];
+  if(!dict) return;
+  document.documentElement.lang = lang;
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    const k = el.getAttribute('data-i18n');
+    if(dict[k]!==undefined) el.textContent = dict[k];
+  });
+  document.querySelectorAll('[data-i18n-html]').forEach(el=>{
+    const k = el.getAttribute('data-i18n-html');
+    if(dict[k]!==undefined) el.innerHTML = dict[k];
+  });
+  document.querySelectorAll('.lang button').forEach(b=>{
+    b.classList.toggle('active', b.getAttribute('data-lang')===lang);
+  });
+}
+document.querySelectorAll('.lang button').forEach(b=>{
+  b.addEventListener('click', ()=> setLang(b.getAttribute('data-lang')));
+});
+
+const io = new IntersectionObserver(es=>{
+  es.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target);} });
+},{threshold:.06});
+document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+
+const PORTRAIT = "data:image/webp;base64,UklGRj5GAABXRUJQVlA4WAoAAAAQAAAAjwEAjwEAQUxQSAsQAAABwK1t2yOnsd4/VDdq0QKZLcczSPKstZiExOQMA2LEyHM5HYIngRfsgS3vaA4hE4XMiJUTY4kV5DiBM1jJWyQJtdRdf/iuq6o6qLr6r69WjAiJkuyGbfOeZD4TEJi0ZSlAtD8AgaROiB5szp2Ym5ubn1skSwPQU/vFuZNzCY/3+8EVWEghRBRFGdtYo9mYXrq8tLz0IeXF60vXlpYu7G80GgIJIx0pIQTnoLVElkdnj8/fb7ValKXJcgA94I+13XrYWp09MTvV47dRPJuPKjMbxxuTl95eXun3V2xze8mGoy5uLi8vn25MjGVmqBSCY/Px2OxCa2M78zcax7FPSEOhT+hiE1PKrda9k7PPs2qYrvk40Ti9fL3X7KJC0BtjXHaGXr0+09jbNQxvoHSv+ZiZjXZ3c3FokzQzQ13rftcwQnOlQ0gdAVGP+egGnY2FmaG9hsmEFaww9ZwcfzT7Tqt7PlLR2TWMab05uy+7ivHi/0cAjZnrVze7Jk1fFn6Yj5YvT44lQnJirdo3+2bLEFHsPI0avU3Dbt+bP8qDNUwgAqK9p36bvYHzNJq02bArM+MAVMmvVtm1aosotp5Gmt7HpscapssaMgIaBy5tEpGzFAJm3H97aq+GjkRJr1bN+TutXa5Vo7mGba0eBSB1yXZEifVzyx8QkfEUFlqXrmAXJ8t1BVMyXa1+4xN/8hQgOkO0/Ua6gmlRmh4HLm6m/pZCxcx93m9PjwO6HD2mFrbS1YoGY1hWsDsvNFOHcvQwnsJH67odStDDUCjZy6EsPYLqUIYeAXYoOw/eO2jR1yPUDkqWR31s7FIfj2A7AFFZ1I6PrvX0CLnDwvMQ4b9IA9MrGY/w01navDSGKOwXSYXm/DbFjsqBhmjtaNjv8CRw+iPyhkqD3hCtTAMi3Hdzzy8QxVQqdDFtz09AqSDvb4Sa2STrqGxoPK1PAuENqYCjq54MlRFj2lqYghChjTl2log8lRMd0eaMCmpIIfHJ+xQ7Ki8asu9MIJwhNNThDbJUavSO1vcHMwdSaK7a3leV1kXb5xDETlnHqY/Ieyo/WqIb06iH8H7uHJGjUqQ31D4YvGHrmL5BzlJZskMbl8aCVmwWAgfbZKhE6YnWmgELkT5f2aAOlSp9h357CnUZrPu5NSJPZUtHFKhhRQ2nfksdT+VL69JhdbDu58qZmWGlCFCdzFgqa3bcRmjqaFFaJ7Oeypue7OqEVOGAxvQmWSp1ekfv1iFDEb+eZjuOyp6G1pqyFoYTiXaWyp9xKnUQhpyY385qDsgjATBK1N8l74kHtERnUBMjrmVzjdrEBro2nYMefR0TJ2gycsS1IVbAd+g8dAA0Q+Soa47IEddMkaOsuSJHWDNGjqrmjBxRzRw5ipo7cgQ1g+So6YogRQ/NIHkWaiT2Ez3apXkk1QjIGl6hHWISvaPx4j8Yi3DwgfFcAtnOalOqEdjB4ohPtIXf7aL67GBhUoC1ZpEPVZvJfQcLD3a77NOiwB/X3Uo0t9ihn2FPcaOfsYbYBd/5eBq6qBHOUWJl2EHtg1DFHPD7FBPLaN3m07qAhxQTt43lGSimxQIGFHri3UH7uFRBqxXOZw9+Rh3iG9v0edSKloBOf9zxjINzt+oQhXKSh9rkiXO0tPZorUhHHTeTPt5xh15BrVAZT8cQ8+DNxkGo4pzfJ0fso/Mbhcl+ZNQ/42Fc9qOL0q6TJQ7S0PcRFWOsTzLxJGtuTwhZiGctG7EjJh707oQe+lACu3vWwrFnMMPv0rVdPWth2TOYmUgN+ZSfp5gYSUcPIcWQr1nzlpMg474PPeyIjlgJ625PRHKIp346jcjMg9YxRLPGIiXXsPP45PAOje8z9CQXbzwt1dB20Kf1Mn7S0KLUw2pfoZgYCu9oL+QwIHHogfUcBdl49VElhoBa7WZi5yljelXpYfR9vtMhpsK7O0DujVD7bpHjKsj6M7Xcmwg/y/axtevzeQdU4unMPi/GNmuQeWORtS2Ro+l8DyEOkPeshXE3a1G+9p/aTMtZcycx52s3nrlwlJiHYOevOX87f8252zlsztvOYXPOdh6b87Xz2JyrncvmPO1cNudo57M5PzufzbnZ+WzGLs1KfuZj6xkNR7caQuyuFd+kDjEangi7hMBvvOM0yHZe291bKT5HnngNf/spvZumhj/3Ma9BHTqCXQQR6tF/cpbZMO5NoXLYKcxs50cgBr9mz12XWLjd2AuIBoZ8ZIcYDrpRi3a3F5LfjM3nofOoCVSB2kCErpoAw52BgSBE4x3vOA6yndelHgwg8ixHTDdQGyzpea1jieXw5l+fHiQXFfqp257pIEM/qQ2ACEdSb6Y3fiBnVXvTGb6jdVjI/jWabm+mO/95f2eJ6ZbnO6z7p8eV6GeRf0/Je8Y3L0L39fwl7+G+CN23ZvYf1jMejtYaQgxeM+N77Wzwmhnfa2eDR60CtTON071qZmyvnX1Sqp6Wv06vZn5zEroX1Nv8h/9uL2gctzExH57u74Xoga9SBcA2ekCpBTLsh29PQ3ZHnUijcp+G/l5GPbKejUqAX6ILGqetJfbD2//4pFT9sp4qkPn0y3qqQObTJ+upBplP76ynGmQ+vbOeqpD5CIxTNmoFCPp3aVCBPZuVAVeymGxVBvxaJYhwMbFUA8b229AJrlcH0IkMrlUIHEuhfl0h8AK0xrdtTBUBnu41kuYEVQjspDhWJdDak+CFSoH9QOMe+aoAMnQhwU6lwDLQbFUKXBPAVtV4M9321QHW/8sT2T0UFaJ5EZerBdwJLFWMlzlxrWJgHhcqBr7+xL94WyFgafHFpK0WPOEqBuxc5Xj57w/MVw58vXJgkSz9twariP5///H/P6NdOVBBPudQPfZx/68PnKwcmLUVA231duX4HpurFQMV5HtsKgiWKwZO4kK1gJ3F/mrxvaZvK+ypFrgKNDYrBa4A41Qp8JcQ9VVy1eE7COyPofFliqsCPG0hwXd8hcDDZoJ5qhCgcSj5yf+wVcHR0WpdIMJFMhUBMX0ZGpG8Vh3gv5MCf1MhXuYTaJyytiJ42v/4pFQQwBZVA0dDFxNrguZOZcCKzKBxr1q8JIbv+rgiVAX2Q2RwkioCaCxFdagMOFqrixSI8MtKkPnE7ovQyED+fTUAvdgFiem25/9b69YfVyIDAWyTrwTP7CN0Ye/9SoDLIoPuzKcyZD3oznwqQ9aDHplPZch6emQ+VSHr6ZX5VIWspzvzaXnP/Kznn7JZT3dQEHnmt3+OGnpR1d50rH/rfeuwkD0R4Qh1mB8VED0h9FPrzrK+KLBQU0Cf5goZ1lu+Ct0P4rJnPczxvhCY3CHP+Pc3VIS+2HOP8/AX0BfQ4nsU8/3qnUmI/sCRDt/h7u4ZAIj0TbZfHNMr0OgPiUMt77leM3tU9Wj71s74XzPrXzvjf82sCtTOvO9dM+tXO7vtLcuT0J/UFAajxmsdhsObf31aDAohWO4c043Ee2A0bpHjd1T/utTAwG8/b2J+12jupt4DM6rdIMPu999TGrsALlh2o3MEu4HAI9x2NnRTR9gNlWB2bcD71iHIbgxeG+B7TWAXtQGe1wR2Efj7nIY3Hz8tdgshcMfz2dnYnyLCbqnVqxQz2n5AiF1D6Ef5bDa0mO3Lw8xtey5mXtvzMfPanpOZ0/a8zJy252bmsz0/M5/tOZq5bM/TzGV7rmYe2/M189ieq9lYDtvzNZPhK1y88bRUyP1YZOzh6JPI/YTST3/c4eol1q8N4QQi/IytTUyfl3oIEGrfLXJMbc/Usmf+5s93Ojz9FO8dQAwFqNVusrQrpleVxnAgceiB9fzsi1ezn+IdUtcrFLOzj2gcEsOCqD26GltuVgQ657N9Q+vaS87z8nQ3EWGY1JKb1QFL00INFUo+vRE7Vp7rqdNwD3ySk401tyciiaEf68THSxx9HxrDhowmVjuWjRHPpefwD4wTeS5+RhF1FIFane+w0MfbB4ekLAQQ4SZ1GIidzLfPFQNSHmozsMvS2qM1URBAYZp/zyidu1VHYU5gD37Gvq42fR41FAdCT7xLlnkRz9Y0ikQpJni3DyymRUgUixG+T45xTn7jaa0KBmic41v2483GQRTuBOqMy3526JV+Ebif/ZgBMp4CZT+bMccusPRuHYU8gYhnz2Csud2UCgWlxjrFDBvr+4hQVMioucYt6Tt0DhrFpUD9XWZJQ2dQQ5GpZCItpyL00sU1on7LOT5pm2hRcKCGz9MOl9IfR1uQhT8BXTvLpQDWbc7UFEaAEueo41mk2wcxEidEDWfIsEhPQ2NEqHE+kRzSERKMkOSSHi3JIj1ikkN69CR79AhK7ujRlKzRIyo5o0dXskWPsOSKHm3JEj3K8iyR5YOmbj3a8tw2F3awekv3P5nVoy0V9q9TzIW982OQCAAV0t0uTNjBAoUgUKL+LrXLPrw1lPsz+uLvdiFf8kP22MESCjl2aaPUR4zpt6dSHRAKgYPtEg/fprUmFALDOqY3y1p6T+/WESE4jDD1FrVdKbttz0/01EEJkakRlHMtAAJBopI4skbtkr2fa9NbU2n8UFGnGZD3pdpLZwGJgLGGifltisv0fu4IpELQKJAZ1pUiTOZ+TiN0FDVMLRC5Mjwz93M1BJASOP3b8ns6Zh2tZO/ngngoZOpo5VcngxYIJaNsHc2WWcyPTqEuEVAKgU/eK62Q3pJd7VUnC2jneBLS+3LKdVZmBDSCSwk0Vy2ZMiqTncvkEyGmhprZLJuLHNH6JKI+MQMbcmphi+ISUTHd6VdDDvJFk+ul0emJ6EwjvSroVAoT83coLgNhyK8ezeQ6oacAGmeIQn9D4Q3R5oyCSlX4Dw0cXfVkXNA9aOutKQiNkqBQEDMrqUPAPS4eACRKhBrdDoH2WJhKlEK5UOpuh0B7ROhiOTkE3aO0HELtUW4OQfYoOwdnA9fT36P8HLaIYutDFTs2ZB6+1cej/Bz03lO/JSJjQrRaOUqfrIz39ChLh32zb2xTeFYwS0T3XjiKjEfJUgGYvLiSmQo+HJ+tInqw/KdjgJYoYQotu1cwskGo4sdEcWa1gtYoa4pIQzdeX35ARGa0TSb1/2D5cLpaKYFSp0bCqbceprPCOD+i+1TiRG3fmW9mV6vyp1ARMH54+QMayTXMmkyklUuTDSCSAkygkgCac8dWW5SG9SNi8t6ZmChuLcweAzJPHDlBISOgxxpGZAo/jE0zruxa1QCgIyHADors7dTzsyfvt1zXMIWej/SwtXpsrtn1C7OFQqVh9zZmrl/d7BrGFMzW/Xt8tHxlf0Miu1Yxh0pr9BnGxHHsEw59MnoXm5h6z0dAawEWUQipu4Z5++pKr9zEDCk3MgkdZbm5fP1S13zUor+NS8Pg6Ozx+fut1nb2LzW3S/v/kK1kNs6emJ3C4PORTcNEUebSsfHG/gtL15Y+HMrL9aUrSz9uNBuZv/oocwfHPOqE6GJz7sTc/Nwi5SI9tV+cOzk3d7z3L6AQPAIAVlA4IAw2AACwGAGdASqQAZABPm0ylEgkIq2ppfM7kbANiWMd9J9NcgOY6XuC/VD13+N6Dl/f23HwW35u3UXnD/637Ce+f9b+wnz6PMN5x/pT/vnqGf07qcvQr/YD1ovVl/sP/d9KD1AP//7Zu/Dfjp+wHzw8zf4/i3qqcR7Njup4Dv5fvboCe78nf/S+oFw1X4z/w+wT/Sf7D/5vaD/2vJh9iewT/P/796cHsH/ef2Pv1+//5oB6RxK9891xvGFljHWZbwJbd1yDxvgXcX2hHcnmvK5Ri65pHW8goxBnNsGiZu4Cs2ZF6CqHu63f+43NgB2Oi0jRBkj30QYJ35KaCkAn29uQdSuBeFIA06B32L73qzsgdziootE1N+peJXxPwaxMOcxmTGr6Vw1+9HrY56UYEDhKNX30QZI32DU7tpKtr3m7GqzD1Gvy+qkWr8qeM+xE3wRL73I7UMI6wT0e4G49Ul3CE9rYRob0ZpJQz1O7s5tYlz5HxIPker9x3NmMhQMbJZ98kgmObvip4+/7hthP9UAArPPJjyoMovIOUgS+ZTMBJLNMGK6wzTGDIhxW5phWirqMh/bUtSg3Q2RwZ2HwMSUZCK2WPlfa723mpVjA4OMo8+DODom5loB4XOzuT4wEQB9yFsS8jDbGU9mnMpqPzLZgu61NHKuwi7+Or6mZuhuBGvnVScBPYxvdNHLWCtj8f/u7+O1hJ4VNHpBE0AoFSobTSgJzxrNAYOPqmb22WvqmlzfZOrBGu7yHP62H4rC3Rn8GH0evMt1ByFvigSrOHlBGp7xhb9bGtEqXH+NhMxMLS61Xqi41RcFohCZV/YHA+PtE5HCngdFevFsbgFIxPbstBv2Y24m0y5zLEDXJ2Z1H+XIfuV+XN/QIUduc0EbTotJ6AZR5d0Vq6RXlOyn6D9W2oz9HqV5ahHiDtbzQcoMm3y8WcrFY+2TjyXAUygJMVVnGLh4/zgM004mIm0Nhq8D9ky8TIyt4OH+zcdq0WugFdu7r+9PHwem1+sIOmWiXsQT6/9qH0/R4BRkZ3JY0H/Z8kflvyFRiYJ6p9A5GDVPKY/+gRkEpONWhxCJuhlMUL2ke4dZbT3X7nhwyONm+WeKxDELn2QuRDxw5dEhfb1dQVmSRJemO7csQso+aDjkLiKuztWPcNr4rlmlluo3vLiMqLWFxXQJK+S8sPJzf1EMRb7dcmpkm50yo0M0EVoinOBpFT4w1qgT/cyh++dRL/loZ0OgSC1ulKROtOeb52FMsd7kyN2/dU+RgtkhG+Ibb/VDj/MEHb/3hmMyyIusOhT1ZBiXt5HQpeB+UTxi05saNRx78ShzD1eVklYriVndDhUr0xjSEY9nA8+U1OP9UBoCB5O7MC5FpUVE0knr29LeINuCSzOFygF9NPvE8WH34UhysDP0qMGSzsxRbf5Ccrn7kXXgGllz4LLddJbrGLkkIpj+H7qoAQdSOyygK6Opc4xPWYou9hVaMaPqwEfOBLlc72yvltr1u+xHbsuVCfqrSY7GAfbX9+Y6o6a33h8WWyWn9dbSWSgJJX4A1WcVWmrYzEgk4EzVcTaLJYgUjA5W9QAzbnOdguxI2cnopnE8eU7w93QlPUZuHPt/0BHTpVfd4kDrTRVBEYldbFnAz17ddK970dn/GnrA5B6EZGG6ph3RgtnEFchjzs7IgF126WMOUXROxCSBFpmq655zd3H9IwUeDAYeW9rJblGOF2fXOv/43AuGGR3uZrHRC0Meo5v6acwGJJklpJ6vl3bzVvKXliU/e6aFbQMVbKUjsfF6p7lSuKolFOnWcxRIdRqLoiLlh6JbbLJAEKEu+nTJbpxlTxOXyIkaNOaCg+8qxCXXezt6rof295uQ0XuTAwMC8l0vKJaD8kb+adPMTl2B5Zl1Po9JRmoEXR7p9n8ZF2VxvcHXMSrR+JEmuKakd3DWxaqKEg5RPP3J3o7yLA/K//det7cf11Lvdu0E2NIoRqpbdCCgPPChTAKJNf1AiTjPWTeuY64bxyLsTSQ9M5kwknmF4iKhvyZsjBAF53qN3WU5Z6k6ygA0iMVdLPkU71BKvQ2sLE9/VBDykft1yUihhiA49tTld8koU0VhJHgtV6ysxn1gvnY5psHbDp09gjVrLIS8YcSbjlVl8n5MkDc6h/Gap7Ps1HkePA8y7Qz5nmFNdM3h14+v0Y7xTvb1HVxbmH+Y2Y2yJRz7d+a97NbqxGxEINmpXnrTh6f4ute+v+FDMqY8FMobkLIDRkuFgQYlI+nEKnhhYtSKd7cYHEqriMSegMOx5og0zS89SS1dknrRNIl0YNKPY/RXM3YgXLxRNwpSxX8BAb956kCAmVf5SAnW8d7Ud6z/UybAmVrzwTZrgei7BPg7uoahyQaPGh6+jFo0IVA+vvIe0b077P5sKMF4+QnQYl0M67CfE74kSQ5E/gHZQDzAAWz7dOC3wbUtk5lJQFmDv0bzA85UC2FAZ7MBYkSwWZ8nThcAT0f/O1Zc2q7m6hCkMuigcuETvTOW9JWf5MY4275DIHeRz4s007flTzn97nlFvZEDqNqcp0ne2QYmZ/lTUkh/BOfZo+DI0pMuetCfyCKo3VuJahCM9mH9bsk23BNd0dAH/5fMeWXH5HKD1ck9Ysoyq96GLUdc578ZGvwcLDW/cu3F+lwfRr1TNxqJbWS8SAnRyyOtpZlUq0e5Z45PCR37XqO/vd6mja2QSr7LP9FndOHJQ4PkXV7kevVi8XUt3HsaTfKo6nIXB7YkVpddkKBjm3zDG7KnqqSoKIHPA3awrexmCEcG21eydOKUkotQqHp1XcQgWrA3d5vkdZWBqH+V9N77sIg5TqzseUe+WVYWDNuzazbqpKaUPAcZ1eEfc3+vRGv+UFQlWDP9liZVBjGIIZcoK+0BIwzO7iF8+e1aM+42fdMDRyYuwpt12bWbdf8t/owG8GcHG/IhecT6i9yoi/VpT9FjZhJ/EDUtQhdkdiTFTP5VEcyFZVf/EhAUlq/hcn/H2orHvofwAAP7ifwAAy0LgYtW51t3qEkCCt5AEFmvFcWqzM3UIkgcKdt+FfJ8IktKw9557dGFy5be1axAwR5+5oHTl3aVtl01tdd+yoomccrzKgb8HxDANCLRPI9NGj3L0m+8Y1GfEYkM8owG+O4mZdmJr/fQOs5lBjRW4fZ/WqZOlxSDRuuhNSL+Z+TckaxqMkpG/CP5WxiGD8BDtDXS35evRV4PeshAbpSpoHORATK+3ohvUdMeE3AlrMz7VMuwv0N/5g8ttyVNqq2BdVNey95Lfo0ABcfnJpZLOlSOn3t20g4iUVGLO/DsRSCPaJUMhIqVdnCfcnqpzWYdIvpkPq+ZefTjyi+FOGX+DdxBrRYYXk1HuUMn+vziXTs2RSHETVdc7n+68n+sSrVaZpYBISTHv0FhB6XodqtwU1PQ2GgVa9AMW6YFqdc3XUvw8X3Mll8jANLRk8gCPZZjCZfvleRdbu+YMfOrdxivgJRXF86HCmU+AWIIQgCj39RTX626ljIuI9YMJ15EvhkkYUHxukdFpo9nWuhf3cT2Ev+XRYT1UI7JU4iCN36VmQJeD16Zx9AtIWGGmjb2jPBljtMrOJzKkW6y5KZhU8Dd/elx6hTjqFFhHnVl5/rrZt9waiC8w0gaNznycskzCMsVHyadqHbLuwFLx7JGQcUHSwyhc+REWUOopfWJhwFc1uZY4IpMSsqC/AVpfc6tufbMobi4VqXLqM1WiBY93OFWSnFmrczxJcaqGMoaPrN/CO+bLTm2epaCtGE3euLUa2FfQwOBwRxF+hj0IuCsmL2EHmkC/0wPhAlf5Tg4WFpe0wAAABLNCOgf0eNHGX12AlAxTDeX8u9e6YWiqCfwOP9QM7GZAMc4AvZFDmpjAEg4AF+F4KGCJEOv8RMAD6JL1fiZ8LsiQwWQ01bsGNOE84P6Q8/zTuYNgYCxXb0xjpDiVdV0rZE66SEaGfmO8f+z7H/RVLduI/Sfq3USLSz5qYjerHeN467R4qZBSrrTYijfc0SVVpqNLhgCuU25/CarrjSvc9voceHNUpAQg2MmO+APgLrYK7FMEOF8WJk1rg08cwWi8GjthQsxDYxXpycadjaQv0wKJhoawPltx2jIeavf01tpFz7oCLm9FLfnYENxSoDFaXM2TEQVLnPd0ZUFrqgaxd6IMX2P0lN/U4uFrmVqEkt+Qz9bXgmrcEjda1IrzqQUKG+HV/hcKDXZQshBU4V+Lv5DE3jyOZyHk0f99MkDWENhjYS0lWsaBMySt5Tk7LeuZBt1F0r1Ul1olP1xE0wplVNfm55+5dteuC9YZ4p2quzwUUzFrEv2AqhMquCWODP8sigZ+1JhrxIv1W/sj24XYM9ISEya6xz7SBbrIGkJGbW6rahgN7L6awYTWSqpnF3IbqoUE5z+ylVVP+VSireqqMOYKWc77qWM0SaFHE6YB80JiYAAAX43D3up48nodWUeW6fOK8t4dWKdqXIyWjlu5khl1xVe2fkpVIg0y8/5+iFedvhly0KabXjLgvnM6HVA9AXVh/TCEC54yv+XUimgh1Ogd3roZbAhS/6GynhAJbfxwDz6oNnZRee8gXMmihQF44+3es5Y68bN+yPvyucE8Ft85W2TI7fVUPpp+3Wd8O2fdI9vZyJTZrHVWB3hYiNmKQakaCQRwkToeMJ6DR82cR2fXxvKK11DCcssiCltav9EnsaOahvrss2qQbI2WcdZ0lewKFJhTWb6tVVsxhljfSV4mV9Th7Z5K+me77QBWNUm03+8jpqfqW51PrXmqf4NKzpnCwEQSdbDgkjBvW86x2owFoEFrvo8VlTU1E2ckFo1o5J1tpNk9xI8p9LS26YzWFGyru3lJvifW35lIgtJtKucHNVhuhNjwnQ2o2KJn4AFKQMUDrbEpOUKZ7d0uTFtNGEGtwmRVfu4mwpePbgezU5da0Zo4v9uoKH5TVTJ1dSxVE3SObbUeV94m7WRiJqUcWTsNw6EXln15WG9AwE214jx10KhNp4D1UzdU3MI24RKXEs7wUhoAAKyaErdQrHhQAoY842Fu2apmgamYfY0LZcHBRZHAY+54YR64viqG/0sVGOofhx6XKQbVIN+ZgGE91Cw0nfyYa4e+7/c4MsUfns993o99YfLHPzgbDXqZEJOXQrmw6QefWu8jQoLp+XZ39jpetGshE7axBO1vrqolPwt/BrUibC7jen1opUCcGu87cKfs08U9vkd3DC4SSoR2afZ82IJx4njEzB4sET4rANN12aJau7P+P43dOyjOkzadxnDnL+ubn5GHDAtcGq5cfGLL0MxC/vSX8ohA7B600snxYwuZ9hnl5Qd4UsGcWHDCq7COxPk9NLhzj2ikgugyp2+ZG7LoBhiHkFnb6l2prWREfiDVXcWR0h6+blq00hhXK0nsmhmz7jNLzlIj23sFQUFCEIEZKmKzjD7261lT29noOrMDaWgrtSPpsSxJYZOE7c/O+QbQ4vVIMAJynOxnEaxUxNdxwNApSSaSDZRH0i3bd/IwjJAB/pz/IxT5yc3kParvulKvLQ7GLXkCxwOjznw60VMHTbcvcjVn97aIAm+3DRiM7gerO+fC9f61wPzDKfboDojrTxr2YQYi35IYxhNdifGO7t8hbU/sX815sb3e5J1NZnfBwrpk6LN1NyAOdluXxOgoM8PlpEiZJ9zm3xOr+sUtRF7tHyeRYeTYWm5Mk2+9Y8snZ6t/GX9eEYRAD+TbEGG5nanMqfRJ4Bj8hRmgKP0VfLHze4ULMceBvBp4eU2kj6Wc8vSwyaRi8tC4hyznWySl4pGni8lGTsOmQ8lLH8VkUMfw2ncaajXfy3LyWtD2yywhUblvIaQlHsnQdu5DW9YdlOUweP7UuKqX3BCmScB/i1AbBTy9y+LFPfT+mzQV+4L3hUCCVd1r1duALUKDACUXHPKl3o9SN3mfM68dGk2NulCSyURoScx6Qw4llL22NOWty5aKiVwp91DXmq0nSWFjuE42MPSUVCS78n4dqsNLtBQZqibXtUXOnSFrgJ1CpDCq+hnT4gb8HVbQwe1KHv4nXDPc27SvBG8t3j58v3/MtaJGlUwBwzC8bARatfe0XLysXetO0L9WDsArU4SByAr4SjjzJ7sIA489uxwZdrohXS1szmtF0xOguL01Nat/CWydA6rLwWwiYy5P8gNzodBXD/0/GbXC9hYPk2/oFHqEPCVjHoDycxfId+EmpD5J7keeM7J5J+z+/NoJyz1GluShPrt1lbW9SXjeKX7wz0vPkr/nDCaRkXgwbCaTW4eQNRThW0vz2ikEgTpb0DSiitO08K+ssXQdA5a0J058qf75laBomn9o1e22yjo0akSp8M1jpESewv6JCGnZYKSNgrO6fO2Lk9PC8jawFzJTvxFXONvbNrO7bO+81Qq9REm9CxWP1QzXRQkfbGHnyt9/Io0Rk3XfKYKUSuphqiRVwf39BDqMVyuZkLMrecerOhLyyYt3LBnRfomATbS/Fa2AjtFLlW7wLLkPz0XctmEh5RYfOXSlhr0ybO7mzUVfDZbMk3s8WiCOnY06I2xYYiVkXxvVrNp71eBrJQie3P40vA1TO2nY8GSqkpfLcvexqib+Z7WddWgsxCL1VNLF3L261+kUYuFlTCG0OEtCGWnlVN2dY32JGPW2FhZUJYflBookXwjiyocVHq1wzv1Tob9cBA0PcRR5F7X6j1+Lys2BeCSFe39O7kH/WAdZxMBN1xrCQJflHTH7REl+Et57yUONkS7bIFYAGzcgldZ64rcz4b2RqLxtJjsXriGEK60ez8hO+ITKAG1E2tTg2o5A652dJirpCDR5zJn+RSiez9HFI/zmKLz70cAMYBEAkTDlouBBclUH536D4dbkptlsB7qPm3+FKk8JGPQiHdnAOVwzdK6pAMcLyX4lsQ7dLNtvXjDm8AWIMaujlb2Q4CM+Jh85NUBenECroW/wHHAi+COU2TeeMHSUgMrJj4RBGec54ud7lvqrpDff+KRnklPz2hCUlGRjywmP5QsMZzlrSe9ehgyVFtVsJrtadhYEayjPI81hLjqa+857lXFkoXAxeW+gfaOaJRvXjxlj5q1+FDPLjCJdKckaFDWlx2dHo/V5eYMVNo3YYeV+7OckoE3iwmA1yvFt+9hIZu6bzdEbQTBRM13CBxAntCqvfS16XNUd10db29NPxS3ECrCySkpp+NK8Uo0HttUJe+PLOaEwvpi8iz/GgF4DNEP6DszWwoV9XtHKnxfkNfiHamJzxKkDR8ypmICTlIY6y+v+Qll67n4dCsPwepLNBEng21B9GzEk5OzQaXWGtaHI1Htef3IUsMAsP7qyHI29A3r6zymldVdcsm2St6Uc99sc3JuzINGN3RqRnzU6erCFBRgfF8vQuSFnVi8bemDZqNxG6UvRtPIQKcZ+zBia0QmISfPC6bK8OLTjL3BxjmFQSaQFF+d3vfQR8LwoClUCYQTI7Gd66QMjQR8oS7osHvR3A93cjHPznmz2mFXGrWfXQUIPFp51Icml5d+BZUHOVOkHNsCmlmnkUW0HXraa32/sPYxKIHE38XJtr+sD521N265uvPKDQMRZNXk+Hi5KUW8YAUMQXivEmDEcx3f1txsJQVlyBSCZYGZW06/B+UygoDIHZ/MnyrQf5teBKCX7KXJbPwuDNzIPS6Xo/CKvw+Jvct6zoMKGT9ycOgCWpeblQxhBXgV9EnKzhRW0lRdEmGOWRYyemTGGtdbTyIrYFpXSOKjkg03jr7XqDHxl8U9kv221mMcwtl9bMhg0DOVfeaZbOLq9mmUZqRpUWFz1VjwrF6VUu7ETkYXtCiLELGK1nt1J15jCm6snYTLSbVqBIm2ezF5GWDVrUvh0B+o1H/DX4UCP59C75m6lZ0DqvjI6EMaIs7omzW/HK5xOBBskfhXMsOr1VjVjAJlblHZ18H+ES2l8cBHf/Kqx7lMxy9giccfrX5wx9IpQHziwIKA9pK+5dqbvPgcu6bXooEJsoD932qVjRQkjxU3Gd4uHGMUCPUQexVyv2A+Qy+jRojYfOoBnEqyZkmZndR6cIscWC66Nyu+icPwlR7nAk0xGregUG71n8Qay/0JXngmmS94PXyd2I9JAqM31TOMVX4xyI19bdCRgLcUH7AD0TwlMG6fhyqrMHntmmfPgb9xj7+kAiEpeqrhsL/vpFtA9YK//znrOxeVHlhTcNuISCl51M6oDoprM33CA9aUHR6V1aQO94Er8QAyKQYsvHNdVRROOA1K7oPRywyhje+I9rQRlD+zWxXNoTvwq+tvd//OVralXKFgvIxvWGC426NesdProI8lpE4Uy/+fIdSBD1zcYd14uNOKOuRudKuU5N5RrUOmmsJxgxCF96TUZ2W71Lqi3RBOzZhM/+3IW37k9MS8wpnZH+3sx/CQ1ilijNB2JfSvag21yUnaUj94GUdvyKv8NR3WOciT0nHuyu4CCwxnuygJKwxOtFZE0aQALZurz0GXL+4X9nFfj7kKPgv6EPnJFZ1kmvdNuc6hlAXctJo/qf8wNU2eVPYKkl6crXSyyy41vJqZNBPs6e1/VejI/Mc45hhXAERSZSE8wQ24Tf8mc9v8E3DH/gCH+JSY0dzg9R9iNa39ATjdxzQmztIl/40kWS/ia9cZoV3/dgGout2G2Z7j7ae2RiEYWZrwzJKXo+W3EaC/Tz8JMedMrz39Vv1g7ru4i0aKxcfguaV5b40b/jXHGWil9jodexR6SJqURi7ileVI6/z74AuL/1FEPwfCAQYLbp06BUGggF7ZeaJCC6/KMPErCzl1cNa5r4VuvRqOTDqDctjEdTjeUxUgwKDx7kc7zWANxA7M9WEf1eqtHQnRVqXDHO/hbYMu+WZFw/u267eUmEwWqQtAgC94NQABYlnwlqXJIHE4NzoXibZRxbYpykfgYw3BzKpiKAvWEk026TqR/pBIU1HikhDN61Q1hNMCy0eqxuisTwcSiUHpjDVRWWUq75z7Ys6Xe01wsNB4PMbTyBxOopEIotoMZSoL13koaxalH3NFQwkdVcT/DOTJz3CNo8uYSSvTbDEPRrbYmDTE0ykERMhrHUWif3a1UnotR0oMpiiaT0HdemEeUP6N59xZG5LSSKj/+FllH9NxD94EuA8L3lmzWIFyN0XTYbSHjcbfvVCOY8eVo+dRUOVMLPpN7juTFHrWSTV3JjqqhNj5tmZcdh2buj6jVr+9K4ZGTY1KM4BRRPn1PK/1RC1exbOiNGpadQo4YNzRNdQJiL++VHBH9SI5Ug5j6A7UWqwdWkRhqvzCs9HhzqTI5TQNa2rnnRwV07JG1qorKM9ocls6plUrzKi+PBGfYnU0KB5xRD8opdbkxWuWNj5xPcUi4gkoV6W9gt+D2qQKVvfG8qYA/Dv4uHCCPDmGjqce5pulqJ5SEgCF9u/9iYoLJA3TBEQkdG3kZt/3gY9xBg4JZkka+GpRzlzjAAIY0wjNSDrs/YcpsYeXlFfzW2OOLKqRjElSzKMkMySXzhyYJQGX5Hfh5WE/Zgoe5qkg3JfvrlJaRXWi5uCZ5SciH9F+8bk5s7Sl0gWGIISMlBJ+Rv+3nZ9r3AWDcwi+zkqkWl0G+VTf0ShwyBOmT1kinKg9GEdGkos7Eh//0mvgCoFEN8zIp59J9ckatcIBDgCyCwdnvzStWvpxdogbsVcY8n10laOJwAltKG4XStDg7wa950+mKiyskB6X8JibwKCc3TlBql8+r4vIC3BGPSsRjdNMXFNBaBRpFHuQ7noAcy4LNxdwsv966hie5awTcBbqIwVV6z+98wAU8KUeE5EP+auJghc2f3hMOcqN8ibPQqEm+utpcYLPN6nD+PYQx/fEuLBBuZz1z8NNh6XO12WSSVCX1/fiFJdiTCql5/u8OY53z2Cr42s41w4jjwnUhhY9hcBVqWlEe96iUZQQMo6QYwS1qiGKF2B1MVGbKcJMegK6h/Yl4zXhUvO+xGtHW2V+jhgUBQ47++RjUnTvaOv1+yGhszvDSPvKL63grhHaHAECONFhFsb0t++BRyGN3ryOwh+aJSRgpQr5snn/SaTN/0yWcphPlVxGVSurAxfz1w4/6+UdcCa4tB+p3UFGg/G7DQYF+O9SyB+3JYrH8EY1QEg/HmjWvINg8VPrcqJXeOWO/dVWvK+CgJr3D6En0rn0EyX8d9OcDGgNmOlFil13iYGVsejMAWa9pj1zhUcwS7sWvsk90Cl9Svffh0Ul1mjCtG4CwgimW5m4B71Ni5LcjzSizIvd2gg9CJEkm8ATlE4uyxaDxJVvy0id4kfvJ7UcGeKNvfRAeQ+KiggUt3KZ0iiNKvgkyJhqQRaZkXIayJK+lYOKCIQB9pwGNKOU2DXgOQ/pco/CEwknsbmBFkneMAxDOJW5jBsqU+IybJb+meVT33C3RYjOqJdQlay80IrltDetwLRIPRYjyli/Jingu9WVvi2Pa6z3PKIURQNM8LQh0LMGv9S3eteBGsOaURsdZMvD0pZiz6F8samx55h640OeXdzA52E/BjF04BsG/S/4EDM3heu/ApwrruQVCALyx12X/qLXfkfscK0Wspb9dSVw8AY2GI3ES4mH394Ze9Bg+70AIjxlks8oWffl1B2miFRBChhq5mQQav4l/G93LEDrLECBgF5pqk0ZQUUm53uNZyAyauZydtHnFBHx7+4SxIO75MU2j0FBovEN/JClB7IlWi+eDyZC+ETzhDz5m+CCXde/uehSrf400UlTewdLrEf2hRkdkyItBicLFgUQk5IeoB5dkB0pR9JC5DmZ+LMJFELPqiFbSH0ZZ9TP7H253k+F33kK6465pnZnc+TsElSm8feFFBUEHP3XxXPhq4xvVL/q7qYL08gXKh1T773rDCoa2r2AkKySeLzGwznsaNDuRgDDquZm8Ytbr1EE3BJ9WKwxdODL5uJQOQRgNtTF5b8lCPFfgStmpw0nDXtb3KWSO0wUy63PMrXpNTtsfWgO1Qe2MsxfTwG41Q5/t82fgQzJzQIafY+506aCHZnEt6yMStEPRERINQkaGvr1e1DDNAmeQ291VKS8d+Tm2F3rAbI9OvbhR2X8ztWKyU3lvDu62TVNULQBX1XZZqxEqV6Uxqcn+6lwvxzcFQEzH9OfmNAuwdqdMh9LtMV2ZOVIoJLa6TkwvtmNqGes9ayTarbVYRVe8fcPfW1/59m7sEaUTcNuMSIRgSOqhYvYA+x9MQJz8ibYVVfTJcfsNqVM52gOSeC4Dahj9xF8RUr4MDqk0VvdG9JydX8svPfd01/IqxtqiCyYFjWuoNMohQw49NMypJE4ghAKequ+88ntObEn+pJtw4X5OPZXmdDIlHU+hqiY3zDnFIO4MDNUh212bFCejBBsyKsdB+HncgaAc1FnhQ2sXfDJ2pOXyqtGMEpRPcD2SqdAHBHUCdflPwTD0cuBoG8cYpRaRQO4IyAa+ER2THtyncez0UejBF9+TLyqu5Gt5N9dToctIwjhljcVY6M+vULROfq/B2PRe5YPS/BFgThQIA43scdVHz4VSd4eP6bl0KAPExGOaRh2JadMMloxR8ZXf7zi0mI1U3Yebc7qr6kM3wEP9lQ+xOUajba+5ngX93/xKRjUKwBtemddMGNR6R6NssFKuQbECQxR9XE6vKQ1SB1TgrDMnB9YmoUAcyns2761X/78EZUFmRqDA2Vodzeuy0/G1sLR2hpglfm8GutpCvzkDQ2X4bzR2bxg9XPc6Vo3oHO/K8hK703DdwyrretEPbTuTFrT7DhOQHSA7CfhuzFlv3oJ8sAlSS8D0whmD92oZI3mzlNle50gdBtFHIKdnNMYkd59xpKp1BGDGnKnTZyxXJ/8AFCXgtmVvWnBe6P09WxuGWiPkjUOff4xkuHQlqDNX1oYp9eqf/RouYlO1IJjXXYmOfUPED+N9Bt8EvilhAwSuB6GN1jLmGn1peh1LzTsqhUjCH9MQN6g7bEWCI/7iDn9SFdKOSpGFO4h1d0AQ1iXcHF+PS8vHYq7flYhDRJYP7Lr6IijG8TQG824E5yWlA74PGhxTIROpfkf2CLoKlt4Ii9dnK9vPynH7SA5DVv3JrEbMDsJpZA5qlLqeNPLhux0/AUn9x1pd5mxDQlKOL1hlhvNTUivNWivrZKSgeWo8MMqMBp0EU1wkb+nnIL8Tu/afYIWvh6RBlABD3T0qud5u/bKjFGW7pwv4pZg6PDysgXus2BhX7tGGJm5r9Z3Buos6nTbO6tmBKuy8Lln6TQ6/mnLL1+47xBeoM/wwUk6XStG5IwEYEU9CuukhTJED6jKtWHtcQhQWCX3f5B7YNwX+/hDMFx59B7r1sBt4Eqb7v5LcAa9PBh1xc5wCig2FrW4OoWg/6MDDSU1shGK6c53YPKk/Vn2QdkJHISjjLTiTCdo72t40Y28dF2lj+a2ceAdgDlzLxNoaV3USSk0d3JjAFVHgu5wUptyHMrNX14Qvbrjrkq1DpY9+UewdrSJ+umdECxmQl+877ZwImTEsCCjJaGNNxvnRcClssSwxKtzVtOkkvC3hzEopNO8hCEY8hbyW0n/ivXxEK7VUPg3MlP71LULsJfODDlQb6PTjGU7u5y//09zOU9weeZ1p/mIu7wNnorEMEbktG5FpChGySm2ynTm9Zh0zVU1piKXObO87PQ6rpkMKuFxwjl4lQIvgh4n064wGkZdKH5udf4tNh9xZQx5ZYKmpj1nm6YQTT53lPRerZGPCwFmd/H2aZ80kkcNWno3NlGtvOd6B3dcynlO2ufst/wMuvKTJEzFeaXUbJl6eXbigQ7R8pJgMDYtJp/vIaCGnwAF5G3MbmDDoMNTsPaGZv1YMcTTozqoBHDJyu1v+IvUsZ/gzmndZh4uugFpNv0NIqj6211pHcVkLPSHLWf9Dlf5nc6uxBnpWW/ZWc1WkTLyyJfglJceNi3zZBRCuyljuJ2fWbhEQ1tz/EI5pUB6KX8f0pWGkEl+2EAsMWSDPdjBqzTUUBy+YaqfeBQ3NlXjBAT5ZtqGiKGgROjn/WlrL/7/AUdyxAzZ+Kc2GMqYNCGU7BFsOgB4apPYMy+b2niKgF3S+XaES449eH2IQRhK4kDiRg+QZ3uIf04A/nWCVc5dhc/xUXcsOZLF5o0DvF44EVxfcFznJBJea7snIYP1GkPnsizJoa7zDe6g3FJtCGoeGdfODuWWZSRpYP3ah3+RGNOF95DwxPhX3batr4sa8CXCSOV3mMgz8dNHuBKJuA+sN28dDAtFQcPxRps3OMInM4ea90tx4hA2OUIo1UUy0sLR8pvlg9re4yqjBSX7aoV+YnW7+jgUZ9ucNExVs1dDBjY/jaNfcv4acP2qDZbLndekaKMnvZK263xAil+DM+7dFXbU8muZ1ILTLguQDKHryBw/6W39mO/PhS+IQE1QoinA4plg302cx5O1mkRexFYiNACUTvGaRW6Mk3dM1Tg7bUWTvVR+o9xEPy/5YC23jY0wQhIClMx5J0F3vpS4WPtj/FPmkhRQOzmZXvGz5Nq3azReX99Zipq+jTDQFDztVmKLDWMz8aIqULsJSZiouEPE27S1Y8eg0JCW97XVntZkWvrAluZS66T42I99PXaDKQ1UPrUl3Aosac1jJVnjIxGHrw5wALXpjmKKdN/sSIoR2WuaI3ebvaWnhjTr0PtagKMvCwhzbeon+/pQpwn2RKWnxJVkF94ptKwQ0SE6foIGPkhsivcRajbYNH5OLtPPKHHRk6rCRqZVM+Emt5+BB8LS39WUInAdA9WB8zhbT28c+mumz8XESv0/Ik7SROiFSkeV/g+cckheSHgxjqC8J/yIR/7YlRkvlzjfacgoFwUozq+XR6e+EvJgJRWi5fiDpB6nxwJ4stGfrBQ+2er8fNI7tu4ASOVUcFBQqAJIuJlHdDCuzsbNNHwoEi5LgX26WgWOcwGPSDT5XyHorFe5hXRTjLXh3dUfdJ31jCKbWB/h13bzgQ60hpCJJ6NMN85yW2ovwGxIY4j/Vkv0O/Uw4Vde75wAwVE2Z0uk0rzpu9Gn2ui0XbvDV5eYw1YrW+n5jUrLOxpw1RLtqUwIVrf2xSoDWSLQgGFX0nprTxTVtsWu5rDQtIUmRq7TbBxcKaMC1Ut8irobcUfdACfGF8DkVl8pERBswzvYrn6OMfYcPNJg+/Bj7JngjNn0hWruJ6uNHLfQCWxEaNkT0UtpjwoShN5iyEL8Blp8aqhtuzo7hCVi++FSA+hisQxxDBZQlIoHggKSVSgcNK7Js76ejEomqGMpVhMh1BSVCFQ602B/K0+H1Qwmqb4u2Gso4ErfzP7AbXsnXwYd/DqUkB4iavIvoBTRgmXtD69bvEd98fOxMD5M+xGeCN5UyzUYJvqjwTMNMI8pOPmOB86u6ny0j3XPdg6YjFmmeMJ5npOmeenZebDjx/eRZprs3U6odzw/begrHs2rMhF6SGk4m2rQAPgtjsepHg0XlNRKXub3Uwm+0E7Wr5TVgUV50G1qfe7+0DA0xukRwuW+WAdRcWSPEsHxc7BoRf6NJY3mVeLgYJb4qZFShbOGQz31oWBajhZuzIrELfAtYPuG8yw03Mj1A6AVfJOkFsUaOLl9ma38U0WiJ/XcPqWpPNZo7lwzY4eGC7kiri2R5HxHFNwvASABc/1sY+Kkgyh6YvPB7/BLU7p7aLPugQXtwUZE8tJCZEvbOyyN1xM8fweW30V9Xit6grh0fIGAA9BihRmj6OEcmlc4+IBKvz6lGVDa87iHIdIlB6Eu89eK2R9gyEhvwun0G11Zt4LhBi2m6lVCPPqKHcHPWvlhfYvU19WB5mZjdHVRzFqtt3V64+g6HkoszwQ22dkZpvKmCV9s+fR8lOO23e/vnFjVyRwGDQRXMRocjrnaLXagqU4fCUByj5PmTXdCQ7cqdRky3IlXeE9pC2aZSMqcejUlQ0Yf6ANxhblo4hmqvlDIykvx6wxaiMrWE0oyLaDldUvox1KvdgBsigaUpMElwtpn2rOfF8EtjRMAbv464yBD51lZgct3zw9w/P93+GGUBhVyJMmLM9XbDetOSaGNnKpe3I3cLK+pcX0BpPFGGM99g5+5cTX6LHuIs/9EWXckcs4kUe4XxSQL9ZXMTcobLGTAqKH442KChZvk+YJdNprnmTyLKraaU3Ma8I2hexb/v+W4u+2XaYUMeEy1EOWUrboLtgtSJvZywKzk5YSFq5sLff7VGPlbGjjxh76THHdbKHHnLloHuIt85n6fAfZkY0m3Cp4z3ac4XxSv7idg8ZSYC9R6ed5aG3xzlyBlQ+8QFIwXlfBI/gD+ULZaTXO3Oo9w/kAfqbgbHnLJQuo4OlIMwM/g2zgIpudbCKbCdNt8k0WWkIQ8dPihj5oZ8/MYHNYD488GWZHt404ADqVmhjtK6gc0KqHQ7sqhed/8JomOF9krgm2dcgrmJjMadr+blRssd1GvdCjHgToOxxSWZshSjUcma+uTYw7+klWqse4n1RdDuP3ifH2oOQBS84GeuHtE6ywQj/HXJBiyTs4e2SHr4Ebl/+rS7sarLNM/LhxYzPGJZscWj1lrtRVoLWSskVaelOa0WBg9foLF8zXM6HUzBQt5eQW3NlBq0C0cf0Mto6suzsreSorRjsJI6+yNm8nEAYc99i9MrHfJsPBTfNy8UmKdMRK+NwU4cpqrL6/g4WXb6ELpu99ay0YFrbDQzGbcauCGO+WW30n1EA1Jh9K6YhYRlBgMAMtXgJjHtZ6UuEpwSvT9/JYHrxu8b4xXXbI5vDdJzrKtl1jGMpkmOKd3MPeWk6HT0hRIMQe8K9zR+tEeGOlfOLAd+mjPk8amJnrUKQMFzhEki/TJz9aziweacxxMFaCPMffDzLug24v0ISwade3xZL282fobezgo4X67LP7jUPXHv7tCNYAAcM0mvGgy2DVUoeJKCh8R514+GfhUlR/GE5yJeWiI75bcrq2YmI80GaKGSG3+09Pe+qy7M/Eyw3TlUuPHnCJ53xmb2pBBvpLD3b7so5CUl6N84J49Yq3UPba5ymswm83hEcSDoAEwvLVaCRs0Dg8Q0BXhdqP32s1V9k7gN0RowFTDwEc2x/8P7r+was32piHW3qqTuMVsXAqlFCdkc+Ch49osaOYjjMn1OLWqUJmc/27hILmRaWa9gx5H4I/2BrkExIJEj2GQrVnafo+r+VYR6ZtbIvzkyv/8/l3oeEbgUIkIm6LZMt9z+5ZpD/wRpjDhy1FXm+iqScILjiNkd20fVIl+B2iRG4n/t6DhbfEW4XOJtDrhLCh2svhABfUPcJlBIHusJ5LXjLH5t/SKvv2ky9MoOMX2SGiLrUHutQzasxR7ce35CbW4zTpQr/nMtTlsAWYr5Ue6c/I0MxbyqR+8/IRvUwnzaq16+wESqOkIhJBMpo/m0o1pHGtJBgUU9csVD29nJGu+TV8GGpITl5XYAQWUNg+XeY9xQwF6AhH9VsrT2Bfip6GT92T3oFRoVRspvntjqtwRAAB7DSAHAbXIm+YoxxfEHHEDOi//Lm48D+Gb+MRJElPtoULhlOque4hLUz0oPyIYIybbkv/UWszXSF+ikIpbKq6dN0vSMSRcts4gIWsuCOJxHuPEIkuOuTsh25WX6wd4Y/DZRkf0PLn+Gwoz4b2RFyNlQvdcHqtaa362/CYNByR8oAL3bET4k7n1Xat6rCaf3FndE4iSgikWYAAcB0Qz+izGqEnq2vvO7kj8ysS3x2ubYUWQ/9HRXy5Ithkg8jTNl55M+yieXX2yJQSUpEaCkamjlJKaG0xN1oWm4mu+T19gb1MGGd9oyXQ0QAet1aIcJjmj4tKZ9DviSImYZ2fN/P/jW6tvJvX/5Zwmgk5PSzuzl95FBA60mNuHTUd/SX2GYGpL2LYfVlnP0nmlSlowbYXyR4imSpAFXcKRL04Zl8/uLEbZFPsAVJFgEUrN0QLWzDcRlZ1VhL2pdvD22hqg0TClnVYk4r6E7Pzy9lQAMwCS5peC8pu8glaAiOoDpqxe2UF8OlElb3lLXIHJtaS4L/OxdluCpJerV1GkHQTzZA7mSr8ZHnnbEV8MF2smvQUDm/JPXNfbMVcE3Ix2u6jqkP5uwAAAAC9q2eR2W4zD2Gf2Jb9slMnGLLOz/GkcaV2GfryK6uUkKWsotb1mUTdfgy4ayLFvgSwAyOOkfWrM5tAWRyexVN8K/96dQMn9DhUdIrEKsCbD4wdxuUlv4SZ/J2dqMgZhYAcJLZwRQKBWkv2TNfLBRMOcUdDb2YMQ31y9H9QCBdu6aGsZECDd/72T8RFZxA7Z4o8eYPHAAaeYrKuxjmC7xPdbGdOVwtZxU2gj4MtwVt4GedVJfOfc+spF6sMcuvGpE8QWadxH3gptvYFZd1rhTtlCdN5YwL1lC/AVyoKj+PMe2nn4BVPnqG74DXL+J7lrTkRmqNWhH3kO8QX8TKmQzpnsW6+bD1So2+S9HmfWLHBgewAfSy/OnPz4O4ATwOZHSVSd9Veq0IN9Fax2UZV04lGtT5VX2f3opgQ0CMTi9Wc8KbF7qNd+eNJIqjbnJUdwF9/lQYENZp8TDgHsNZY0/Fw5AJDOMZBoJ24wIJefhzQ8t0puUqep5BoyeJlV5+TMAAAAAGefGG0SThABOmYnJ7QP93UQ5x8UPBSswb5MLrOokG1M2HGfSjlMTQ6jvQ9RsGtAEfc+3CQnMmwtHOq+h8fOm9tsCbDWN3C714w8SsUbWWacYCWaAs8+GyIImqiQeCabitleqddyutPP25vnYIQ8stULB3py6HrIOY9LzGqgHB6nCfHGJZEs9NuRnsjxI1kyajlwPYTOEqsug+YQgWmBfUmEC2ZJLlZZ101O6dTwAzLLRGo0yKIVR63Hghxa5b381q4aHZeo1w1YlHNnK/aONe/oKMagIM4jKVSpyotIA91GwOgugFJotnY3Fnbop33PEvdQ8MhuGeOfwaKMvXmG7rBG7rPFMu/3hzJbZCb6RFjMlJLNN/BS81kic/9EY6bpHBY/ycjUdXL34j3lnTcZ/i8rjFIt2+sXahckoZ8NO4FxqR47BzRQkFeEQ3t/kTHdyVR+ktwtfp4J4BD+dPB3lnFP+XRW36Dppw125yQNF+olDoXtjNVfzdbXhQBa9Rf+zYpS4bUYyPjwn1fbL3KNawo4eC0pr2dU9yLAmgLLEuHlZ9n8zGEyS5uzfW2KE/2fdqt1nqWFULNHf4neW+EZc2pOm3QHD583+Vtb6UzLCCld6snLQZW+k00OrJaJWqcpbjf4YTFXkAk8ur+yiEVMWRbGP4b3JkKL1A95gj6ZgPU/RZJjJY9Q4zYAy48+FzF8bYaK58UExvDKaBThyjJxf3PqM06lRndaDGo41R/gWpf2KdCYyh1r8dZEbkidbNYX9YNqZo6qa8f/KBCRVzzy9u/72iTjWjw1fGMY8p4L1ZQE0nirRb5hn2u+6mwIZj1fBjGyr/6/eAAAAAAA=";
+document.querySelectorAll('.js-portrait').forEach(i => i.src = PORTRAIT);
+</script>
+</body>
+</html>

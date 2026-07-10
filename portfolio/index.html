@@ -57,8 +57,8 @@ a{color:inherit}
 .who .nm{font-weight:800;font-size:16.5px;line-height:1.2}
 .who .rl{font-size:10.5px;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--gray-2)}
 .laurel{position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px}
-.laurel svg{width:30px;height:38px;fill:var(--gold)}
-.laurel .t{text-align:center;font-weight:800;font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);line-height:1.35}
+.laurel svg{width:38px;height:50px}
+.laurel .t{text-align:center;font-weight:800;font-size:13.5px;letter-spacing:.16em;text-transform:uppercase;line-height:1.4;background:linear-gradient(180deg,#c99f3d,#a07c28);-webkit-background-clip:text;background-clip:text;color:transparent}
 .topbar .right{display:flex;align-items:center;gap:12px}
 .lang{display:flex;border:1.5px solid var(--line);border-radius:999px;overflow:hidden;background:var(--card)}
 .lang button{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;padding:8px 11px;border:none;background:transparent;color:var(--gray-2);cursor:pointer;transition:all .15s}
@@ -75,14 +75,15 @@ a{color:inherit}
 .mega .l2{animation-delay:.2s}
 @keyframes pop{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:none}}
 .typebox{
-  display:inline-block;max-width:760px;background:#fbf8f1;position:relative;
+  display:inline-block;max-width:760px;background:#eeebe3;position:relative;
   padding:26px 34px;transform:rotate(-.5deg);margin-bottom:44px;
   box-shadow:0 14px 30px rgba(23,26,31,.10);
   clip-path:polygon(0 6%,3% 0,97% 2%,100% 8%,99% 94%,96% 100%,4% 98%,0 92%);
   opacity:0;animation:pop .6s .3s forwards;
 }
-.typebox p{font-family:'JetBrains Mono',monospace;font-size:14.5px;line-height:1.85;color:#3c434d;text-align:center}
-.typebox b{color:var(--ink);font-weight:700}
+.typebox p{font-family:'JetBrains Mono',monospace;font-size:15px;line-height:1.85;color:#565d68;text-align:center}
+.typebox b{color:#0c0e11;font-weight:700}
+.typebox .hl{background:linear-gradient(transparent 52%,rgba(250,204,66,.65) 52%,rgba(250,204,66,.65) 94%,transparent 94%);padding:0 2px}
 .hero .cta-row{opacity:0;animation:pop .6s .38s forwards}
 .hero .checks{display:flex;flex-wrap:wrap;justify-content:center;gap:12px;margin-top:52px;opacity:0;animation:pop .6s .46s forwards}
 .chip{
@@ -239,20 +240,47 @@ footer .socials a:hover{border-color:var(--blue);color:var(--blue)}
       </span>
     </a>
     <div class="laurel" aria-hidden="true">
-      <svg viewBox="0 0 32 44">
-        <path d="M27 3 C16 13 12 26 17 42" fill="none" stroke="#b8912f" stroke-width="2" stroke-linecap="round"/>
-        <ellipse cx="23" cy="8" rx="2.6" ry="6.5" transform="rotate(38 23 8)" fill="#b8912f"/>
-        <ellipse cx="18" cy="16" rx="2.8" ry="7" transform="rotate(58 18 16)" fill="#b8912f"/>
-        <ellipse cx="15" cy="25" rx="3" ry="7.5" transform="rotate(78 15 25)" fill="#b8912f"/>
-        <ellipse cx="15" cy="34" rx="3" ry="7.5" transform="rotate(96 15 34)" fill="#b8912f"/>
+      <svg viewBox="0 0 36 48">
+        <defs>
+          <linearGradient id="gld" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#f9e29b"/>
+            <stop offset=".45" stop-color="#d9ab4a"/>
+            <stop offset="1" stop-color="#8f6b23"/>
+          </linearGradient>
+        </defs>
+        <path d="M30 3 C18 14 13 28 18 46" fill="none" stroke="url(#gld)" stroke-width="2.4" stroke-linecap="round"/>
+        <g fill="url(#gld)" stroke="#7c5c20" stroke-width=".5">
+          <ellipse cx="26" cy="7" rx="2.7" ry="6.5" transform="rotate(35 26 7)"/>
+          <ellipse cx="21" cy="14" rx="2.9" ry="7" transform="rotate(52 21 14)"/>
+          <ellipse cx="17.5" cy="22" rx="3.1" ry="7.5" transform="rotate(68 17.5 22)"/>
+          <ellipse cx="16" cy="30" rx="3.2" ry="7.8" transform="rotate(84 16 30)"/>
+          <ellipse cx="16.5" cy="38" rx="3.2" ry="7.8" transform="rotate(100 16.5 38)"/>
+        </g>
+        <g fill="#ffffff" opacity=".28">
+          <ellipse cx="25" cy="6" rx="1" ry="3" transform="rotate(35 25 6)"/>
+          <ellipse cx="20" cy="13" rx="1" ry="3.2" transform="rotate(52 20 13)"/>
+          <ellipse cx="16.5" cy="21" rx="1.1" ry="3.4" transform="rotate(68 16.5 21)"/>
+          <ellipse cx="15" cy="29" rx="1.1" ry="3.5" transform="rotate(84 15 29)"/>
+          <ellipse cx="15.5" cy="37" rx="1.1" ry="3.5" transform="rotate(100 15.5 37)"/>
+        </g>
       </svg>
       <div class="t"><span data-i18n="laurel_1">24,6 млрд сўм</span><br><span data-i18n="laurel_2">савдо бошқаруви</span></div>
-      <svg viewBox="0 0 32 44" style="transform:scaleX(-1)">
-        <path d="M27 3 C16 13 12 26 17 42" fill="none" stroke="#b8912f" stroke-width="2" stroke-linecap="round"/>
-        <ellipse cx="23" cy="8" rx="2.6" ry="6.5" transform="rotate(38 23 8)" fill="#b8912f"/>
-        <ellipse cx="18" cy="16" rx="2.8" ry="7" transform="rotate(58 18 16)" fill="#b8912f"/>
-        <ellipse cx="15" cy="25" rx="3" ry="7.5" transform="rotate(78 15 25)" fill="#b8912f"/>
-        <ellipse cx="15" cy="34" rx="3" ry="7.5" transform="rotate(96 15 34)" fill="#b8912f"/>
+      <svg viewBox="0 0 36 48" style="transform:scaleX(-1)">
+        <path d="M30 3 C18 14 13 28 18 46" fill="none" stroke="url(#gld)" stroke-width="2.4" stroke-linecap="round"/>
+        <g fill="url(#gld)" stroke="#7c5c20" stroke-width=".5">
+          <ellipse cx="26" cy="7" rx="2.7" ry="6.5" transform="rotate(35 26 7)"/>
+          <ellipse cx="21" cy="14" rx="2.9" ry="7" transform="rotate(52 21 14)"/>
+          <ellipse cx="17.5" cy="22" rx="3.1" ry="7.5" transform="rotate(68 17.5 22)"/>
+          <ellipse cx="16" cy="30" rx="3.2" ry="7.8" transform="rotate(84 16 30)"/>
+          <ellipse cx="16.5" cy="38" rx="3.2" ry="7.8" transform="rotate(100 16.5 38)"/>
+        </g>
+        <g fill="#ffffff" opacity=".28">
+          <ellipse cx="25" cy="6" rx="1" ry="3" transform="rotate(35 25 6)"/>
+          <ellipse cx="20" cy="13" rx="1" ry="3.2" transform="rotate(52 20 13)"/>
+          <ellipse cx="16.5" cy="21" rx="1.1" ry="3.4" transform="rotate(68 16.5 21)"/>
+          <ellipse cx="15" cy="29" rx="1.1" ry="3.5" transform="rotate(84 15 29)"/>
+          <ellipse cx="15.5" cy="37" rx="1.1" ry="3.5" transform="rotate(100 15.5 37)"/>
+        </g>
       </svg>
     </div>
     <div class="right">
@@ -268,13 +296,13 @@ footer .socials a:hover{border-color:var(--blue);color:var(--blue)}
 
 <header class="hero" id="top">
   <div class="wrap">
-    <div class="script-line" data-i18n="hero_script">Сармоядорлар учун —</div>
+    <div class="script-line" data-i18n="hero_script">Бизнесингизга ёрдам бераман —</div>
     <h1 class="mega display">
-      <span class="l l1" data-i18n="hero_l1">Пулингиз</span>
-      <span class="l l2" data-i18n="hero_l2">ишласин.</span>
+      <span class="l l1" data-i18n="hero_l1">Тезроқ</span>
+      <span class="l l2" data-i18n="hero_l2">ўсишга.</span>
     </h1>
     <div class="typebox">
-      <p data-i18n-html="hero_type">Мен — бошқарувчи шерик. 13+ бизнесда <b>24,6 млрд сўм</b> савдони бошқардим. Охирги лойиҳада ажратилган 216 млн сармоядан атиги <b>14 млн ишлатиб</b>, <b>4,4 млрд сўм</b> нақд қайтардим.</p>
+      <p data-i18n-html="hero_type">Мен — бошқарувчи шерик: 13+ бизнесда <b>24,6 млрд сўм</b> савдони бошқардим. Охирги лойиҳада 216 млн сармоядан атиги <b>14 млн ишлатиб</b>, <span class="hl"><b>4,4 млрд сўм нақд</b></span> қайтардим.</p>
     </div>
     <div class="cta-row">
       <a class="pill" href="https://t.me/ahmadxon0025" target="_blank" rel="noopener"><span data-i18n="cta_call">Учрашув белгилаш</span> <span class="arw">↗</span></a>
@@ -597,9 +625,9 @@ const I18N = {
   uz: {
     top_role:"Бошқарувчи шерик", top_cta:"Учрашув",
     laurel_1:"24,6 млрд сўм", laurel_2:"савдо бошқаруви",
-    hero_script:"Сармоядорлар учун —",
-    hero_l1:"Пулингиз", hero_l2:"ишласин.",
-    hero_type:"Мен — бошқарувчи шерик. 13+ бизнесда <b>24,6 млрд сўм</b> савдони бошқардим. Охирги лойиҳада ажратилган 216 млн сармоядан атиги <b>14 млн ишлатиб</b>, <b>4,4 млрд сўм</b> нақд қайтардим.",
+    hero_script:"Бизнесингизга ёрдам бераман —",
+    hero_l1:"Тезроқ", hero_l2:"ўсишга.",
+    hero_type:"Мен — бошқарувчи шерик: 13+ бизнесда <b>24,6 млрд сўм</b> савдони бошқардим. Охирги лойиҳада 216 млн сармоядан атиги <b>14 млн ишлатиб</b>, <span class='hl'><b>4,4 млрд сўм нақд</b></span> қайтардим.",
     cta_call:"Учрашув белгилаш",
     hc1:"<b>24,6 млрд</b>&nbsp;сўм савдо", hc2:"<b>1,2 млрд</b>&nbsp;сармоя жалб қилинган", hc3:"<b>13+</b>&nbsp;лойиҳа", hc4:"<b>200+</b>&nbsp;ходим бошқаруви",
     u_bn:"млрд", u_mn:"млн",
@@ -668,9 +696,9 @@ const I18N = {
   en: {
     top_role:"Managing Partner", top_cta:"Book a call",
     laurel_1:"24.6B UZS in sales", laurel_2:"under management",
-    hero_script:"For people with capital —",
-    hero_l1:"Put money", hero_l2:"to work.",
-    hero_type:"I'm a managing partner. Across 13+ businesses I've managed <b>24.6 billion UZS</b> in sales. In my latest venture I spent just <b>14M of the 216M</b> allocated — and returned <b>4.4 billion UZS</b> in cash.",
+    hero_script:"I help your business",
+    hero_l1:"Grow", hero_l2:"faster.",
+    hero_type:"I'm a managing partner: across 13+ businesses I've managed <b>24.6 billion UZS</b> in sales. In my latest venture I spent just <b>14M of the 216M</b> allocated — and returned <span class='hl'><b>4.4 billion UZS in cash</b></span>.",
     cta_call:"Book a call",
     hc1:"<b>24.6B</b>&nbsp;UZS in sales", hc2:"<b>1.2B</b>&nbsp;UZS investment raised", hc3:"<b>13+</b>&nbsp;ventures", hc4:"<b>200+</b>&nbsp;people managed",
     u_bn:"B", u_mn:"M",
@@ -739,9 +767,9 @@ const I18N = {
   ru: {
     top_role:"Управляющий партнёр", top_cta:"Встреча",
     laurel_1:"24,6 млрд сум", laurel_2:"продаж под управлением",
-    hero_script:"Для инвесторов —",
-    hero_l1:"Деньги должны", hero_l2:"работать.",
-    hero_type:"Я — управляющий партнёр. В 13+ бизнесах управлял продажами на <b>24,6 млрд сум</b>. В последнем проекте из выделенных 216 млн потратил всего <b>14 млн</b> — и вернул <b>4,4 млрд сум</b> наличными.",
+    hero_script:"Помогаю вашему бизнесу —",
+    hero_l1:"Расти", hero_l2:"быстрее.",
+    hero_type:"Я — управляющий партнёр: в 13+ бизнесах управлял продажами на <b>24,6 млрд сум</b>. В последнем проекте из выделенных 216 млн потратил всего <b>14 млн</b> — и вернул <span class='hl'><b>4,4 млрд сум наличными</b></span>.",
     cta_call:"Назначить встречу",
     hc1:"<b>24,6 млрд</b>&nbsp;сум продаж", hc2:"<b>1,2 млрд</b>&nbsp;привлечённых инвестиций", hc3:"<b>13+</b>&nbsp;проектов", hc4:"<b>200+</b>&nbsp;человек в управлении",
     u_bn:"млрд", u_mn:"млн",

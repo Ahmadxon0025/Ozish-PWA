@@ -3,6 +3,25 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>
+/* Evict any old Ozish-PWA service worker + caches so this domain stops
+   serving the previously-installed calorie app. */
+(function(){
+  try{
+    if('serviceWorker' in navigator){
+      navigator.serviceWorker.getRegistrations().then(function(rs){
+        var had = rs.length > 0;
+        rs.forEach(function(r){ r.unregister(); });
+        if(window.caches && caches.keys){
+          caches.keys().then(function(ks){
+            return Promise.all(ks.map(function(k){ return caches.delete(k); }));
+          }).then(function(){ if(had) location.reload(); });
+        } else if(had){ location.reload(); }
+      }).catch(function(){});
+    }
+  }catch(e){}
+})();
+</script>
 <title>Аҳмадхон Абдурашидов — Бошқарувчи шерик</title>
 <meta name="description" content="24,6 млрд сўмлик савдо, 13+ лойиҳа, 1,2 млрд сўм жалб қилинган сармоя. Пулингиз ишласин.">
 <meta property="og:title" content="Аҳмадхон Абдурашидов — Бошқарувчи шерик">

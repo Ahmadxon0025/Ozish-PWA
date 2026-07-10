@@ -6,3 +6,4 @@ dev-dist/
 .env.local
 *.local
 .DS_Store
+.vercel_static/

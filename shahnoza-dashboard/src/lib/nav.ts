@@ -14,6 +14,7 @@ import {
   PieChart,
   CheckSquare,
   KanbanSquare,
+  Trophy,
   Settings,
   UserCog,
   Plug,
@@ -66,6 +67,12 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: "Mening vazifalarim", href: "/tasks/my", icon: CheckSquare },
       { label: "Kanban", href: "/tasks/kanban", icon: KanbanSquare },
+      {
+        label: "Samaradorlik",
+        href: "/tasks/performance",
+        icon: Trophy,
+        roles: ["super_admin", "owner", "sales_manager"],
+      },
     ],
   },
   {

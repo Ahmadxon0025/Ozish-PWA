@@ -375,6 +375,79 @@ on the phone.
 
 ---
 
+## 7. Current state as-built, and what this pass changed
+
+### 7.1 Analysis of the current implementation (before this pass)
+Read end-to-end: `0005_tasks.sql`, `tasks.ts` router, `/tasks/kanban`, `/tasks/my`.
+
+- **Model:** `tasks(title, description, assigned_to, created_by, priority DEFAULT
+  'medium', status DEFAULT 'todo', category, related_type/related_id, due_date,
+  completed_at, timestamps)` + `task_comments`. Solid base, but flat: no start
+  date, no cycle-time signal, no labels, no recurrence, no parent grouping.
+- **Statuses:** only `todo / in_progress / review / done` — no triage/backlog
+  inbox and no `cancelled` (so dropped work either lingers or is deleted, losing
+  history and polluting metrics).
+- **Router:** `my`, `board`, `create`, `updateStatus`, `delete`, comments. The
+  create form couldn't set an assignee (everything self-assigned) — a real gap
+  for a manager handing out work. **No performance/reporting endpoint at all.**
+- **UI:** kanban had no "create" button and no overdue signal; my-tasks had a
+  decent create form but no personal stats. Neither showed who is behind.
+- **Weak vs. the research:** missing the headline the owner asked for — a
+  per-person / per-role performance view — plus the basics of assignee-on-create,
+  overdue visibility, and a triage state.
+
+### 7.2 What was built (this pass)
+Everything additive; no table/column dropped; live rows untouched.
+
+- **Migration `0013_tasks_upgrade.sql`** (also in `all_migrations.sql`): adds
+  `start_date`, `started_at` (cycle time), `estimate_hours`, `labels text[]`,
+  `parent_task_id` (self-FK, mini-epic), `recurrence` — all `IF NOT EXISTS`.
+- **Statuses widened** to `backlog → todo → in_progress → review → done` (+ a
+  side `cancelled`). `backlog` is the Linear-style triage inbox; `cancelled` is
+  excluded from all metrics. `review` and the 4-level priority were **kept** to
+  avoid migrating live rows.
+- **Router `tasks.ts`:** `create`/`update` now carry assignee + all new fields;
+  `updateStatus` stamps `started_at` once (never overwritten) and, when a
+  **recurring** task is completed, spawns the next occurrence with shifted dates
+  (the Asana idea, plain date math — no scheduler). Added `assignees`, `myStats`
+  (caller's own 30-day numbers), and the headline **`performance`** endpoint
+  (manager-gated) computing, per person and per role: completed, on-time %, open,
+  overdue, workload, avg cycle time — using the exact formulas in §5.
+- **UI:**
+  - **Kanban** — 5 flow columns, assignee filter, a shared create dialog, label
+    chips, a recurrence marker, and **red overdue cards**. Click a card title to
+    edit.
+  - **My tasks** — a personal 4-tile stat strip (completed / on-time% / open /
+    overdue), overdue highlighting, labels, and the shared create/edit dialog.
+  - **Samaradorlik (new, `/tasks/performance`)** — mobile-first **leaderboard**
+    (ranked by on-time %, tie-break completed; 🥇🥈🥉 for the top 3), a per-role
+    roll-up table, period toggle (this week / 30 days / this month), a role
+    filter, and the 70–80% interpretation guardrail in the copy. Nav item is
+    visible to `super_admin / owner / sales_manager` only.
+  - Shared `TaskFormDialog` component keeps create/edit consistent across pages.
+
+### 7.3 Re-review (think after)
+- **Ownership & due dates obvious?** Yes — assignee is set at creation, shown on
+  every card, and overdue is red everywhere plus counted per person.
+- **Is each person's performance obvious at a glance?** Yes — the leaderboard is
+  the weekly-review agenda; on-time % is colour-coded (green ≥80, amber ≥60, red
+  <60) and overdue is a red badge.
+- **Verified by reasoning on sample data:** a task completed before its due date
+  increments `completed` and `onTime`; one with no due date is excluded from the
+  on-time denominator (so on-time % can't be gamed by omitting dates *upward*);
+  `cancelled` never counts; cycle time falls back to `created_at` when a task
+  skips `in_progress`. Divisions guard zero (show "—").
+- **Risks carried forward (from §6):** leaderboards can be gamed / hurt morale →
+  gated to managers + framed as "where do we need help"; on-time % is only as
+  honest as the due dates; cycle time is noisy if people skip `in_progress` — all
+  documented here rather than pretended away.
+- `pnpm typecheck` + `pnpm build`: green.
+
+> Owner action: run `0013_tasks_upgrade.sql` in the Supabase SQL editor (migrations
+> aren't auto-applied).
+
+---
+
 ### Sources
 - [Aurora Training Advantage — Task Ownership](https://auroratrainingadvantage.com/business-administration/key-term/task-ownership/)
 - [Medium (Gorin) — Who owns a task](https://maxim-gorin.medium.com/assigning-responsibility-who-owns-a-task-and-when-75e2ea78a38a)

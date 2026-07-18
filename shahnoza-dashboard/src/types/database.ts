@@ -376,6 +376,12 @@ export interface Database {
           completed_at: string | null;
           created_at: string;
           updated_at: string;
+          start_date: string | null;
+          started_at: string | null;
+          estimate_hours: number | null;
+          labels: string[] | null;
+          parent_task_id: string | null;
+          recurrence: string | null;
         };
         Insert: {
           id?: string;
@@ -392,6 +398,12 @@ export interface Database {
           completed_at?: string | null;
           created_at?: string;
           updated_at?: string;
+          start_date?: string | null;
+          started_at?: string | null;
+          estimate_hours?: number | null;
+          labels?: string[] | null;
+          parent_task_id?: string | null;
+          recurrence?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["tasks"]["Insert"]>;
         Relationships: [];

@@ -1,17 +1,53 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
+import type { Database } from "@/types/database";
 import {
   createTRPCRouter,
   protectedProcedure,
+  roleProcedure,
 } from "@/server/api/trpc";
-import { TASK_STATUSES, TASK_PRIORITIES } from "@/lib/constants";
+import {
+  TASK_STATUSES,
+  TASK_FLOW_STATUSES,
+  TASK_OPEN_STATUSES,
+  TASK_WORKLOAD_STATUSES,
+  TASK_PRIORITIES,
+} from "@/lib/constants";
 import { groupBy } from "./_helpers";
+import { resolvePeriod } from "./_helpers";
 
 const statusEnum = z.enum(TASK_STATUSES);
 const priorityEnum = z.enum(TASK_PRIORITIES);
 
+// Task performance is a manager view (per research self-critique: leaderboard
+// to managers; each person sees their own stats via `myStats`).
+const managerProcedure = roleProcedure("super_admin", "owner", "sales_manager");
+
+const OPEN = [...TASK_OPEN_STATUSES];
+const WORKLOAD = new Set<string>(TASK_WORKLOAD_STATUSES);
+
+/** Shift an ISO date by a recurrence rule (for spawning the next occurrence). */
+function shiftDate(iso: string, rule: string): string | null {
+  const d = new Date(iso);
+  if (rule === "daily") d.setUTCDate(d.getUTCDate() + 1);
+  else if (rule === "weekly") d.setUTCDate(d.getUTCDate() + 7);
+  else if (rule === "monthly") d.setUTCMonth(d.getUTCMonth() + 1);
+  else return null;
+  return d.toISOString();
+}
+
 export const tasksRouter = createTRPCRouter({
-  /** Tasks assigned to the current user (or created by them). */
+  /** Active users, for the assignee picker. */
+  assignees: protectedProcedure.query(async ({ ctx }) => {
+    const { data } = await ctx.supabase
+      .from("users")
+      .select("id, full_name, role")
+      .eq("is_active", true)
+      .order("full_name", { ascending: true });
+    return data ?? [];
+  }),
+
+  /** Tasks assigned to (or created by) the current user. */
   my: protectedProcedure
     .input(z.object({ status: statusEnum.optional() }).optional())
     .query(async ({ ctx, input }) => {
@@ -25,23 +61,67 @@ export const tasksRouter = createTRPCRouter({
       return data ?? [];
     }),
 
-  /** All tasks grouped by status (kanban). RLS scopes what each role sees. */
-  board: protectedProcedure.query(async ({ ctx }) => {
-    const [{ data: tasks }, { data: users }] = await Promise.all([
-      ctx.supabase.from("tasks").select("*").order("created_at", { ascending: false }),
-      ctx.supabase.from("users").select("id, full_name"),
+  /** The caller's own headline stats (last 30 days) — shown on "my tasks". */
+  myStats: protectedProcedure.query(async ({ ctx }) => {
+    const now = new Date();
+    const from = new Date(now.getTime() - 30 * 24 * 3600 * 1000).toISOString();
+    const nowISO = now.toISOString();
+    const [{ data: completed }, { data: open }] = await Promise.all([
+      ctx.supabase
+        .from("tasks")
+        .select("due_date, completed_at")
+        .eq("assigned_to", ctx.appUser.id)
+        .eq("status", "done")
+        .gte("completed_at", from),
+      ctx.supabase
+        .from("tasks")
+        .select("due_date, status")
+        .eq("assigned_to", ctx.appUser.id)
+        .in("status", OPEN),
     ]);
-    const userName = new Map((users ?? []).map((u) => [u.id, u.full_name]));
-    const withNames = (tasks ?? []).map((t) => ({
-      ...t,
-      assignedName: t.assigned_to ? userName.get(t.assigned_to) ?? "—" : null,
-    }));
-    const byStatus = groupBy(withNames, (t) => t.status);
-    return TASK_STATUSES.map((s) => ({
-      status: s,
-      tasks: byStatus.get(s) ?? [],
-    }));
+    const done = completed ?? [];
+    const withDue = done.filter((t) => t.due_date);
+    const onTime = withDue.filter(
+      (t) => t.completed_at && t.due_date && t.completed_at <= t.due_date,
+    ).length;
+    const openRows = open ?? [];
+    return {
+      completed: done.length,
+      onTimePct: withDue.length ? Math.round((onTime / withDue.length) * 100) : null,
+      open: openRows.length,
+      overdue: openRows.filter((t) => t.due_date && t.due_date < nowISO).length,
+    };
   }),
+
+  /** All tasks grouped by the flow statuses (kanban). RLS scopes visibility. */
+  board: protectedProcedure
+    .input(z.object({ assignedTo: z.string().uuid().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      let q = ctx.supabase
+        .from("tasks")
+        .select("*")
+        .order("due_date", { ascending: true, nullsFirst: false });
+      if (input?.assignedTo) q = q.eq("assigned_to", input.assignedTo);
+      const [{ data: tasks }, { data: users }] = await Promise.all([
+        q,
+        ctx.supabase.from("users").select("id, full_name"),
+      ]);
+      const userName = new Map((users ?? []).map((u) => [u.id, u.full_name]));
+      const nowISO = new Date().toISOString();
+      const withNames = (tasks ?? [])
+        .filter((t) => t.status !== "cancelled")
+        .map((t) => ({
+          ...t,
+          assignedName: t.assigned_to ? userName.get(t.assigned_to) ?? "—" : null,
+          isOverdue:
+            t.status !== "done" && !!t.due_date && t.due_date < nowISO,
+        }));
+      const byStatus = groupBy(withNames, (t) => t.status);
+      return TASK_FLOW_STATUSES.map((s) => ({
+        status: s,
+        tasks: byStatus.get(s) ?? [],
+      }));
+    }),
 
   create: protectedProcedure
     .input(
@@ -50,8 +130,14 @@ export const tasksRouter = createTRPCRouter({
         description: z.string().optional(),
         assignedTo: z.string().uuid().optional(),
         priority: priorityEnum.default("medium"),
+        status: statusEnum.default("todo"),
         category: z.string().optional(),
         dueDate: z.string().optional(),
+        startDate: z.string().optional(),
+        estimateHours: z.number().nonnegative().optional(),
+        labels: z.array(z.string()).optional(),
+        parentTaskId: z.string().uuid().optional(),
+        recurrence: z.enum(["daily", "weekly", "monthly"]).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -63,9 +149,15 @@ export const tasksRouter = createTRPCRouter({
           assigned_to: input.assignedTo ?? ctx.appUser.id,
           created_by: ctx.appUser.id,
           priority: input.priority,
+          status: input.status,
           category: input.category ?? null,
           due_date: input.dueDate ?? null,
-          status: "todo",
+          start_date: input.startDate ?? null,
+          estimate_hours: input.estimateHours ?? null,
+          labels: input.labels && input.labels.length ? input.labels : null,
+          parent_task_id: input.parentTaskId ?? null,
+          recurrence: input.recurrence ?? null,
+          started_at: input.status === "in_progress" ? new Date().toISOString() : null,
         })
         .select()
         .single();
@@ -73,17 +165,89 @@ export const tasksRouter = createTRPCRouter({
       return data;
     }),
 
+  /** Edit task fields (not status — use updateStatus for state moves). */
+  update: protectedProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        title: z.string().min(1).optional(),
+        description: z.string().nullable().optional(),
+        assignedTo: z.string().uuid().nullable().optional(),
+        priority: priorityEnum.optional(),
+        category: z.string().nullable().optional(),
+        dueDate: z.string().nullable().optional(),
+        startDate: z.string().nullable().optional(),
+        estimateHours: z.number().nonnegative().nullable().optional(),
+        labels: z.array(z.string()).optional(),
+        recurrence: z.enum(["daily", "weekly", "monthly"]).nullable().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const patch: Database["public"]["Tables"]["tasks"]["Update"] = {};
+      if (input.title !== undefined) patch.title = input.title;
+      if (input.description !== undefined) patch.description = input.description;
+      if (input.assignedTo !== undefined) patch.assigned_to = input.assignedTo;
+      if (input.priority !== undefined) patch.priority = input.priority;
+      if (input.category !== undefined) patch.category = input.category;
+      if (input.dueDate !== undefined) patch.due_date = input.dueDate;
+      if (input.startDate !== undefined) patch.start_date = input.startDate;
+      if (input.estimateHours !== undefined) patch.estimate_hours = input.estimateHours;
+      if (input.labels !== undefined) patch.labels = input.labels.length ? input.labels : null;
+      if (input.recurrence !== undefined) patch.recurrence = input.recurrence;
+      const { error } = await ctx.supabase.from("tasks").update(patch).eq("id", input.id);
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      return { ok: true };
+    }),
+
   updateStatus: protectedProcedure
     .input(z.object({ id: z.string().uuid(), status: statusEnum }))
     .mutation(async ({ ctx, input }) => {
-      const { error } = await ctx.supabase
+      // Read current so we can set started_at once and handle recurrence.
+      const { data: current } = await ctx.supabase
         .from("tasks")
-        .update({
-          status: input.status,
-          completed_at: input.status === "done" ? new Date().toISOString() : null,
-        })
-        .eq("id", input.id);
+        .select("*")
+        .eq("id", input.id)
+        .maybeSingle();
+      if (!current) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const now = new Date().toISOString();
+      const patch: Database["public"]["Tables"]["tasks"]["Update"] = {
+        status: input.status,
+        completed_at: input.status === "done" ? now : null,
+      };
+      // Set started_at the first time it enters in_progress; never overwrite.
+      if (input.status === "in_progress" && !current.started_at) {
+        patch.started_at = now;
+      }
+      const { error } = await ctx.supabase.from("tasks").update(patch).eq("id", input.id);
       if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+
+      // If a recurring task is completed, spawn the next occurrence (todo).
+      if (
+        input.status === "done" &&
+        current.recurrence &&
+        current.status !== "done"
+      ) {
+        const nextDue = current.due_date ? shiftDate(current.due_date, current.recurrence) : null;
+        const nextStart = current.start_date
+          ? shiftDate(current.start_date, current.recurrence)
+          : null;
+        await ctx.supabase.from("tasks").insert({
+          title: current.title,
+          description: current.description,
+          assigned_to: current.assigned_to,
+          created_by: current.created_by,
+          priority: current.priority,
+          status: "todo",
+          category: current.category,
+          due_date: nextDue,
+          start_date: nextStart,
+          estimate_hours: current.estimate_hours,
+          labels: current.labels,
+          parent_task_id: current.parent_task_id,
+          recurrence: current.recurrence,
+        });
+      }
       return { ok: true };
     }),
 
@@ -116,5 +280,173 @@ export const tasksRouter = createTRPCRouter({
       });
       if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
       return { ok: true };
+    }),
+
+  /**
+   * Per-person + per-role performance for a period (default: last 30 days).
+   * Metrics per TASKS_RESEARCH.md: completed, on-time %, open, overdue,
+   * workload, avg cycle time. Cancelled tasks are excluded everywhere.
+   */
+  performance: managerProcedure
+    .input(z.object({ from: z.string().optional(), to: z.string().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      let fromISO: string;
+      let toISO: string;
+      if (input?.from && input?.to) {
+        const r = resolvePeriod({ from: input.from, to: input.to });
+        fromISO = r.from;
+        toISO = r.to;
+      } else {
+        const now = new Date();
+        fromISO = new Date(now.getTime() - 30 * 24 * 3600 * 1000).toISOString();
+        toISO = now.toISOString();
+      }
+      const nowISO = new Date().toISOString();
+
+      const [{ data: users }, { data: completed }, { data: open }] =
+        await Promise.all([
+          ctx.supabase
+            .from("users")
+            .select("id, full_name, role")
+            .eq("is_active", true),
+          ctx.supabase
+            .from("tasks")
+            .select("assigned_to, due_date, completed_at, started_at, created_at")
+            .eq("status", "done")
+            .gte("completed_at", fromISO)
+            .lt("completed_at", toISO),
+          ctx.supabase
+            .from("tasks")
+            .select("assigned_to, due_date, status")
+            .in("status", OPEN),
+        ]);
+
+      type Acc = {
+        userId: string;
+        name: string;
+        role: string;
+        completed: number;
+        completedWithDue: number;
+        onTime: number;
+        open: number;
+        overdue: number;
+        workload: number;
+        cycleMs: number;
+        cycleCount: number;
+      };
+      const acc = new Map<string, Acc>();
+      for (const u of users ?? []) {
+        acc.set(u.id, {
+          userId: u.id,
+          name: u.full_name ?? "—",
+          role: u.role ?? "—",
+          completed: 0,
+          completedWithDue: 0,
+          onTime: 0,
+          open: 0,
+          overdue: 0,
+          workload: 0,
+          cycleMs: 0,
+          cycleCount: 0,
+        });
+      }
+
+      for (const t of completed ?? []) {
+        if (!t.assigned_to) continue;
+        const a = acc.get(t.assigned_to);
+        if (!a) continue;
+        a.completed += 1;
+        if (t.due_date) {
+          a.completedWithDue += 1;
+          if (t.completed_at && t.completed_at <= t.due_date) a.onTime += 1;
+        }
+        const startRef = t.started_at ?? t.created_at;
+        if (t.completed_at && startRef) {
+          const ms = new Date(t.completed_at).getTime() - new Date(startRef).getTime();
+          if (ms >= 0) {
+            a.cycleMs += ms;
+            a.cycleCount += 1;
+          }
+        }
+      }
+      for (const t of open ?? []) {
+        if (!t.assigned_to) continue;
+        const a = acc.get(t.assigned_to);
+        if (!a) continue;
+        a.open += 1;
+        if (WORKLOAD.has(t.status)) a.workload += 1;
+        if (t.due_date && t.due_date < nowISO) a.overdue += 1;
+      }
+
+      const derive = (a: Acc) => ({
+        userId: a.userId,
+        name: a.name,
+        role: a.role,
+        completed: a.completed,
+        onTimePct: a.completedWithDue
+          ? Math.round((a.onTime / a.completedWithDue) * 100)
+          : null,
+        onTime: a.onTime,
+        completedWithDue: a.completedWithDue,
+        open: a.open,
+        overdue: a.overdue,
+        workload: a.workload,
+        avgCycleDays: a.cycleCount
+          ? Math.round((a.cycleMs / a.cycleCount / 86400000) * 10) / 10
+          : null,
+      });
+
+      // Only surface people with activity in scope (completed or currently open).
+      const people = Array.from(acc.values())
+        .filter((a) => a.completed > 0 || a.open > 0)
+        .map(derive)
+        .sort((x, y) => {
+          // Rank by on-time % desc (nulls last), tie-break by completed desc.
+          const ax = x.onTimePct ?? -1;
+          const ay = y.onTimePct ?? -1;
+          if (ay !== ax) return ay - ax;
+          return y.completed - x.completed;
+        });
+
+      // Per-role roll-up.
+      const byRole = groupBy(Array.from(acc.values()), (a) => a.role);
+      const roles = Array.from(byRole.entries())
+        .map(([role, list]) => {
+          const completedSum = list.reduce((s, a) => s + a.completed, 0);
+          const withDue = list.reduce((s, a) => s + a.completedWithDue, 0);
+          const onTimeSum = list.reduce((s, a) => s + a.onTime, 0);
+          const openSum = list.reduce((s, a) => s + a.open, 0);
+          const overdueSum = list.reduce((s, a) => s + a.overdue, 0);
+          const workloadSum = list.reduce((s, a) => s + a.workload, 0);
+          return {
+            role,
+            people: list.filter((a) => a.completed > 0 || a.open > 0).length,
+            completed: completedSum,
+            onTimePct: withDue ? Math.round((onTimeSum / withDue) * 100) : null,
+            open: openSum,
+            overdue: overdueSum,
+            workload: workloadSum,
+          };
+        })
+        .filter((r) => r.completed > 0 || r.open > 0)
+        .sort((a, b) => b.completed - a.completed);
+
+      const totals = {
+        completed: people.reduce((s, p) => s + p.completed, 0),
+        open: people.reduce((s, p) => s + p.open, 0),
+        overdue: people.reduce((s, p) => s + p.overdue, 0),
+        onTimePct: (() => {
+          const wd = Array.from(acc.values()).reduce((s, a) => s + a.completedWithDue, 0);
+          const ot = Array.from(acc.values()).reduce((s, a) => s + a.onTime, 0);
+          return wd ? Math.round((ot / wd) * 100) : null;
+        })(),
+      };
+
+      return {
+        period: { from: fromISO.slice(0, 10), to: toISO.slice(0, 10) },
+        people,
+        roles,
+        totals,
+      };
     }),
 });

@@ -42,17 +42,59 @@ export const LEAD_STATUS_LABELS: Record<string, string> = {
   lost: "Yo'qotildi",
 };
 
-export const TASK_STATUSES = ["todo", "in_progress", "review", "done"] as const;
+// Full status set. `backlog` (triage/inbox) and `cancelled` were added in the
+// task-management overhaul; `review` and the others are unchanged so existing
+// rows keep working. Status stays free-text in the DB (no enum migration).
+export const TASK_STATUSES = [
+  "backlog",
+  "todo",
+  "in_progress",
+  "review",
+  "done",
+  "cancelled",
+] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 
+// The ordered flow shown as Kanban columns and used for prev/next moves.
+// `cancelled` is intentionally excluded — it's a side action, not a column.
+export const TASK_FLOW_STATUSES = [
+  "backlog",
+  "todo",
+  "in_progress",
+  "review",
+  "done",
+] as const;
+
+// Statuses that count as "open" (still active work) for performance metrics.
+export const TASK_OPEN_STATUSES = [
+  "backlog",
+  "todo",
+  "in_progress",
+  "review",
+] as const;
+
+// The subset that counts toward "current workload" (committed, being worked).
+export const TASK_WORKLOAD_STATUSES = ["todo", "in_progress", "review"] as const;
+
 export const TASK_STATUS_LABELS: Record<string, string> = {
+  backlog: "Reja (backlog)",
   todo: "Bajarilishi kerak",
   in_progress: "Jarayonda",
   review: "Tekshiruvda",
   done: "Bajarildi",
+  cancelled: "Bekor qilingan",
 };
 
+// 4-level priority (ClickUp-style). Kept as-is to avoid migrating live rows;
+// "medium" is the "Normal" tier.
 export const TASK_PRIORITIES = ["low", "medium", "high", "urgent"] as const;
+
+export const TASK_PRIORITY_LABELS: Record<string, string> = {
+  low: "Past",
+  medium: "O'rta",
+  high: "Yuqori",
+  urgent: "Shoshilinch",
+};
 
 export const PAYMENT_PROVIDERS = ["click", "payme", "uzum_nasiya"] as const;
 

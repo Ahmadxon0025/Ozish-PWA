@@ -782,3 +782,20 @@ INSERT INTO expense_categories (name, is_variable, is_pilot_expense, display_ord
   ('Sotuv upgrade',   false, false, 24),
   ('Target (reklama)', true, true,  25)
 ON CONFLICT (name) DO NOTHING;
+
+-- ============================================================================
+-- 0013_tasks_upgrade.sql
+-- ============================================================================
+-- Additive only. Upgrades the task model (start date, cycle-time, estimate,
+-- labels, parent/mini-epic, recurrence). No column dropped/retyped.
+
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS start_date TIMESTAMPTZ;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS estimate_hours NUMERIC;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS labels TEXT[];
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS parent_task_id UUID REFERENCES tasks(id) ON DELETE SET NULL;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS recurrence TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_task_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_completed_at ON tasks(completed_at);
+CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date);

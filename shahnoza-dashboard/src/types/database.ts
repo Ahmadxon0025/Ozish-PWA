@@ -553,6 +553,7 @@ export interface Database {
           id: string;
           user_id: string | null;
           share_rate: number;
+          bears_loss: boolean;
           effective_from: string;
           effective_to: string | null;
           note: string | null;
@@ -562,6 +563,7 @@ export interface Database {
           id?: string;
           user_id?: string | null;
           share_rate: number;
+          bears_loss?: boolean;
           effective_from: string;
           effective_to?: string | null;
           note?: string | null;

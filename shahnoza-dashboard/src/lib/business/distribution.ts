@@ -3,7 +3,8 @@ import { round2 } from "./currency";
 export interface OwnerInput {
   userId: string;
   name: string;
-  shareRate: number; // fraction, e.g. 0.30
+  shareRate: number; // fraction of PROFIT, e.g. 0.30
+  bearsLoss: boolean; // true = "true owner", absorbs losses
   takenUsd: number; // already-withdrawn payouts in the period
 }
 
@@ -12,56 +13,90 @@ export interface OwnerSettlement {
   name: string;
   shareRate: number;
   sharePercent: number; // 0..100
-  entitlementUsd: number; // net profit × share
+  bearsLoss: boolean;
+  entitlementUsd: number; // profit share (or loss absorbed, negative)
   takenUsd: number;
-  balanceUsd: number; // entitlement − taken (>0 business owes owner; <0 owner overdrew)
+  balanceUsd: number; // entitlement − taken (>0 owed to owner; <0 owner overdrew / owes)
 }
 
 export interface DistributionResult {
   netProfitUsd: number;
+  isLoss: boolean;
   owners: OwnerSettlement[];
-  distributedRate: number; // sum of shares (0..1)
-  retainedRate: number; // 1 − distributed (can't go below 0)
-  retainedUsd: number; // net profit kept in the business
+  distributedRate: number; // sum of profit shares (0..1)
+  retainedRate: number;
+  retainedUsd: number; // profit retained in the business (0 during a loss)
   totalEntitledUsd: number;
   totalTakenUsd: number;
   totalOwedUsd: number;
 }
 
 /**
- * Split a period's net profit across owners by their share %.
- *   entitlement = netProfit × share
- *   balance (owed) = entitlement − taken
- * The unallocated remainder (100% − Σshares) is "retained in the business".
+ * Split a period's result across owners.
+ *
+ *  - PROFIT (net ≥ 0): entitlement = share × profit for each owner; the
+ *    unallocated remainder (100% − Σshares) stays in the business.
+ *  - LOSS (net < 0): owners who don't bear loss get 0; the loss is absorbed
+ *    entirely by the loss-bearing owner(s), split among them by their share.
+ *    (So the "true owner" eats the whole loss; a pure profit-share partner
+ *    never goes negative.)
+ *  - Fallback: if a loss occurs but nobody is marked as loss-bearer, it's
+ *    split by share so it isn't silently dropped.
  */
 export function computeDistribution(
   netProfitUsd: number,
   owners: OwnerInput[],
 ): DistributionResult {
   const net = round2(netProfitUsd);
+  const isLoss = net < 0;
+
+  let entitlementOf: (o: OwnerInput) => number;
+  let retainedUsd = 0;
+  let retainedRate = 0;
+
+  const distributedRate = round2(owners.reduce((a, o) => a + o.shareRate, 0));
+
+  if (!isLoss) {
+    entitlementOf = (o) => round2(net * o.shareRate);
+    retainedRate = Math.max(0, round2(1 - distributedRate));
+    retainedUsd = round2(net * retainedRate);
+  } else {
+    const bearers = owners.filter((o) => o.bearsLoss);
+    if (bearers.length > 0) {
+      const bearerShareSum = bearers.reduce((a, o) => a + o.shareRate, 0);
+      entitlementOf = (o) => {
+        if (!o.bearsLoss) return 0;
+        if (bearerShareSum > 0) return round2(net * (o.shareRate / bearerShareSum));
+        return round2(net / bearers.length);
+      };
+    } else {
+      // No designated loss-bearer — split by share as a fallback.
+      entitlementOf = (o) => round2(net * o.shareRate);
+    }
+  }
+
   const settled = owners.map((o): OwnerSettlement => {
-    const entitlementUsd = round2(net * o.shareRate);
+    const entitlementUsd = entitlementOf(o);
     const takenUsd = round2(o.takenUsd);
     return {
       userId: o.userId,
       name: o.name,
       shareRate: o.shareRate,
       sharePercent: round2(o.shareRate * 100),
+      bearsLoss: o.bearsLoss,
       entitlementUsd,
       takenUsd,
       balanceUsd: round2(entitlementUsd - takenUsd),
     };
   });
 
-  const distributedRate = owners.reduce((a, o) => a + o.shareRate, 0);
-  const retainedRate = Math.max(0, round2(1 - distributedRate));
-
   return {
     netProfitUsd: net,
+    isLoss,
     owners: settled,
-    distributedRate: round2(distributedRate),
+    distributedRate,
     retainedRate,
-    retainedUsd: round2(net * retainedRate),
+    retainedUsd,
     totalEntitledUsd: round2(settled.reduce((a, o) => a + o.entitlementUsd, 0)),
     totalTakenUsd: round2(settled.reduce((a, o) => a + o.takenUsd, 0)),
     totalOwedUsd: round2(settled.reduce((a, o) => a + o.balanceUsd, 0)),

@@ -293,17 +293,21 @@ export const financeRouter = createTRPCRouter({
         .select("*")
         .order("effective_from", { ascending: false }),
     ]);
-    const currentByUser = new Map<string, number>();
+    const currentByUser = new Map<string, { rate: number; bearsLoss: boolean }>();
     for (const s of shares ?? []) {
       if (s.user_id && !s.effective_to && !currentByUser.has(s.user_id)) {
-        currentByUser.set(s.user_id, Number(s.share_rate));
+        currentByUser.set(s.user_id, {
+          rate: Number(s.share_rate),
+          bearsLoss: Boolean(s.bears_loss),
+        });
       }
     }
     return (owners ?? []).map((o) => ({
       userId: o.id,
       name: o.full_name,
       role: o.role,
-      shareRate: currentByUser.get(o.id) ?? 0,
+      shareRate: currentByUser.get(o.id)?.rate ?? 0,
+      bearsLoss: currentByUser.get(o.id)?.bearsLoss ?? false,
     }));
   }),
 
@@ -329,9 +333,9 @@ export const financeRouter = createTRPCRouter({
       ]);
 
     // Share active during the period (latest effective_from <= range end, and
-    // not ended before range start). Fallback 0.
+    // not ended before range start). Fallback 0 / no loss.
     const periodStart = range.from.slice(0, 10);
-    const shareFor = (userId: string): number => {
+    const shareFor = (userId: string): { rate: number; bearsLoss: boolean } => {
       const applicable = (shares ?? [])
         .filter((s) => s.user_id === userId)
         .filter(
@@ -340,7 +344,9 @@ export const financeRouter = createTRPCRouter({
             (!s.effective_to || s.effective_to >= periodStart),
         )
         .sort((a, b) => (a.effective_from < b.effective_from ? 1 : -1));
-      return applicable.length ? Number(applicable[0].share_rate) : 0;
+      return applicable.length
+        ? { rate: Number(applicable[0].share_rate), bearsLoss: Boolean(applicable[0].bears_loss) }
+        : { rate: 0, bearsLoss: false };
     };
 
     const takenByUser = new Map<string, number>();
@@ -354,12 +360,16 @@ export const financeRouter = createTRPCRouter({
 
     const result = computeDistribution(
       pnl.netProfitUsd,
-      (owners ?? []).map((o) => ({
-        userId: o.id,
-        name: o.full_name,
-        shareRate: shareFor(o.id),
-        takenUsd: takenByUser.get(o.id) ?? 0,
-      })),
+      (owners ?? []).map((o) => {
+        const s = shareFor(o.id);
+        return {
+          userId: o.id,
+          name: o.full_name,
+          shareRate: s.rate,
+          bearsLoss: s.bearsLoss,
+          takenUsd: takenByUser.get(o.id) ?? 0,
+        };
+      }),
     );
 
     return {
@@ -375,6 +385,7 @@ export const financeRouter = createTRPCRouter({
       z.object({
         userId: z.string().uuid(),
         sharePercent: z.number().min(0).max(100),
+        bearsLoss: z.boolean().default(false),
         effectiveFrom: z.string(),
         note: z.string().optional(),
       }),
@@ -389,6 +400,7 @@ export const financeRouter = createTRPCRouter({
       const { error } = await ctx.supabase.from("owner_shares").insert({
         user_id: input.userId,
         share_rate: input.sharePercent / 100,
+        bears_loss: input.bearsLoss,
         effective_from: input.effectiveFrom,
         note: input.note ?? null,
       });

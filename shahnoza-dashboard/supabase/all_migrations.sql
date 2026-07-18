@@ -740,7 +740,8 @@ CREATE POLICY fx_rates_write ON fx_rates FOR ALL TO authenticated
 CREATE TABLE owner_shares (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  share_rate DECIMAL(6, 4) NOT NULL,     -- 0.30 = 30%
+  share_rate DECIMAL(6, 4) NOT NULL,     -- 0.30 = 30% of PROFIT
+  bears_loss BOOLEAN DEFAULT false,      -- true = "true owner", absorbs losses
   effective_from DATE NOT NULL,
   effective_to DATE,                     -- NULL = still active
   note TEXT,

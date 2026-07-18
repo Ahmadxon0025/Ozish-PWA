@@ -135,11 +135,17 @@ export default function OwnersPage() {
             ))
           : d.owners.map((o) => {
               const owed = o.balanceUsd; // >0 business owes; <0 overdrawn
+              const isLossShare = o.entitlementUsd < 0;
               return (
                 <Card key={o.userId}>
                   <CardHeader>
-                    <CardTitle className="flex items-center justify-between text-base">
-                      <span>{o.name}</span>
+                    <CardTitle className="flex items-center justify-between gap-2 text-base">
+                      <span className="flex items-center gap-2">
+                        {o.name}
+                        {o.bearsLoss && (
+                          <Badge variant="warning">Asosiy ega</Badge>
+                        )}
+                      </span>
                       <Badge variant="secondary">
                         <Percent className="mr-1 h-3 w-3" />
                         {formatPct100(o.sharePercent)}
@@ -147,11 +153,19 @@ export default function OwnersPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2 text-sm">
-                    <Row label="Olishi kerak (ulush)" value={formatUsd(o.entitlementUsd)} strong />
+                    {isLossShare ? (
+                      <Row
+                        label="Zarar ulushi (ko'tardi)"
+                        value={`− ${formatUsd(Math.abs(o.entitlementUsd))}`}
+                        strong
+                      />
+                    ) : (
+                      <Row label="Olishi kerak (ulush)" value={formatUsd(o.entitlementUsd)} strong />
+                    )}
                     <Row label="Oldi (to'langan)" value={formatUsd(o.takenUsd)} />
                     <div className="mt-2 flex items-center justify-between border-t pt-2">
                       <span className="font-medium">
-                        {owed >= 0 ? "Qoldiq (olishi kerak)" : "Ortiqcha olgan"}
+                        {owed >= 0 ? "Qoldiq (olishi kerak)" : "Qaytarishi kerak"}
                       </span>
                       <span
                         className={`text-lg font-bold ${owed >= 0 ? "text-success" : "text-destructive"}`}
@@ -241,6 +255,7 @@ function SetShareDialog({ owners, onDone }: { owners: Owner[]; onDone: () => voi
   const [open, setOpen] = useState(false);
   const [userId, setUserId] = useState("");
   const [percent, setPercent] = useState("");
+  const [bearsLoss, setBearsLoss] = useState(false);
   const [from, setFrom] = useState(today());
 
   const m = api.finance.setOwnerShare.useMutation({
@@ -249,6 +264,7 @@ function SetShareDialog({ owners, onDone }: { owners: Owner[]; onDone: () => voi
       onDone();
       setOpen(false);
       setPercent("");
+      setBearsLoss(false);
     },
     onError: (e) => toast({ title: "Xato", description: e.message, variant: "destructive" }),
   });
@@ -298,6 +314,21 @@ function SetShareDialog({ owners, onDone }: { owners: Owner[]; onDone: () => voi
               <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
             </div>
           </div>
+          <label className="flex items-start gap-2 rounded-md border p-3 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4"
+              checked={bearsLoss}
+              onChange={(e) => setBearsLoss(e.target.checked)}
+            />
+            <span>
+              <b>Asosiy ega (zararni ko'taradi)</b>
+              <span className="block text-muted-foreground">
+                Zarar bo'lganda uni to'liq shu ega ko'taradi. Faqat foyda
+                ulushdorlari uchun belgilamang.
+              </span>
+            </span>
+          </label>
         </div>
         <DialogFooter>
           <DialogClose asChild>
@@ -306,7 +337,7 @@ function SetShareDialog({ owners, onDone }: { owners: Owner[]; onDone: () => voi
           <Button
             disabled={!userId || !(pct >= 0) || m.isPending}
             onClick={() =>
-              m.mutate({ userId, sharePercent: pct, effectiveFrom: from })
+              m.mutate({ userId, sharePercent: pct, bearsLoss, effectiveFrom: from })
             }
           >
             Saqlash

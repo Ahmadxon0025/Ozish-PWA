@@ -1,0 +1,5 @@
+-- seed.sql — optional local dev seed.
+-- Reference data (products, traffic_sources, expense_categories) is already
+-- inserted by the migrations. Add demo leads/sales/expenses here if you want a
+-- populated local database. Left empty by default so a fresh remote project
+-- starts clean.

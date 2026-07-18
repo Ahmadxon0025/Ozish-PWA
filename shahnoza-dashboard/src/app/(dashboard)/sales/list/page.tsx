@@ -305,10 +305,18 @@ function NewSaleDialog({
   const utils = api.useUtils();
   const [open, setOpen] = useState(false);
   const [salesPersonId, setSalesPersonId] = useState<string>("");
+  const [productId, setProductId] = useState<string>("");
   const [amount, setAmount] = useState("");
+  const [currency, setCurrency] = useState<"USD" | "UZS">("USD");
+  const [accountId, setAccountId] = useState<string>("");
   const [provider, setProvider] = useState<string>("");
   const [soldAt, setSoldAt] = useState<string>(todayInput());
   const [notes, setNotes] = useState("");
+
+  const products = api.sales.products.useQuery(undefined, { enabled: open });
+  const accounts = api.accounts.list.useQuery(undefined, { enabled: open });
+  const rateQ = api.accounts.currentRate.useQuery(undefined, { enabled: open });
+  const rate = rateQ.data?.rate ?? 12900;
 
   const create = api.sales.create.useMutation({
     onSuccess: () => {
@@ -333,7 +341,10 @@ function NewSaleDialog({
 
   function resetForm() {
     setSalesPersonId("");
+    setProductId("");
     setAmount("");
+    setCurrency("USD");
+    setAccountId("");
     setProvider("");
     setSoldAt(todayInput());
     setNotes("");
@@ -341,18 +352,23 @@ function NewSaleDialog({
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const amountUsd = Number(amount);
-    if (!amountUsd || amountUsd <= 0) {
+    const entered = Number(amount);
+    if (!entered || entered <= 0) {
       toast({
         title: "Summani kiriting",
-        description: "USD summasi 0 dan katta bo'lishi kerak.",
+        description: "Summa 0 dan katta bo'lishi kerak.",
         variant: "destructive",
       });
       return;
     }
+    const totalUsd = currency === "USD" ? entered : Math.round((entered / rate) * 100) / 100;
+    const totalUzs = currency === "UZS" ? entered : Math.round(entered * rate);
     create.mutate({
       salesPersonId: salesPersonId || undefined,
-      totalAmountUsd: amountUsd,
+      productId: productId || undefined,
+      accountId: accountId || undefined,
+      totalAmountUsd: totalUsd,
+      totalAmountUzs: totalUzs,
       paymentProvider: provider
         ? (provider as (typeof PAYMENT_PROVIDERS)[number])
         : undefined,
@@ -385,6 +401,22 @@ function NewSaleDialog({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
+            <Label htmlFor="product">Mahsulot</Label>
+            <Select value={productId} onValueChange={setProductId}>
+              <SelectTrigger id="product">
+                <SelectValue placeholder="Mahsulotni tanlang" />
+              </SelectTrigger>
+              <SelectContent>
+                {(products.data ?? []).map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name} (${Number(p.price_usd ?? 0)})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
             <Label htmlFor="salesperson">Sotuvchi</Label>
             <Select value={salesPersonId} onValueChange={setSalesPersonId}>
               <SelectTrigger id="salesperson">
@@ -400,19 +432,49 @@ function NewSaleDialog({
             </Select>
           </div>
 
+          <div className="grid grid-cols-3 gap-3">
+            <div className="col-span-2 space-y-1.5">
+              <Label htmlFor="amount">Summa</Label>
+              <Input
+                id="amount"
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.01"
+                placeholder="0"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="currency">Valyuta</Label>
+              <Select value={currency} onValueChange={(v) => setCurrency(v as "USD" | "UZS")}>
+                <SelectTrigger id="currency">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="USD">USD</SelectItem>
+                  <SelectItem value="UZS">UZS</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
           <div className="space-y-1.5">
-            <Label htmlFor="amount">Summa (USD)</Label>
-            <Input
-              id="amount"
-              type="number"
-              inputMode="decimal"
-              min="0"
-              step="0.01"
-              placeholder="0"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              required
-            />
+            <Label htmlFor="account">Qaysi hisobga</Label>
+            <Select value={accountId} onValueChange={setAccountId}>
+              <SelectTrigger id="account">
+                <SelectValue placeholder="Hisob (avtomatik: so'm)" />
+              </SelectTrigger>
+              <SelectContent>
+                {(accounts.data?.items ?? []).map((a) => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.name} ({a.currency})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-1.5">

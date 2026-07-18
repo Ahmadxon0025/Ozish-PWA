@@ -4,6 +4,21 @@
 // No I/O; the handler maps the returned aliases to real account rows.
 
 const DEPOSIT_TRIGGERS = ["kirim", "deposit", "приход"];
+const SALE_TRIGGERS = ["sotuv", "sotildi", "sotdim", "sale", "продажа"];
+
+// Product keyword -> seeded product name (0002_products.sql).
+const PRODUCT_PATTERNS: [string, RegExp][] = [
+  ["BAZA", /\bbaza\b|база/i],
+  ["KASB", /\bkasb\b|касб/i],
+  ["BIZNES", /\bbiznes\b|\bbiznus\b|бизнес/i],
+];
+
+// Payment provider keyword -> canonical value (CHECK: click|payme|uzum_nasiya).
+const PROVIDER_PATTERNS: [string, RegExp][] = [
+  ["click", /\bclick\b|клик/i],
+  ["payme", /\bpayme\b|пайми/i],
+  ["uzum_nasiya", /\buzum\b|\bnasiya\b|\bnasija\b|узум|насия/i],
+];
 const TRANSFER_TRIGGERS = [
   "o'tkazma",
   "o`tkazma",
@@ -34,6 +49,11 @@ export function isDepositTrigger(text: string): boolean {
 export function isTransferTrigger(text: string): boolean {
   const t = text.trim().toLowerCase();
   return TRANSFER_TRIGGERS.some((w) => t.startsWith(w) || t.startsWith("/" + w));
+}
+
+export function isSaleTrigger(text: string): boolean {
+  const t = text.trim().toLowerCase();
+  return SALE_TRIGGERS.some((w) => t.startsWith(w) || t.startsWith("/" + w));
 }
 
 /**
@@ -106,4 +126,21 @@ export function parseTransfer(text: string): ParsedTransfer {
   const { amount, isUsd } = parseAmountUnits(text);
   const aliases = findAccountAliases(text);
   return { amount, isUsd, fromAlias: aliases[0] ?? null, toAlias: aliases[1] ?? null };
+}
+
+export interface ParsedSale {
+  amount: number | null;
+  isUsd: boolean;
+  productName: string | null; // BAZA | KASB | BIZNES
+  provider: string | null; // click | payme | uzum_nasiya
+  accountAlias: string | null;
+}
+
+/** Parse "sotuv 379$ biznes click firma". */
+export function parseSale(text: string): ParsedSale {
+  const { amount, isUsd } = parseAmountUnits(text);
+  const productName = PRODUCT_PATTERNS.find(([, re]) => re.test(text))?.[0] ?? null;
+  const provider = PROVIDER_PATTERNS.find(([, re]) => re.test(text))?.[0] ?? null;
+  const accountAlias = findAccountAliases(text)[0] ?? null;
+  return { amount, isUsd, productName, provider, accountAlias };
 }

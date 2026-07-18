@@ -26,6 +26,16 @@ const listInput = z.object({
 });
 
 export const salesRouter = createTRPCRouter({
+  /** Active products for the sale form dropdown. */
+  products: protectedProcedure.query(async ({ ctx }) => {
+    const { data } = await ctx.supabase
+      .from("products")
+      .select("id, name, price_usd, price_uzs")
+      .eq("is_active", true)
+      .order("price_usd", { ascending: true });
+    return data ?? [];
+  }),
+
   list: protectedProcedure.input(listInput).query(async ({ ctx, input }) => {
     let query = ctx.supabase
       .from("sales")

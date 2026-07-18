@@ -8,6 +8,12 @@ import {
   TrendingUp,
   Users2,
   Trophy,
+  Megaphone,
+  Gauge,
+  UserPlus,
+  Tag,
+  Percent,
+  Landmark,
 } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { PageHeader } from "@/components/layout/page-header";
@@ -20,9 +26,11 @@ import { formatUsd, formatPct100 } from "@/lib/format";
 
 export default function DashboardPage() {
   const summary = api.dashboard.summary.useQuery();
+  const metrics = api.dashboard.metrics.useQuery();
   const trend = api.dashboard.salesTrend.useQuery({ days: 30 });
   const top = api.dashboard.topSellersToday.useQuery();
   const s = summary.data;
+  const m = metrics.data;
 
   return (
     <div>
@@ -65,6 +73,56 @@ export default function DashboardPage() {
               sub={`Margin ${formatPct100(s.pnl.marginPct)}`}
               icon={TrendingUp}
               tone={s.pnl.netProfitUsd >= 0 ? "success" : "destructive"}
+            />
+          </>
+        )}
+      </div>
+
+      {/* Decision metrics */}
+      <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-6">
+        {metrics.isLoading || !m ? (
+          Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 rounded-xl" />
+          ))
+        ) : (
+          <>
+            <KpiCard
+              label="Reklama (oy)"
+              value={formatUsd(m.adSpend)}
+              icon={Megaphone}
+              tone="warning"
+            />
+            <KpiCard
+              label="ROAS"
+              value={m.roas != null ? `${m.roas.toFixed(2)}×` : "—"}
+              sub="Daromad ÷ reklama"
+              icon={Gauge}
+              tone={m.roas != null && m.roas >= 1 ? "success" : "default"}
+            />
+            <KpiCard
+              label="CAC"
+              value={m.cac != null ? formatUsd(m.cac) : "—"}
+              sub="Reklama ÷ sotuv"
+              icon={UserPlus}
+            />
+            <KpiCard
+              label="AOV"
+              value={m.aov != null ? formatUsd(m.aov) : "—"}
+              sub="O'rtacha chek"
+              icon={Tag}
+            />
+            <KpiCard
+              label="ROI"
+              value={m.roi != null ? `${m.roi.toFixed(0)}%` : "—"}
+              sub="Foyda ÷ xarajat"
+              icon={Percent}
+              tone={m.roi != null && m.roi >= 0 ? "success" : "destructive"}
+            />
+            <KpiCard
+              label="Kassa"
+              value={formatUsd(m.kassaUsd)}
+              sub="Barcha hisoblar"
+              icon={Landmark}
             />
           </>
         )}

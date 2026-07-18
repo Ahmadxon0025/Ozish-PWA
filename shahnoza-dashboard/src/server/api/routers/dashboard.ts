@@ -3,8 +3,12 @@ import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
 import { monthRange, yesterdayRange, todayRange } from "@/lib/dates";
 import { computePnl } from "@/lib/business/pnl";
 import { computeCommissions } from "@/lib/business/commission";
+import { getCurrentRate } from "@/lib/business/exchange-rate";
+import { round2 } from "@/lib/business/currency";
 import { MONTHLY_SALES_PLAN_USD } from "@/lib/constants";
 import { sum, groupBy } from "./_helpers";
+
+const AD_CATEGORIES = ["Reklama - Facebook", "Reklama - Instagram", "Reklama - Telegram"];
 
 export const dashboardRouter = createTRPCRouter({
   /** Headline KPI bundle for the dashboard home page. */
@@ -98,6 +102,91 @@ export const dashboardRouter = createTRPCRouter({
       },
       expenses: { yesterday: expYday, month: expMonth },
       pnl,
+    };
+  }),
+
+  /** Decision metrics (current month): ad spend, ROAS, CAC, AOV, ROI, cash. */
+  metrics: protectedProcedure.query(async ({ ctx }) => {
+    const month = monthRange();
+    const [salesRes, expRes, catRes, accRes, txnRes, rate] = await Promise.all([
+      ctx.supabase
+        .from("sales")
+        .select("total_amount_usd, is_refunded, refund_amount_usd, sales_person_id")
+        .gte("sold_at", month.from)
+        .lt("sold_at", month.to),
+      ctx.supabase
+        .from("expenses")
+        .select("amount_usd, category_id")
+        .gte("expense_date", month.from.slice(0, 10))
+        .lt("expense_date", month.to.slice(0, 10)),
+      ctx.supabase.from("expense_categories").select("id, name"),
+      ctx.supabase.from("accounts").select("id, currency"),
+      ctx.supabase.from("account_transactions").select("account_id, direction, amount"),
+      getCurrentRate(ctx.supabase),
+    ]);
+
+    const sales = salesRes.data ?? [];
+    const salesCount = sales.length;
+    const gross = sum(sales, (s) => s.total_amount_usd);
+    const refunds = sum(sales, (s) => (s.is_refunded ? s.refund_amount_usd : 0));
+    const revenue = round2(gross - refunds);
+
+    // Ad spend = expenses in the Reklama categories.
+    const adCatIds = new Set(
+      (catRes.data ?? [])
+        .filter((c) => c.name && AD_CATEGORIES.includes(c.name))
+        .map((c) => c.id),
+    );
+    const expenses = expRes.data ?? [];
+    const operating = sum(expenses, (e) => e.amount_usd);
+    const adSpend = round2(
+      sum(expenses.filter((e) => e.category_id && adCatIds.has(e.category_id)), (e) => e.amount_usd),
+    );
+
+    const commissions = sum(
+      computeCommissions(
+        sales.map((s, i) => ({
+          id: String(i),
+          sales_person_id: s.sales_person_id,
+          total_amount_usd: s.total_amount_usd,
+          is_refunded: s.is_refunded,
+          refund_amount_usd: s.refund_amount_usd,
+        })),
+      ),
+      (c) => c.amountUsd,
+    );
+    const pnl = computePnl({
+      grossRevenueUsd: gross,
+      refundsUsd: refunds,
+      operatingExpensesUsd: operating,
+      commissionsUsd: commissions,
+    });
+    const totalExpenses = pnl.totalCostsUsd;
+
+    // Cash (kassa) = Σ account balances converted to USD.
+    const balByAccount = new Map<string, number>();
+    for (const t of txnRes.data ?? []) {
+      if (!t.account_id) continue;
+      const delta = (t.direction === "in" ? 1 : -1) * Number(t.amount ?? 0);
+      balByAccount.set(t.account_id, (balByAccount.get(t.account_id) ?? 0) + delta);
+    }
+    let kassaUsd = 0;
+    for (const a of accRes.data ?? []) {
+      const bal = balByAccount.get(a.id) ?? 0;
+      kassaUsd += a.currency === "USD" ? bal : rate.rate > 0 ? bal / rate.rate : 0;
+    }
+
+    return {
+      revenue,
+      salesCount,
+      adSpend,
+      totalExpenses,
+      netProfit: pnl.netProfitUsd,
+      roas: adSpend > 0 ? round2(revenue / adSpend) : null,
+      cac: salesCount > 0 ? round2(adSpend / salesCount) : null,
+      aov: salesCount > 0 ? round2(revenue / salesCount) : null,
+      roi: totalExpenses > 0 ? round2((pnl.netProfitUsd / totalExpenses) * 100) : null, // %
+      kassaUsd: round2(kassaUsd),
     };
   }),
 

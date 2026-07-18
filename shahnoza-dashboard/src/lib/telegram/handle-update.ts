@@ -15,8 +15,10 @@ import { parseExpense, isExpenseTrigger } from "./parse-expense";
 import {
   isDepositTrigger,
   isTransferTrigger,
+  isSaleTrigger,
   parseDeposit,
   parseTransfer,
+  parseSale,
 } from "./parse-command";
 import type { Database } from "@/types/database";
 
@@ -117,6 +119,9 @@ const HELP = [
   "Xarajat qo'shish uchun shunday yozing:",
   "`rasxod 50$ facebook reklama`",
   "`rasxod 500000 video montaj`",
+  "",
+  "Sotuv qo'shish:",
+  "`sotuv 379$ biznes click firma`",
   "",
   "Pul kirimi (hisobga):",
   "`kirim 6 mln firma`",
@@ -391,6 +396,97 @@ export async function handleTelegramUpdate(update: unknown): Promise<void> {
     }
     lines.push(`${from.name}: ${fmtMoney(fromBal, from.currency)} · ${to.name}: ${fmtMoney(toBal, to.currency)}`);
     await sendMessage(chatId, lines.join("\n"), { replyToMessageId: msg.message_id });
+    return;
+  }
+
+  // --- Sale (sotuv): create a sale + credit an account ---
+  if (isSaleTrigger(text)) {
+    const parsed = parseSale(text);
+    if (parsed.amount == null || parsed.amount <= 0) {
+      await sendMessage(chatId, "❓ Summani topolmadim. Masalan: `sotuv 379$ biznes click firma`", {
+        replyToMessageId: msg.message_id,
+      });
+      return;
+    }
+    // Resolve product (BAZA/KASB/BIZNES) — optional but preferred.
+    let productId: string | null = null;
+    let productLabel = "—";
+    if (parsed.productName) {
+      const { data: product } = await db
+        .from("products")
+        .select("id, name")
+        .eq("name", parsed.productName)
+        .maybeSingle();
+      if (product) {
+        productId = product.id;
+        productLabel = product.name;
+      }
+    }
+    // Resolve destination account (named, else default UZS).
+    const account = parsed.accountAlias
+      ? await resolveAccountByAlias(db, parsed.accountAlias)
+      : null;
+    const accountId = account?.id ?? (await resolveDefaultAccountId(db, "UZS"));
+    if (!accountId) {
+      await sendMessage(chatId, "❓ Hisob topilmadi.", { replyToMessageId: msg.message_id });
+      return;
+    }
+
+    const rate = await getCurrentRate(db);
+    const isUsd = parsed.isUsd;
+    const totalUsd = isUsd ? round2(parsed.amount) : round2(parsed.amount / rate.rate);
+    const totalUzs = isUsd ? Math.round(parsed.amount * rate.rate) : Math.round(parsed.amount);
+    const salesPersonId = await resolveCreatedBy(db, fromId);
+    const soldAt = new Date().toISOString();
+
+    const { data: sale, error } = await db
+      .from("sales")
+      .insert({
+        product_id: productId,
+        account_id: accountId,
+        sales_person_id: salesPersonId,
+        total_amount_usd: totalUsd,
+        total_amount_uzs: totalUzs,
+        payment_provider: (parsed.provider as never) ?? null,
+        sold_at: soldAt,
+      })
+      .select("id")
+      .single();
+    if (error) {
+      await sendMessage(chatId, `⚠️ Xatolik: ${error.message}`, { replyToMessageId: msg.message_id });
+      return;
+    }
+
+    // Credit the account (money in), like sales.create.
+    await insertAccountEntry(db, {
+      accountId,
+      direction: "in",
+      kind: "sale",
+      amountUsd: totalUsd,
+      amountUzs: totalUzs,
+      rate: rate.rate,
+      description: `Sotuv${productLabel !== "—" ? ` — ${productLabel}` : ""}`,
+      relatedType: "sale",
+      relatedId: sale.id,
+      createdBy: salesPersonId,
+      occurredAt: soldAt,
+    });
+
+    const { data: acct } = await db
+      .from("accounts")
+      .select("name, currency")
+      .eq("id", accountId)
+      .maybeSingle();
+    const bal = await accountBalance(db, accountId);
+    const shownAmount = isUsd ? formatUsd(parsed.amount) : `${groupThousands(parsed.amount)} so'm`;
+    await sendMessage(
+      chatId,
+      [
+        `✅ *Sotuv* — ${shownAmount} — ${productLabel} — 💳 ${acct?.name ?? "—"}`,
+        `Yangi balans: ${fmtMoney(bal, acct?.currency ?? "UZS")}`,
+      ].join("\n"),
+      { replyToMessageId: msg.message_id },
+    );
     return;
   }
 

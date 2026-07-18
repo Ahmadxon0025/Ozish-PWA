@@ -1,6 +1,11 @@
 import "server-only";
 import { requireAdminClient } from "@/lib/supabase/admin";
 import { uzsToUsd } from "@/lib/business/currency";
+import { getCurrentRate } from "@/lib/business/exchange-rate";
+import {
+  insertAccountEntry,
+  resolveDefaultAccountId,
+} from "@/lib/business/account-posting";
 import { amoGet } from "./client";
 import {
   AMO_STATUS_WON,
@@ -79,6 +84,26 @@ export async function runAmocrmSync(): Promise<SyncResult> {
       (mappedUsers ?? []).map((u) => [u.amocrm_user_id as number, u.id]),
     );
 
+    // For won-lead sales: map the amoCRM price (UZS) to a product, credit the
+    // default UZS account, and normalize with the current CBU rate — mirroring
+    // sales.create so AmoCRM sales land in revenue + cash + cashflow.
+    const [{ data: products }, defaultUzsAccountId, rate] = await Promise.all([
+      db.from("products").select("id, name, price_uzs, price_usd"),
+      resolveDefaultAccountId(db, "UZS"),
+      getCurrentRate(db),
+    ]);
+    const matchProductByUzs = (amountUzs: number): string | null => {
+      if (!amountUzs || !products?.length) return null;
+      let best: { id: string; diff: number } | null = null;
+      for (const p of products) {
+        const price = Number(p.price_uzs ?? 0);
+        if (!price) continue;
+        const diff = Math.abs(price - amountUzs) / price;
+        if (best === null || diff < best.diff) best = { id: p.id, diff };
+      }
+      return best && best.diff <= 0.1 ? best.id : null; // within 10%
+    };
+
     // --- Leads (paged) -----------------------------------------------------
     for (let page = 1; page <= MAX_PAGES; page++) {
       const res = await amoGet<{ _embedded?: { leads?: AmoLead[] } }>(
@@ -128,14 +153,37 @@ export async function runAmocrmSync(): Promise<SyncResult> {
             .maybeSingle();
           if (!existingSale) {
             const amountUzs = Number(lead.price ?? 0);
-            await db.from("sales").insert({
-              amocrm_lead_id: lead.id,
-              lead_id: upserted.id,
-              sales_person_id: assignedTo,
-              total_amount_uzs: amountUzs || null,
-              total_amount_usd: amountUzs ? uzsToUsd(amountUzs) : null,
-              sold_at: unixToIso(lead.updated_at) ?? new Date().toISOString(),
-            });
+            const amountUsd = amountUzs ? uzsToUsd(amountUzs) : null;
+            const soldAt = unixToIso(lead.updated_at) ?? new Date().toISOString();
+            const { data: sale } = await db
+              .from("sales")
+              .insert({
+                amocrm_lead_id: lead.id,
+                lead_id: upserted.id,
+                sales_person_id: assignedTo,
+                product_id: matchProductByUzs(amountUzs),
+                account_id: defaultUzsAccountId,
+                total_amount_uzs: amountUzs || null,
+                total_amount_usd: amountUsd,
+                sold_at: soldAt,
+              })
+              .select("id")
+              .single();
+            // Credit the default account (money in), like sales.create.
+            if (sale && defaultUzsAccountId && amountUsd) {
+              await insertAccountEntry(db, {
+                accountId: defaultUzsAccountId,
+                direction: "in",
+                kind: "sale",
+                amountUsd,
+                amountUzs: amountUzs || null,
+                rate: rate.rate,
+                description: "Sotuv (AmoCRM)",
+                relatedType: "sale",
+                relatedId: sale.id,
+                occurredAt: soldAt,
+              });
+            }
             saleCount++;
           }
         }

@@ -1,5 +1,6 @@
--- Shahnoza Dashboard — combined schema + RLS + auth provisioning
+-- Shahnoza Dashboard — combined schema + RLS + auth provisioning + telegram
 -- Paste this whole file into Supabase → SQL Editor → Run. Safe to run once on a fresh project.
+-- (Uses IF NOT EXISTS where possible, so re-running the telegram section is safe.)
 
 -- ============================================================
 -- 0001_users.sql
@@ -621,5 +622,25 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_auth_user();
+
+
+-- ============================================================
+-- 0009_telegram_expenses.sql
+-- ============================================================
+-- 0009_telegram_expenses.sql
+-- Link expenses to the Telegram messages that created them, so replies can
+-- edit/delete the right row. Also record the source and who typed it.
+
+ALTER TABLE expenses
+  ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'app',
+  ADD COLUMN IF NOT EXISTS telegram_chat_id TEXT,
+  ADD COLUMN IF NOT EXISTS telegram_message_id BIGINT,
+  ADD COLUMN IF NOT EXISTS telegram_confirm_message_id BIGINT,
+  ADD COLUMN IF NOT EXISTS telegram_user_id TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_expenses_tg_msg
+  ON expenses(telegram_chat_id, telegram_message_id);
+CREATE INDEX IF NOT EXISTS idx_expenses_tg_confirm
+  ON expenses(telegram_chat_id, telegram_confirm_message_id);
 
 

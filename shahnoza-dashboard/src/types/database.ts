@@ -271,6 +271,11 @@ export interface Database {
           receipt_url: string | null;
           created_by: string | null;
           created_at: string;
+          source: string | null;
+          telegram_chat_id: string | null;
+          telegram_message_id: number | null;
+          telegram_confirm_message_id: number | null;
+          telegram_user_id: string | null;
         };
         Insert: {
           id?: string;
@@ -284,6 +289,11 @@ export interface Database {
           receipt_url?: string | null;
           created_by?: string | null;
           created_at?: string;
+          source?: string | null;
+          telegram_chat_id?: string | null;
+          telegram_message_id?: number | null;
+          telegram_confirm_message_id?: number | null;
+          telegram_user_id?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["expenses"]["Insert"]>;
         Relationships: [];

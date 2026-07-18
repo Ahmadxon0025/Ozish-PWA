@@ -5,6 +5,7 @@ import { computePnl } from "@/lib/business/pnl";
 import { computeCommissions } from "@/lib/business/commission";
 import { MONTHLY_SALES_PLAN_USD } from "@/lib/constants";
 import { formatUsd } from "@/lib/format";
+import { env } from "@/lib/env";
 import { broadcast } from "./bot";
 
 function sum<T>(rows: T[], pick: (r: T) => number | null | undefined): number {
@@ -138,10 +139,20 @@ export async function buildDailyReport(): Promise<string> {
 }
 
 export async function sendDailyReport(): Promise<{
-  sent: { admin: boolean; owner: boolean };
+  sent: { admin: boolean; owner: boolean; group: boolean; chats: number };
   text: string;
 }> {
   const text = await buildDailyReport();
-  const sent = await broadcast(text);
-  return { sent, text };
+  const results = await broadcast(text);
+  const okFor = (chatId: string) =>
+    Boolean(chatId) && results.some((r) => r.chatId === chatId && r.ok);
+  return {
+    sent: {
+      admin: okFor(env.TELEGRAM_ADMIN_CHAT_ID),
+      owner: okFor(env.TELEGRAM_OWNER_CHAT_ID),
+      group: okFor(env.TELEGRAM_FINANCE_CHAT_ID),
+      chats: results.filter((r) => r.ok).length,
+    },
+    text,
+  };
 }

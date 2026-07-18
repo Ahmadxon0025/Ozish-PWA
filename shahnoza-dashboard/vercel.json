@@ -8,10 +8,6 @@
     {
       "path": "/api/cron/daily-report",
       "schedule": "0 4 * * *"
-    },
-    {
-      "path": "/api/cron/refresh-fx",
-      "schedule": "30 3 * * *"
     }
   ]
 }

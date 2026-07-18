@@ -17,6 +17,18 @@ export async function GET(request: NextRequest) {
   if (!authorized(request)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  // Refresh the CBU FX rate as part of the daily job (keeps us within the
+  // Hobby-plan 2-cron limit instead of a separate cron).
+  if (isServiceRoleConfigured()) {
+    try {
+      const { requireAdminClient } = await import("@/lib/supabase/admin");
+      const { refreshFxRate } = await import("@/lib/business/exchange-rate");
+      await refreshFxRate(requireAdminClient());
+    } catch {
+      // non-fatal
+    }
+  }
+
   if (!isTelegramConfigured() || !isServiceRoleConfigured()) {
     return NextResponse.json({
       ok: false,

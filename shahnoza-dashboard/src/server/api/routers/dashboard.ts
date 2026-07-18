@@ -8,7 +8,12 @@ import { round2 } from "@/lib/business/currency";
 import { MONTHLY_SALES_PLAN_USD } from "@/lib/constants";
 import { sum, groupBy } from "./_helpers";
 
-const AD_CATEGORIES = ["Reklama - Facebook", "Reklama - Instagram", "Reklama - Telegram"];
+const AD_CATEGORIES = [
+  "Reklama - Facebook",
+  "Reklama - Instagram",
+  "Reklama - Telegram",
+  "Target (reklama)",
+];
 
 export const dashboardRouter = createTRPCRouter({
   /** Headline KPI bundle for the dashboard home page. */
@@ -16,7 +21,7 @@ export const dashboardRouter = createTRPCRouter({
     const month = monthRange();
     const yesterday = yesterdayRange();
 
-    const [salesMonthRes, salesYdayRes, leadsMonthRes, expMonthRes, expYdayRes] =
+    const [salesMonthRes, salesYdayRes, leadsMonthRes, expMonthRes, expYdayRes, refundedMonthRes] =
       await Promise.all([
         ctx.supabase
           .from("sales")
@@ -43,6 +48,12 @@ export const dashboardRouter = createTRPCRouter({
           .select("amount_usd")
           .gte("expense_date", yesterday.from.slice(0, 10))
           .lt("expense_date", yesterday.to.slice(0, 10)),
+        ctx.supabase
+          .from("sales")
+          .select("refund_amount_usd")
+          .eq("is_refunded", true)
+          .gte("refunded_at", month.from)
+          .lt("refunded_at", month.to),
       ]);
 
     const salesMonth = salesMonthRes.data ?? [];
@@ -51,9 +62,8 @@ export const dashboardRouter = createTRPCRouter({
 
     const monthAmount = sum(salesMonth, (s) => s.total_amount_usd);
     const ydayAmount = sum(salesYday, (s) => s.total_amount_usd);
-    const refundsMonth = sum(salesMonth, (s) =>
-      s.is_refunded ? s.refund_amount_usd : 0,
-    );
+    // Refunds recognized by refunded_at (may differ from the sale month).
+    const refundsMonth = sum(refundedMonthRes.data ?? [], (r) => r.refund_amount_usd);
     const expMonth = sum(expMonthRes.data ?? [], (e) => e.amount_usd);
     const expYday = sum(expYdayRes.data ?? [], (e) => e.amount_usd);
 
@@ -108,7 +118,7 @@ export const dashboardRouter = createTRPCRouter({
   /** Decision metrics (current month): ad spend, ROAS, CAC, AOV, ROI, cash. */
   metrics: protectedProcedure.query(async ({ ctx }) => {
     const month = monthRange();
-    const [salesRes, expRes, catRes, accRes, txnRes, rate] = await Promise.all([
+    const [salesRes, expRes, catRes, accRes, txnRes, rate, refundedRes] = await Promise.all([
       ctx.supabase
         .from("sales")
         .select("total_amount_usd, is_refunded, refund_amount_usd, sales_person_id")
@@ -123,12 +133,18 @@ export const dashboardRouter = createTRPCRouter({
       ctx.supabase.from("accounts").select("id, currency"),
       ctx.supabase.from("account_transactions").select("account_id, direction, amount"),
       getCurrentRate(ctx.supabase),
+      ctx.supabase
+        .from("sales")
+        .select("refund_amount_usd")
+        .eq("is_refunded", true)
+        .gte("refunded_at", month.from)
+        .lt("refunded_at", month.to),
     ]);
 
     const sales = salesRes.data ?? [];
     const salesCount = sales.length;
     const gross = sum(sales, (s) => s.total_amount_usd);
-    const refunds = sum(sales, (s) => (s.is_refunded ? s.refund_amount_usd : 0));
+    const refunds = sum(refundedRes.data ?? [], (r) => r.refund_amount_usd);
     const revenue = round2(gross - refunds);
 
     // Ad spend = expenses in the Reklama categories.

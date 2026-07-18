@@ -49,37 +49,51 @@ async function gatherPeriod(
   input?: { from?: string; to?: string; month?: string },
 ) {
   const range = resolvePeriod(input);
-  const [{ data: sales }, { data: expenses }] = await Promise.all([
-    ctx.supabase
-      .from("sales")
-      .select("total_amount_usd, sales_person_id, is_refunded, refund_amount_usd, refunded_at, sold_at")
-      .gte("sold_at", range.from)
-      .lt("sold_at", range.to),
-    ctx.supabase
-      .from("expenses")
-      .select("amount_usd")
-      .gte("expense_date", range.from.slice(0, 10))
-      .lt("expense_date", range.to.slice(0, 10)),
-  ]);
-  return { range, sales: sales ?? [], expenses: expenses ?? [] };
+  // Revenue + commissions are recognized when the sale is made (sold_at).
+  // Refunds are recognized when the refund happens (refunded_at) — which may be
+  // a different month than the sale — so they're queried separately.
+  const [{ data: sales }, { data: expenses }, { data: refunded }] =
+    await Promise.all([
+      ctx.supabase
+        .from("sales")
+        .select("total_amount_usd, sales_person_id, is_refunded, refund_amount_usd, sold_at")
+        .gte("sold_at", range.from)
+        .lt("sold_at", range.to),
+      ctx.supabase
+        .from("expenses")
+        .select("amount_usd")
+        .gte("expense_date", range.from.slice(0, 10))
+        .lt("expense_date", range.to.slice(0, 10)),
+      ctx.supabase
+        .from("sales")
+        .select("refund_amount_usd")
+        .eq("is_refunded", true)
+        .gte("refunded_at", range.from)
+        .lt("refunded_at", range.to),
+    ]);
+  const refundsUsd = sum(refunded ?? [], (r) => r.refund_amount_usd);
+  return { range, sales: sales ?? [], expenses: expenses ?? [], refundsUsd };
 }
 
-// Net profit for a resolved range (used by P&L and distribution).
+// Net profit for a resolved range (used by P&L and distribution). Refunds are
+// passed in explicitly (recognized by refunded_at, not the sale month).
 function netProfitFor(
   sales: { total_amount_usd: number | null; sales_person_id: string | null; is_refunded: boolean | null; refund_amount_usd: number | null }[],
   expenses: { amount_usd: number | null }[],
+  refundsUsd: number,
 ) {
   const grossRevenueUsd = sum(sales, (s) => s.total_amount_usd);
-  const refundsUsd = sum(sales, (s) => (s.is_refunded ? s.refund_amount_usd : 0));
   const operatingExpensesUsd = sum(expenses, (e) => e.amount_usd);
+  // Commission is on gross sale amount for sales made this period; refund
+  // clawbacks land in the refund month via the refunds line, not here.
   const commissionsUsd = sum(
     computeCommissions(
       sales.map((s, i) => ({
         id: String(i),
         sales_person_id: s.sales_person_id,
         total_amount_usd: s.total_amount_usd,
-        is_refunded: s.is_refunded,
-        refund_amount_usd: s.refund_amount_usd,
+        is_refunded: false,
+        refund_amount_usd: null,
       })),
     ),
     (c) => c.amountUsd,
@@ -90,8 +104,8 @@ function netProfitFor(
 export const financeRouter = createTRPCRouter({
   /** Real-time P&L for any period (from/to or month) + waterfall steps. */
   pnl: financeProcedure.input(periodInput).query(async ({ ctx, input }) => {
-    const { range, sales, expenses } = await gatherPeriod(ctx, input);
-    const result = netProfitFor(sales, expenses);
+    const { range, sales, expenses, refundsUsd } = await gatherPeriod(ctx, input);
+    const result = netProfitFor(sales, expenses, refundsUsd);
     return {
       ...result,
       waterfall: pnlWaterfall(result),
@@ -254,11 +268,11 @@ export const financeRouter = createTRPCRouter({
   bonus: financeProcedure
     .input(z.object({ month: z.string().optional() }).optional())
     .query(async ({ ctx, input }) => {
-      const { range, sales, expenses } = await gatherPeriod(ctx, { month: input?.month });
+      const { range, sales, expenses, refundsUsd } = await gatherPeriod(ctx, { month: input?.month });
 
-      // Cash collected = net sales (gross − refunds within the month).
+      // Cash collected = net sales (gross − refunds recognized this month).
       const gross = sum(sales, (s) => s.total_amount_usd);
-      const refunds = sum(sales, (s) => (s.is_refunded ? s.refund_amount_usd : 0));
+      const refunds = refundsUsd;
       const cashCollected = gross - refunds;
 
       // ALL expenses = operating expenses + commissions.
@@ -380,8 +394,8 @@ export const financeRouter = createTRPCRouter({
 
   /** Profit split for a period: entitlement vs taken vs owed, per owner. */
   distribution: financeProcedure.input(periodInput).query(async ({ ctx, input }) => {
-    const { range, sales, expenses } = await gatherPeriod(ctx, input);
-    const pnl = netProfitFor(sales, expenses);
+    const { range, sales, expenses, refundsUsd } = await gatherPeriod(ctx, input);
+    const pnl = netProfitFor(sales, expenses, refundsUsd);
 
     const [{ data: owners }, { data: shares }, { data: payouts }] =
       await Promise.all([

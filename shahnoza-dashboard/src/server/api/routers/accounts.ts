@@ -79,15 +79,40 @@ export const accountsRouter = createTRPCRouter({
         .limit(input?.limit ?? 50);
       if (input?.accountId) q = q.eq("account_id", input.accountId);
       const { data: txns } = await q;
+      const rows = txns ?? [];
 
       const { data: accounts } = await ctx.supabase
         .from("accounts")
         .select("id, name, currency");
       const accName = new Map((accounts ?? []).map((a) => [a.id, a.name]));
 
-      return (txns ?? []).map((t) => ({
+      // Enrich expense-linked entries with their expense category name so the
+      // ledger can show what an outflow was for.
+      const expenseIds = rows
+        .filter((t) => t.related_type === "expense" && t.related_id)
+        .map((t) => t.related_id as string);
+      const catByTxnRelated = new Map<string, string>();
+      if (expenseIds.length > 0) {
+        const [{ data: exp }, { data: cats }] = await Promise.all([
+          ctx.supabase.from("expenses").select("id, category_id").in("id", expenseIds),
+          ctx.supabase.from("expense_categories").select("id, name"),
+        ]);
+        const catName = new Map((cats ?? []).map((c) => [c.id, c.name]));
+        for (const e of exp ?? []) {
+          if (e.category_id) {
+            const name = catName.get(e.category_id);
+            if (name) catByTxnRelated.set(e.id, name);
+          }
+        }
+      }
+
+      return rows.map((t) => ({
         ...t,
         accountName: t.account_id ? accName.get(t.account_id) ?? "—" : "—",
+        categoryName:
+          t.related_type === "expense" && t.related_id
+            ? catByTxnRelated.get(t.related_id) ?? null
+            : null,
       }));
     }),
 

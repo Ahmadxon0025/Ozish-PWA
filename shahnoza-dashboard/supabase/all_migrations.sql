@@ -760,3 +760,25 @@ CREATE POLICY owner_shares_write ON owner_shares FOR ALL TO authenticated
   USING (public.is_super_admin()) WITH CHECK (public.is_super_admin());
 
 
+
+-- ============================================================================
+-- 0012_expense_categories_expand.sql
+-- ============================================================================
+-- Additive only. Expand expense categories to match the owner's spreadsheet
+-- (RASXODLAR). `name` is UNIQUE, so ON CONFLICT DO NOTHING is safe/idempotent.
+
+INSERT INTO expense_categories (name, is_variable, is_pilot_expense, display_order) VALUES
+  ('Obunalar',        false, true,  13),
+  ('Ofis',            false, true,  14),
+  ('Ijara',           false, true,  15),
+  ('Sayohat',         false, false, 16),
+  ('Soliq',           false, true,  17),
+  ('Mebel',           false, false, 18),
+  ('Studiya',         false, true,  19),
+  ('Ovqat',           false, true,  20),
+  ('Marketing',       true,  true,  21),
+  ('Bilim',           false, false, 22),
+  ('Mayda xarajat',   true,  false, 23),
+  ('Sotuv upgrade',   false, false, 24),
+  ('Target (reklama)', true, true,  25)
+ON CONFLICT (name) DO NOTHING;

@@ -57,7 +57,6 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "Pul oqimi", href: "/finance/cashflow", icon: Activity, roles: FINANCE_ROLES },
       { label: "Taqsimot (Egalar)", href: "/finance/owners", icon: PieChart, roles: ["super_admin", "owner"] },
       { label: "Hisoblar (Kassa)", href: "/finance/accounts", icon: Landmark, roles: FINANCE_ROLES },
-      { label: "Xarajatlar", href: "/finance/expenses", icon: Receipt, roles: FINANCE_ROLES },
       { label: "Bonuslar", href: "/finance/bonuses", icon: PiggyBank, roles: FINANCE_ROLES },
       { label: "Komissiyalar", href: "/finance/commissions", icon: Percent, roles: FINANCE_ROLES },
     ],

@@ -9,6 +9,8 @@ import {
   ArrowLeftRight,
   ArrowDownToLine,
   ArrowUpFromLine,
+  Receipt,
+  ListOrdered,
   Plus,
   Pencil,
   Trash2,
@@ -49,6 +51,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogTrigger,
   DialogFooter,
   DialogClose,
@@ -62,6 +65,10 @@ function fmtNative(amount: number, currency: string) {
     : `${formatNumber(Math.round(amount))} so'm`;
 }
 
+function today(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 const KIND_ICON: Record<string, typeof Wallet> = {
   bank: Landmark,
   card: CreditCard,
@@ -70,10 +77,29 @@ const KIND_ICON: Record<string, typeof Wallet> = {
   other: Wallet,
 };
 
+/** Human labels for the ledger "Turi" (kind) column. */
+const KIND_LABEL: Record<string, string> = {
+  deposit: "Kirim",
+  manual: "Kirim",
+  sale: "Sotuv",
+  expense: "Xarajat",
+  withdraw: "Chiqim",
+  transfer: "O'tkazma",
+  conversion: "Konvertatsiya",
+  adjustment: "Tuzatish",
+  sale_refund: "Qaytarim",
+};
+
+function kindLabel(kind: string, categoryName: string | null): string {
+  if (categoryName) return categoryName;
+  return KIND_LABEL[kind] ?? kind;
+}
+
 export default function AccountsPage() {
   const utils = api.useUtils();
   const accounts = api.accounts.list.useQuery();
   const txns = api.accounts.transactions.useQuery({ limit: 50 });
+  const categories = api.expenses.categories.useQuery();
 
   const rate = accounts.data?.rate;
   const items = accounts.data?.items ?? [];
@@ -81,6 +107,7 @@ export default function AccountsPage() {
   const invalidate = () => {
     utils.accounts.list.invalidate();
     utils.accounts.transactions.invalidate();
+    utils.dashboard.metrics.invalidate();
   };
 
   return (
@@ -134,12 +161,12 @@ export default function AccountsPage() {
           const Icon = KIND_ICON[a.kind ?? "other"] ?? Wallet;
           return (
             <Card key={a.id}>
-              <CardContent className="flex items-center justify-between gap-3 p-4">
+              <CardContent className="p-4">
                 <div className="flex items-center gap-3">
                   <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary/10 text-primary">
                     <Icon className="h-5 w-5" />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{a.name}</span>
                       <Badge variant="secondary">{a.currency}</Badge>
@@ -154,17 +181,15 @@ export default function AccountsPage() {
                     )}
                   </div>
                 </div>
-                <div className="flex flex-col gap-2">
-                  <MoveDialog
+                <div className="mt-3 flex flex-wrap gap-2 border-t pt-3">
+                  <MoveDialog account={a} mode="deposit" onDone={invalidate} />
+                  <ExpenseDialog
                     account={a}
-                    mode="deposit"
+                    categories={categories.data ?? []}
                     onDone={invalidate}
                   />
-                  <MoveDialog
-                    account={a}
-                    mode="withdraw"
-                    onDone={invalidate}
-                  />
+                  <MoveDialog account={a} mode="withdraw" onDone={invalidate} />
+                  <AccountLedgerDialog account={a} onDone={invalidate} />
                 </div>
               </CardContent>
             </Card>
@@ -181,7 +206,7 @@ export default function AccountsPage() {
         )}
       </div>
 
-      {/* Transactions */}
+      {/* Transactions (all accounts) */}
       <Card className="mt-4">
         <CardHeader>
           <CardTitle className="text-base">So'nggi harakatlar</CardTitle>
@@ -209,7 +234,9 @@ export default function AccountsPage() {
                     </TableCell>
                     <TableCell>{t.accountName}</TableCell>
                     <TableCell>
-                      <Badge variant="outline">{t.kind}</Badge>
+                      <Badge variant="outline">
+                        {kindLabel(t.kind, t.categoryName)}
+                      </Badge>
                     </TableCell>
                     <TableCell className="max-w-[200px] truncate">
                       {t.description ?? "—"}
@@ -412,6 +439,11 @@ function MoveDialog({
           <DialogTitle>
             {isDeposit ? "Kirim" : "Chiqim"} — {account.name}
           </DialogTitle>
+          <DialogDescription>
+            {isDeposit
+              ? "Hisobga naqd/tashqi tushum qo'shish (sotuvdan tashqari)."
+              : "Hisobdan pul yechish (operatsion xarajat emas)."}
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1.5">
@@ -447,6 +479,224 @@ function MoveDialog({
           >
             Saqlash
           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Record an operating expense straight from a Kassa account. Reuses
+ * `expenses.create`, which writes the `expenses` row AND the linked
+ * `account_transactions` out-entry in one path — so P&L and cashflow stay
+ * correct and nothing double-posts.
+ */
+function ExpenseDialog({
+  account,
+  categories,
+  onDone,
+}: {
+  account: AccountItem;
+  categories: Array<{ id: string; name: string | null }>;
+  onDone: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [categoryId, setCategoryId] = useState("");
+  const [amount, setAmount] = useState("");
+  const [description, setDescription] = useState("");
+  const [expenseDate, setExpenseDate] = useState(today());
+
+  const create = api.expenses.create.useMutation({
+    onSuccess: () => {
+      toast({ title: "Xarajat qo'shildi", variant: "success" });
+      onDone();
+      setOpen(false);
+      reset();
+    },
+    onError: (e) => toast({ title: "Xato", description: e.message, variant: "destructive" }),
+  });
+
+  function reset() {
+    setCategoryId("");
+    setAmount("");
+    setDescription("");
+    setExpenseDate(today());
+  }
+
+  const amt = Number(amount) || 0;
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (!o) reset();
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button size="sm" variant="ghost">
+          <Receipt className="h-4 w-4" /> Xarajat
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Xarajat — {account.name}</DialogTitle>
+          <DialogDescription>
+            Operatsion xarajat (kategoriya bilan). P&L va Pul oqimiga tushadi.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label>Kategoriya</Label>
+            <Select value={categoryId} onValueChange={setCategoryId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Kategoriyani tanlang" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name ?? "—"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Summa ({account.currency})</Label>
+            <Input
+              type="number"
+              inputMode="decimal"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="0"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Sana</Label>
+            <Input
+              type="date"
+              value={expenseDate}
+              onChange={(e) => setExpenseDate(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Tavsif</Label>
+            <Input
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Ixtiyoriy"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button variant="ghost">Bekor</Button>
+          </DialogClose>
+          <Button
+            disabled={!categoryId || amt <= 0 || create.isPending}
+            onClick={() =>
+              create.mutate({
+                categoryId,
+                amount: amt,
+                currency: account.currency as "USD" | "UZS",
+                accountId: account.id,
+                expenseDate,
+                description: description || undefined,
+              })
+            }
+          >
+            {create.isPending ? "Saqlanmoqda..." : "Saqlash"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Per-account ledger: recent in/out movements for a single account. */
+function AccountLedgerDialog({
+  account,
+  onDone,
+}: {
+  account: AccountItem;
+  onDone: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ledger = api.accounts.transactions.useQuery(
+    { accountId: account.id, limit: 50 },
+    { enabled: open },
+  );
+  const rows = ledger.data ?? [];
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="ghost">
+          <ListOrdered className="h-4 w-4" /> Harakatlar
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>
+            Harakatlar — {account.name} ({account.currency})
+          </DialogTitle>
+          <DialogDescription>
+            Ushbu hisob bo'yicha so'nggi kirim/chiqimlar.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="max-h-[60vh] overflow-y-auto">
+          {ledger.isLoading ? (
+            <Skeleton className="h-40 w-full" />
+          ) : rows.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Sana</TableHead>
+                  <TableHead>Turi</TableHead>
+                  <TableHead>Izoh</TableHead>
+                  <TableHead className="text-right">Summa</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((t) => (
+                  <TableRow key={t.id}>
+                    <TableCell className="whitespace-nowrap text-muted-foreground">
+                      {formatDateTime(t.occurred_at)}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">
+                        {kindLabel(t.kind, t.categoryName)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="max-w-[220px] truncate">
+                      {t.description ?? "—"}
+                    </TableCell>
+                    <TableCell
+                      className={`text-right font-medium ${t.direction === "in" ? "text-success" : "text-destructive"}`}
+                    >
+                      {t.direction === "in" ? "+" : "−"}
+                      {fmtNative(Number(t.amount), t.currency)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <EmptyState icon={ArrowLeftRight} title="Harakatlar yo'q" />
+          )}
+        </div>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button
+              variant="outline"
+              onClick={() => {
+                // Refresh page totals in case entries were changed elsewhere.
+                onDone();
+              }}
+            >
+              Yopish
+            </Button>
+          </DialogClose>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -553,7 +803,7 @@ function TxnActions({ txn, onDone }: { txn: Txn; onDone: () => void }) {
     return (
       <span
         className="inline-flex items-center gap-1 text-xs text-muted-foreground"
-        title="Bu yozuv avtomatik — Xarajatlar/Sotuvlar sahifasida tahrirlang"
+        title="Bu yozuv avtomatik — Sotuvlar sahifasida yoki xarajatni o'chirib tahrirlang"
       >
         <Lock className="h-3.5 w-3.5" /> manba
       </span>

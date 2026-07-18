@@ -113,6 +113,31 @@ export async function buildDailyReport(): Promise<string> {
           .join("\n")
       : "— Bugun sotuv yo'q";
 
+  // Account balances (kassa).
+  const [{ data: accts }, { data: acctTxns }] = await Promise.all([
+    db.from("accounts").select("id, name, currency").order("sort_order"),
+    db.from("account_transactions").select("account_id, direction, amount"),
+  ]);
+  const balByAcct = new Map<string, number>();
+  for (const t of acctTxns ?? []) {
+    if (!t.account_id) continue;
+    const delta = (t.direction === "in" ? 1 : -1) * Number(t.amount ?? 0);
+    balByAcct.set(t.account_id, (balByAcct.get(t.account_id) ?? 0) + delta);
+  }
+  const acctLines =
+    (accts ?? []).length > 0
+      ? (accts ?? [])
+          .map((a) => {
+            const bal = balByAcct.get(a.id) ?? 0;
+            const shown =
+              a.currency === "USD"
+                ? formatUsd(bal)
+                : `${new Intl.NumberFormat("en-US").format(Math.round(bal))} so'm`;
+            return `• ${a.name}: ${shown}`;
+          })
+          .join("\n")
+      : "— Hisob yo'q";
+
   return [
     `📊 *KUNLIK HISOBOT* — ${todayKey()}`,
     ``,
@@ -132,6 +157,9 @@ export async function buildDailyReport(): Promise<string> {
     ``,
     `📈 *SOF FOYDA (bu oy)*`,
     `${formatUsd(pnl.netProfitUsd)}`,
+    ``,
+    `💳 *HISOBLAR (BALANS)*`,
+    acctLines,
     ``,
     `👥 *SOTUVCHILAR (bugun)*`,
     sellersLines,

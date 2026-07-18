@@ -190,6 +190,7 @@ export interface Database {
           refunded_at: string | null;
           notes: string | null;
           created_at: string;
+          account_id: string | null;
         };
         Insert: {
           id?: string;
@@ -208,6 +209,7 @@ export interface Database {
           refunded_at?: string | null;
           notes?: string | null;
           created_at?: string;
+          account_id?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["sales"]["Insert"]>;
         Relationships: [];
@@ -276,6 +278,7 @@ export interface Database {
           telegram_message_id: number | null;
           telegram_confirm_message_id: number | null;
           telegram_user_id: string | null;
+          account_id: string | null;
         };
         Insert: {
           id?: string;
@@ -294,6 +297,7 @@ export interface Database {
           telegram_message_id?: number | null;
           telegram_confirm_message_id?: number | null;
           telegram_user_id?: string | null;
+          account_id?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["expenses"]["Insert"]>;
         Relationships: [];
@@ -460,6 +464,90 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["sync_logs"]["Insert"]>;
         Relationships: [];
       };
+      accounts: {
+        Row: {
+          id: string;
+          name: string;
+          kind: string | null;
+          currency: string;
+          is_active: boolean;
+          sort_order: number | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          kind?: string | null;
+          currency?: string;
+          is_active?: boolean;
+          sort_order?: number | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["accounts"]["Insert"]>;
+        Relationships: [];
+      };
+      account_transactions: {
+        Row: {
+          id: string;
+          account_id: string | null;
+          direction: "in" | "out";
+          kind: string;
+          amount: number;
+          currency: string;
+          amount_usd: number | null;
+          rate: number | null;
+          description: string | null;
+          related_type: string | null;
+          related_id: string | null;
+          transfer_group: string | null;
+          occurred_at: string;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          account_id?: string | null;
+          direction: "in" | "out";
+          kind?: string;
+          amount: number;
+          currency: string;
+          amount_usd?: number | null;
+          rate?: number | null;
+          description?: string | null;
+          related_type?: string | null;
+          related_id?: string | null;
+          transfer_group?: string | null;
+          occurred_at?: string;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["account_transactions"]["Insert"]
+        >;
+        Relationships: [];
+      };
+      fx_rates: {
+        Row: {
+          id: string;
+          base: string;
+          quote: string;
+          rate: number;
+          source: string | null;
+          as_of: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          base?: string;
+          quote?: string;
+          rate: number;
+          source?: string | null;
+          as_of?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["fx_rates"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -488,3 +576,6 @@ export type TaskRow = T["tasks"]["Row"];
 export type TaskCommentRow = T["task_comments"]["Row"];
 export type IntegrationTokenRow = T["integration_tokens"]["Row"];
 export type SyncLogRow = T["sync_logs"]["Row"];
+export type AccountRow = T["accounts"]["Row"];
+export type AccountTransactionRow = T["account_transactions"]["Row"];
+export type FxRateRow = T["fx_rates"]["Row"];

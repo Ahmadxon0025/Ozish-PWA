@@ -1,6 +1,12 @@
 import "server-only";
 import { requireAdminClient } from "@/lib/supabase/admin";
 import { toUsd } from "@/lib/business/currency";
+import { getCurrentRate } from "@/lib/business/exchange-rate";
+import {
+  insertAccountEntry,
+  resolveDefaultAccountId,
+  deleteRelatedEntries,
+} from "@/lib/business/account-posting";
 import { todayKey } from "@/lib/dates";
 import { formatUsd } from "@/lib/format";
 import { sendMessage } from "./bot";
@@ -8,6 +14,39 @@ import { parseExpense, isExpenseTrigger } from "./parse-expense";
 import type { Database } from "@/types/database";
 
 type ExpenseUpdate = Database["public"]["Tables"]["expenses"]["Update"];
+type AdminDb = ReturnType<typeof requireAdminClient>;
+
+// Match an account named in the message (e.g. "... visa" / "... naqd"),
+// otherwise fall back to the first account of the right currency.
+const ACCOUNT_ALIASES: [RegExp, string[]][] = [
+  [/\bvisa\b|виза|виз/i, ["visa"]],
+  [/\bnaqd\b|\bcash\b|нал/i, ["naqd", "cash"]],
+  [/\bkarta\b|\bcard\b|карта/i, ["karta", "card"]],
+  [/\bfirma\b|фирма|firm/i, ["firma", "firm"]],
+];
+
+async function resolveAccountForMessage(
+  db: AdminDb,
+  text: string,
+  currency: "UZS" | "USD",
+): Promise<string | null> {
+  const { data: accounts } = await db
+    .from("accounts")
+    .select("id, name, currency, kind")
+    .eq("is_active", true);
+  const list = accounts ?? [];
+
+  for (const [re, needles] of ACCOUNT_ALIASES) {
+    if (re.test(text)) {
+      const match = list.find((a) => {
+        const hay = `${a.name} ${a.kind ?? ""}`.toLowerCase();
+        return needles.some((n) => hay.includes(n));
+      });
+      if (match) return match.id;
+    }
+  }
+  return resolveDefaultAccountId(db, currency);
+}
 
 const HELP = [
   "🤖 *Moliya boti*",
@@ -87,6 +126,7 @@ export async function handleTelegramUpdate(update: unknown): Promise<void> {
       const parsed = parseExpense(text);
 
       if (parsed.isDelete) {
+        await deleteRelatedEntries(db, "expense", expense.id);
         await db.from("expenses").delete().eq("id", expense.id);
         await sendMessage(chatId, "🗑 Xarajat o'chirildi.", {
           replyToMessageId: msg.message_id,
@@ -94,11 +134,12 @@ export async function handleTelegramUpdate(update: unknown): Promise<void> {
         return;
       }
 
+      const editRate = await getCurrentRate(db);
       const patch: ExpenseUpdate = {};
       if (parsed.hasAmount && parsed.amount != null) {
         patch.amount = parsed.amount;
         patch.currency = parsed.currency;
-        patch.amount_usd = toUsd(parsed.amount, parsed.currency);
+        patch.amount_usd = toUsd(parsed.amount, parsed.currency, editRate.rate);
       }
       let categoryName: string | null = null;
       if (parsed.categoryName) {
@@ -122,6 +163,25 @@ export async function handleTelegramUpdate(update: unknown): Promise<void> {
       }
 
       await db.from("expenses").update(patch).eq("id", expense.id);
+
+      // If the amount changed, re-sync the linked account movement.
+      if (patch.amount_usd != null && expense.account_id) {
+        await deleteRelatedEntries(db, "expense", expense.id);
+        await insertAccountEntry(db, {
+          accountId: expense.account_id,
+          direction: "out",
+          kind: "expense",
+          amountUsd: Number(patch.amount_usd),
+          amountUzs: patch.currency === "UZS" ? Number(patch.amount) : null,
+          rate: editRate.rate,
+          description: expense.description ?? "Xarajat",
+          relatedType: "expense",
+          relatedId: expense.id,
+          createdBy: expense.created_by,
+          occurredAt: `${expense.expense_date}T12:00:00Z`,
+        });
+      }
+
       const newUsd =
         patch.amount_usd != null ? Number(patch.amount_usd) : Number(expense.amount_usd ?? 0);
       await sendMessage(
@@ -147,7 +207,9 @@ export async function handleTelegramUpdate(update: unknown): Promise<void> {
     }
 
     const cat = await findCategoryId(db, parsed.categoryName);
-    const amountUsd = toUsd(parsed.amount, parsed.currency);
+    const rate = await getCurrentRate(db);
+    const amountUsd = toUsd(parsed.amount, parsed.currency, rate.rate);
+    const accountId = await resolveAccountForMessage(db, text, parsed.currency);
 
     let createdBy: string | null = null;
     if (fromId) {
@@ -170,6 +232,7 @@ export async function handleTelegramUpdate(update: unknown): Promise<void> {
         expense_date: todayKey(),
         created_by: createdBy,
         source: "telegram",
+        account_id: accountId,
         telegram_chat_id: String(chatId),
         telegram_message_id: msg.message_id,
         telegram_user_id: fromId,
@@ -177,12 +240,37 @@ export async function handleTelegramUpdate(update: unknown): Promise<void> {
       .select("id")
       .single();
 
+    // Deduct from the account (money out) + fetch its name for the reply.
+    let accountName: string | null = null;
+    if (inserted && accountId) {
+      await insertAccountEntry(db, {
+        accountId,
+        direction: "out",
+        kind: "expense",
+        amountUsd,
+        amountUzs: parsed.currency === "UZS" ? parsed.amount : null,
+        rate: rate.rate,
+        description: parsed.description || cat?.name || "Xarajat",
+        relatedType: "expense",
+        relatedId: inserted.id,
+        createdBy,
+        occurredAt: `${todayKey()}T12:00:00Z`,
+      });
+      const { data: acct } = await db
+        .from("accounts")
+        .select("name")
+        .eq("id", accountId)
+        .maybeSingle();
+      accountName = acct?.name ?? null;
+    }
+
     const confirmId = await sendMessage(
       chatId,
       [
         `✅ *Xarajat qo'shildi*`,
         `${formatUsd(amountUsd)} — ${cat?.name ?? "Boshqa"}`,
         parsed.description ? `_${parsed.description}_` : "",
+        accountName ? `💳 ${accountName}` : "",
         "",
         `Tahrirlash: shu xabarga *reply* qiling (\`60$\` · \`instagram\` · \`o'chir\`).`,
       ]

@@ -263,6 +263,9 @@ function AddExpenseDialog({
   const [expenseDate, setExpenseDate] = useState<string>(today());
   const [description, setDescription] = useState<string>("");
   const [paidTo, setPaidTo] = useState<string>("");
+  const [accountId, setAccountId] = useState<string>("auto");
+  const accountsQ = api.accounts.list.useQuery();
+  const accounts = accountsQ.data?.items ?? [];
 
   const create = api.expenses.create.useMutation({
     onSuccess: () => {
@@ -283,6 +286,7 @@ function AddExpenseDialog({
     setExpenseDate(today());
     setDescription("");
     setPaidTo("");
+    setAccountId("auto");
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -303,6 +307,7 @@ function AddExpenseDialog({
       expenseDate,
       description: description || undefined,
       paidTo: paidTo || undefined,
+      accountId: accountId === "auto" ? undefined : accountId,
     });
   }
 
@@ -375,6 +380,23 @@ function AddExpenseDialog({
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="account">Qaysi hisobdan (kassa)</Label>
+              <Select value={accountId} onValueChange={setAccountId}>
+                <SelectTrigger id="account">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">Avtomatik (valyuta bo'yicha)</SelectItem>
+                  {accounts.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name} ({a.currency})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="grid gap-2">

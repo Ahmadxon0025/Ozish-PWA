@@ -7,6 +7,8 @@ import {
 } from "@/server/api/trpc";
 import { monthRange } from "@/lib/dates";
 import { commissionForSale } from "@/lib/business/commission";
+import { getCurrentRate } from "@/lib/business/exchange-rate";
+import { insertAccountEntry } from "@/lib/business/account-posting";
 import { PAYMENT_PROVIDERS } from "@/lib/constants";
 import { sum, groupBy, resolveMonth } from "./_helpers";
 
@@ -195,6 +197,7 @@ export const salesRouter = createTRPCRouter({
         paymentType: z.string().optional(),
         soldAt: z.string(),
         notes: z.string().optional(),
+        accountId: z.string().uuid().nullable().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -210,10 +213,29 @@ export const salesRouter = createTRPCRouter({
           payment_type: input.paymentType ?? null,
           sold_at: input.soldAt,
           notes: input.notes ?? null,
+          account_id: input.accountId ?? null,
         })
         .select()
         .single();
       if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+
+      // Credit the account the payment landed in (money in).
+      if (input.accountId) {
+        const rate = await getCurrentRate(ctx.supabase);
+        await insertAccountEntry(ctx.supabase, {
+          accountId: input.accountId,
+          direction: "in",
+          kind: "sale",
+          amountUsd: input.totalAmountUsd,
+          amountUzs: input.totalAmountUzs ?? null,
+          rate: rate.rate,
+          description: "Sotuv",
+          relatedType: "sale",
+          relatedId: data.id,
+          createdBy: ctx.appUser.id,
+          occurredAt: input.soldAt,
+        });
+      }
       return data;
     }),
 
@@ -227,7 +249,7 @@ export const salesRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { error } = await ctx.supabase
+      const { data: sale, error } = await ctx.supabase
         .from("sales")
         .update({
           is_refunded: true,
@@ -235,8 +257,26 @@ export const salesRouter = createTRPCRouter({
           refund_reason: input.reason ?? null,
           refunded_at: new Date().toISOString(),
         })
-        .eq("id", input.saleId);
+        .eq("id", input.saleId)
+        .select("account_id")
+        .single();
       if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+
+      // Money leaves the account it was credited to.
+      if (sale?.account_id && input.refundAmountUsd > 0) {
+        const rate = await getCurrentRate(ctx.supabase);
+        await insertAccountEntry(ctx.supabase, {
+          accountId: sale.account_id,
+          direction: "out",
+          kind: "sale",
+          amountUsd: input.refundAmountUsd,
+          rate: rate.rate,
+          description: "Qaytarish (refund)",
+          relatedType: "sale_refund",
+          relatedId: input.saleId,
+          createdBy: ctx.appUser.id,
+        });
+      }
       return { ok: true };
     }),
 });

@@ -9,6 +9,7 @@ import {
   Wallet,
   PiggyBank,
   Percent,
+  Landmark,
   CheckSquare,
   KanbanSquare,
   Settings,
@@ -51,6 +52,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Moliya",
     items: [
       { label: "P&L (Foyda)", href: "/finance/pnl", icon: Wallet, roles: FINANCE_ROLES },
+      { label: "Hisoblar (Kassa)", href: "/finance/accounts", icon: Landmark, roles: FINANCE_ROLES },
       { label: "Xarajatlar", href: "/finance/expenses", icon: Receipt, roles: FINANCE_ROLES },
       { label: "Bonuslar", href: "/finance/bonuses", icon: PiggyBank, roles: FINANCE_ROLES },
       { label: "Komissiyalar", href: "/finance/commissions", icon: Percent, roles: FINANCE_ROLES },

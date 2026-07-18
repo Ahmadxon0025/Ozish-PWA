@@ -28,6 +28,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # Don't let checkout persist the default GITHUB_TOKEN in git config —
+          # its http.extraheader would override our PAT and it can't see the
+          # deploy repo (→ "Repository not found"). We push with the PAT in the URL.
+          persist-credentials: false
 
       - name: Split the subfolder and push to the deploy repo
         env:

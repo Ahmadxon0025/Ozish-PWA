@@ -263,6 +263,140 @@ export const accountsRouter = createTRPCRouter({
       return { ok: true };
     }),
 
+  /**
+   * Edit a manual ledger entry. Transfers/conversions update BOTH legs (the
+   * amount is read in the source account's currency and re-converted at the
+   * leg's stored rate). Entries created by an expense/sale must be edited at
+   * their source, so those are rejected.
+   */
+  updateTransaction: managerProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        amount: z.number().positive().optional(),
+        description: z.string().optional(),
+        occurredAt: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { data: txn } = await ctx.supabase
+        .from("account_transactions")
+        .select("*")
+        .eq("id", input.id)
+        .maybeSingle();
+      if (!txn) throw new TRPCError({ code: "NOT_FOUND" });
+      if (["expense", "sale", "sale_refund"].includes(txn.related_type ?? "")) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Bu yozuv Xarajatlar/Sotuvlar sahifasida tahrirlanadi.",
+        });
+      }
+      const current = await getCurrentRate(ctx.supabase);
+
+      if (txn.transfer_group) {
+        const { data: legs } = await ctx.supabase
+          .from("account_transactions")
+          .select("*")
+          .eq("transfer_group", txn.transfer_group);
+        const clicked = (legs ?? []).find((l) => l.id === txn.id);
+        const other = (legs ?? []).find((l) => l.id !== txn.id);
+        if (!clicked || !other) throw new TRPCError({ code: "NOT_FOUND" });
+
+        const rate = Number(clicked.rate ?? other.rate ?? current.rate);
+        const desc = input.description;
+        const occ = input.occurredAt;
+
+        if (input.amount != null) {
+          // amount is in the clicked leg's currency; re-derive the other leg.
+          const newClicked = input.amount;
+          let newOther = newClicked;
+          if (clicked.currency !== other.currency) {
+            // Convert the clicked-currency amount into the other leg's currency.
+            newOther =
+              clicked.currency === "UZS"
+                ? round2(newClicked / rate) // so'm -> dollar
+                : round2(newClicked * rate); // dollar -> so'm
+          }
+          await ctx.supabase
+            .from("account_transactions")
+            .update({
+              amount: newClicked,
+              amount_usd: toUsdAt(newClicked, clicked.currency, rate),
+              ...(desc !== undefined ? { description: desc } : {}),
+              ...(occ ? { occurred_at: occ } : {}),
+            } as never)
+            .eq("id", clicked.id);
+          await ctx.supabase
+            .from("account_transactions")
+            .update({
+              amount: newOther,
+              amount_usd: toUsdAt(newOther, other.currency, rate),
+              ...(occ ? { occurred_at: occ } : {}),
+            } as never)
+            .eq("id", other.id);
+        } else if (desc !== undefined || occ) {
+          await ctx.supabase
+            .from("account_transactions")
+            .update({
+              ...(desc !== undefined ? { description: desc } : {}),
+              ...(occ ? { occurred_at: occ } : {}),
+            } as never)
+            .eq("id", clicked.id);
+          if (occ) {
+            await ctx.supabase
+              .from("account_transactions")
+              .update({ occurred_at: occ } as never)
+              .eq("id", other.id);
+          }
+        }
+        return { ok: true };
+      }
+
+      // Single manual entry.
+      const rate = Number(txn.rate ?? current.rate);
+      const patch: Record<string, unknown> = {};
+      if (input.amount != null) {
+        patch.amount = input.amount;
+        patch.amount_usd = toUsdAt(input.amount, txn.currency, rate);
+      }
+      if (input.description !== undefined) patch.description = input.description;
+      if (input.occurredAt) patch.occurred_at = input.occurredAt;
+      const { error } = await ctx.supabase
+        .from("account_transactions")
+        .update(patch as never)
+        .eq("id", input.id);
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      return { ok: true };
+    }),
+
+  /** Delete a manual entry (both legs of a transfer). Expense/sale-linked
+   * entries must be removed at their source. */
+  deleteTransaction: managerProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const { data: txn } = await ctx.supabase
+        .from("account_transactions")
+        .select("id, transfer_group, related_type")
+        .eq("id", input.id)
+        .maybeSingle();
+      if (!txn) throw new TRPCError({ code: "NOT_FOUND" });
+      if (["expense", "sale", "sale_refund"].includes(txn.related_type ?? "")) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Bu yozuv Xarajatlar/Sotuvlar sahifasida o'chiriladi.",
+        });
+      }
+      if (txn.transfer_group) {
+        await ctx.supabase
+          .from("account_transactions")
+          .delete()
+          .eq("transfer_group", txn.transfer_group);
+      } else {
+        await ctx.supabase.from("account_transactions").delete().eq("id", input.id);
+      }
+      return { ok: true };
+    }),
+
   /** Manually refresh the CBU rate now (super admin). */
   refreshRate: superAdminProcedure.mutation(async ({ ctx }) => {
     const { refreshFxRate } = await import("@/lib/business/exchange-rate");

@@ -10,7 +10,9 @@ import {
   ArrowDownToLine,
   ArrowUpFromLine,
   Plus,
-  RefreshCw,
+  Pencil,
+  Trash2,
+  Lock,
 } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { PageHeader } from "@/components/layout/page-header";
@@ -196,6 +198,7 @@ export default function AccountsPage() {
                   <TableHead>Turi</TableHead>
                   <TableHead>Izoh</TableHead>
                   <TableHead className="text-right">Summa</TableHead>
+                  <TableHead className="text-right">Amal</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -216,6 +219,9 @@ export default function AccountsPage() {
                     >
                       {t.direction === "in" ? "+" : "−"}
                       {fmtNative(Number(t.amount), t.currency)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <TxnActions txn={t} onDone={invalidate} />
                     </TableCell>
                   </TableRow>
                 ))}
@@ -515,6 +521,125 @@ function AddAccountDialog({ onDone }: { onDone: () => void }) {
           </DialogClose>
           <Button disabled={!name || m.isPending} onClick={() => m.mutate({ name, kind, currency })}>
             Qo'shish
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+type Txn = {
+  id: string;
+  amount: number;
+  currency: string;
+  description: string | null;
+  occurred_at: string;
+  related_type: string | null;
+};
+
+const LOCKED_KINDS = ["expense", "sale", "sale_refund"];
+
+function TxnActions({ txn, onDone }: { txn: Txn; onDone: () => void }) {
+  const locked = LOCKED_KINDS.includes(txn.related_type ?? "");
+  const del = api.accounts.deleteTransaction.useMutation({
+    onSuccess: () => {
+      toast({ title: "O'chirildi", variant: "success" });
+      onDone();
+    },
+    onError: (e) => toast({ title: "Xato", description: e.message, variant: "destructive" }),
+  });
+
+  if (locked) {
+    return (
+      <span
+        className="inline-flex items-center gap-1 text-xs text-muted-foreground"
+        title="Bu yozuv avtomatik — Xarajatlar/Sotuvlar sahifasida tahrirlang"
+      >
+        <Lock className="h-3.5 w-3.5" /> manba
+      </span>
+    );
+  }
+
+  return (
+    <div className="flex justify-end gap-1">
+      <EditTxnDialog txn={txn} onDone={onDone} />
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-9 w-9 text-destructive"
+        onClick={() => {
+          if (confirm("Bu harakatni o'chirasizmi?")) del.mutate({ id: txn.id });
+        }}
+      >
+        <Trash2 className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}
+
+function EditTxnDialog({ txn, onDone }: { txn: Txn; onDone: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [amount, setAmount] = useState(String(txn.amount));
+  const [description, setDescription] = useState(txn.description ?? "");
+  const [date, setDate] = useState(txn.occurred_at.slice(0, 10));
+
+  const m = api.accounts.updateTransaction.useMutation({
+    onSuccess: () => {
+      toast({ title: "Saqlandi", variant: "success" });
+      onDone();
+      setOpen(false);
+    },
+    onError: (e) => toast({ title: "Xato", description: e.message, variant: "destructive" }),
+  });
+
+  const amt = Number(amount) || 0;
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-9 w-9">
+          <Pencil className="h-4 w-4" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Harakatni tahrirlash</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label>Summa ({txn.currency})</Label>
+            <Input
+              type="number"
+              inputMode="decimal"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Izoh</Label>
+            <Input value={description} onChange={(e) => setDescription(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Sana</Label>
+            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </div>
+        </div>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button variant="ghost">Bekor</Button>
+          </DialogClose>
+          <Button
+            disabled={amt <= 0 || m.isPending}
+            onClick={() =>
+              m.mutate({
+                id: txn.id,
+                amount: amt,
+                description,
+                occurredAt: `${date}T12:00:00Z`,
+              })
+            }
+          >
+            Saqlash
           </Button>
         </DialogFooter>
       </DialogContent>

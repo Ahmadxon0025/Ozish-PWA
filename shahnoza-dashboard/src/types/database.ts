@@ -548,6 +548,28 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["fx_rates"]["Insert"]>;
         Relationships: [];
       };
+      owner_shares: {
+        Row: {
+          id: string;
+          user_id: string | null;
+          share_rate: number;
+          effective_from: string;
+          effective_to: string | null;
+          note: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id?: string | null;
+          share_rate: number;
+          effective_from: string;
+          effective_to?: string | null;
+          note?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["owner_shares"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {

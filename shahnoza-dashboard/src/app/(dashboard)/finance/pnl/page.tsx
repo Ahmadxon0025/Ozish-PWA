@@ -6,9 +6,10 @@ import { api } from "@/lib/trpc/react";
 import { PageHeader } from "@/components/layout/page-header";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import {
-  MonthSelect,
-  currentMonthValue,
-} from "@/components/dashboard/month-select";
+  PeriodSelect,
+  defaultPeriod,
+  type Period,
+} from "@/components/dashboard/period-select";
 import {
   Card,
   CardContent,
@@ -18,19 +19,19 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PnlWaterfallChart } from "@/components/charts/pnl-waterfall-chart";
-import { formatUsd, formatPct100 } from "@/lib/format";
+import { formatUsd, formatPct100, formatDate } from "@/lib/format";
 
 export default function PnlPage() {
-  const [month, setMonth] = useState<string>(currentMonthValue());
-  const pnl = api.finance.pnl.useQuery({ month });
+  const [period, setPeriod] = useState<Period>(defaultPeriod());
+  const pnl = api.finance.pnl.useQuery({ from: period.from, to: period.to });
   const d = pnl.data;
 
   return (
     <div>
       <PageHeader
         title="Foyda va zarar (P&L)"
-        description="Oylik daromad, xarajat va sof foyda tahlili."
-        actions={<MonthSelect value={month} onChange={setMonth} />}
+        description={`Davr: ${formatDate(period.from)} — ${formatDate(period.to)}`}
+        actions={<PeriodSelect value={period} onChange={setPeriod} />}
       />
 
       {/* KPI cards */}

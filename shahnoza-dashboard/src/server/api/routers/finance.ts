@@ -9,18 +9,31 @@ import {
 import { computePnl, pnlWaterfall } from "@/lib/business/pnl";
 import { computeBonus } from "@/lib/business/bonus";
 import { commissionForSale, computeCommissions } from "@/lib/business/commission";
+import { computeDistribution } from "@/lib/business/distribution";
+import { getCurrentRate } from "@/lib/business/exchange-rate";
+import { insertAccountEntry } from "@/lib/business/account-posting";
 import { SUPER_ADMIN_BONUS_RATE } from "@/lib/constants";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { sum, groupBy, resolveMonth } from "./_helpers";
+import { sum, groupBy, resolveMonth, resolvePeriod } from "./_helpers";
+import type { Range } from "@/lib/dates";
 
 // Finance is visible to super_admin, owner, and sales_manager.
 const financeProcedure = roleProcedure("super_admin", "owner", "sales_manager");
 
-async function gatherMonth(
+// Accepts either an explicit from/to range or a month key.
+const periodInput = z
+  .object({
+    from: z.string().optional(),
+    to: z.string().optional(),
+    month: z.string().optional(),
+  })
+  .optional();
+
+async function gatherPeriod(
   ctx: { supabase: ReturnType<typeof createServerSupabase> },
-  month?: string,
+  input?: { from?: string; to?: string; month?: string },
 ) {
-  const range = resolveMonth(month);
+  const range = resolvePeriod(input);
   const [{ data: sales }, { data: expenses }] = await Promise.all([
     ctx.supabase
       .from("sales")
@@ -36,36 +49,82 @@ async function gatherMonth(
   return { range, sales: sales ?? [], expenses: expenses ?? [] };
 }
 
-export const financeRouter = createTRPCRouter({
-  /** Real-time P&L for a month + waterfall steps. */
-  pnl: financeProcedure
-    .input(z.object({ month: z.string().optional() }).optional())
-    .query(async ({ ctx, input }) => {
-      const { sales, expenses } = await gatherMonth(ctx, input?.month);
-      const grossRevenueUsd = sum(sales, (s) => s.total_amount_usd);
-      const refundsUsd = sum(sales, (s) => (s.is_refunded ? s.refund_amount_usd : 0));
-      const operatingExpensesUsd = sum(expenses, (e) => e.amount_usd);
-      const commissionsUsd = sum(
-        computeCommissions(
-          sales.map((s, i) => ({
-            id: String(i),
-            sales_person_id: s.sales_person_id,
-            total_amount_usd: s.total_amount_usd,
-            is_refunded: s.is_refunded,
-            refund_amount_usd: s.refund_amount_usd,
-          })),
-        ),
-        (c) => c.amountUsd,
-      );
+// Net profit for a resolved range (used by P&L and distribution).
+function netProfitFor(
+  sales: { total_amount_usd: number | null; sales_person_id: string | null; is_refunded: boolean | null; refund_amount_usd: number | null }[],
+  expenses: { amount_usd: number | null }[],
+) {
+  const grossRevenueUsd = sum(sales, (s) => s.total_amount_usd);
+  const refundsUsd = sum(sales, (s) => (s.is_refunded ? s.refund_amount_usd : 0));
+  const operatingExpensesUsd = sum(expenses, (e) => e.amount_usd);
+  const commissionsUsd = sum(
+    computeCommissions(
+      sales.map((s, i) => ({
+        id: String(i),
+        sales_person_id: s.sales_person_id,
+        total_amount_usd: s.total_amount_usd,
+        is_refunded: s.is_refunded,
+        refund_amount_usd: s.refund_amount_usd,
+      })),
+    ),
+    (c) => c.amountUsd,
+  );
+  return computePnl({ grossRevenueUsd, refundsUsd, operatingExpensesUsd, commissionsUsd });
+}
 
-      const result = computePnl({
-        grossRevenueUsd,
-        refundsUsd,
-        operatingExpensesUsd,
-        commissionsUsd,
-      });
-      return { ...result, waterfall: pnlWaterfall(result) };
-    }),
+export const financeRouter = createTRPCRouter({
+  /** Real-time P&L for any period (from/to or month) + waterfall steps. */
+  pnl: financeProcedure.input(periodInput).query(async ({ ctx, input }) => {
+    const { range, sales, expenses } = await gatherPeriod(ctx, input);
+    const result = netProfitFor(sales, expenses);
+    return {
+      ...result,
+      waterfall: pnlWaterfall(result),
+      period: { from: range.from.slice(0, 10), to: range.to.slice(0, 10) },
+    };
+  }),
+
+  /**
+   * Cashflow for a period from the account ledger: money in vs out, grouped by
+   * kind, plus the net movement.
+   */
+  cashflow: financeProcedure.input(periodInput).query(async ({ ctx, input }) => {
+    const range: Range = resolvePeriod(input);
+    const { data: txns } = await ctx.supabase
+      .from("account_transactions")
+      .select("direction, kind, amount_usd, occurred_at")
+      .gte("occurred_at", range.from)
+      .lt("occurred_at", range.to);
+    const rows = txns ?? [];
+
+    const inRows = rows.filter((t) => t.direction === "in");
+    const outRows = rows.filter((t) => t.direction === "out");
+
+    // Transfers/conversions move money BETWEEN own accounts — exclude from
+    // real in/out so cashflow reflects external money only.
+    const internal = new Set(["transfer", "conversion"]);
+    const realIn = inRows.filter((t) => !internal.has(t.kind));
+    const realOut = outRows.filter((t) => !internal.has(t.kind));
+
+    const byKind = (list: typeof rows) => {
+      const g = groupBy(list, (t) => t.kind);
+      return Array.from(g.entries())
+        .map(([kind, r]) => ({ kind, amount: sum(r, (x) => x.amount_usd) }))
+        .sort((a, b) => b.amount - a.amount);
+    };
+
+    const inflowUsd = sum(realIn, (t) => t.amount_usd);
+    const outflowUsd = sum(realOut, (t) => t.amount_usd);
+    return {
+      period: { from: range.from.slice(0, 10), to: range.to.slice(0, 10) },
+      inflowUsd,
+      outflowUsd,
+      netUsd: Math.round((inflowUsd - outflowUsd) * 100) / 100,
+      inflowByKind: byKind(realIn),
+      outflowByKind: byKind(realOut),
+      transferCount: rows.filter((t) => internal.has(t.kind)).length,
+    };
+  }),
 
   /** Commission lines for a month (computed from sales). */
   commissions: financeProcedure
@@ -128,7 +187,7 @@ export const financeRouter = createTRPCRouter({
   bonus: financeProcedure
     .input(z.object({ month: z.string().optional() }).optional())
     .query(async ({ ctx, input }) => {
-      const { range, sales, expenses } = await gatherMonth(ctx, input?.month);
+      const { range, sales, expenses } = await gatherPeriod(ctx, { month: input?.month });
 
       // Cash collected = net sales (gross − refunds within the month).
       const gross = sum(sales, (s) => s.total_amount_usd);
@@ -218,4 +277,175 @@ export const financeRouter = createTRPCRouter({
       .order("month", { ascending: false });
     return data ?? [];
   }),
+
+  // ---- Owner profit distribution (Taqsimot) -------------------------------
+
+  /** The owners (super_admin + owner roles) with their current share %. */
+  ownerShares: financeProcedure.query(async ({ ctx }) => {
+    const [{ data: owners }, { data: shares }] = await Promise.all([
+      ctx.supabase
+        .from("users")
+        .select("id, full_name, role")
+        .in("role", ["super_admin", "owner"])
+        .eq("is_active", true),
+      ctx.supabase
+        .from("owner_shares")
+        .select("*")
+        .order("effective_from", { ascending: false }),
+    ]);
+    const currentByUser = new Map<string, number>();
+    for (const s of shares ?? []) {
+      if (s.user_id && !s.effective_to && !currentByUser.has(s.user_id)) {
+        currentByUser.set(s.user_id, Number(s.share_rate));
+      }
+    }
+    return (owners ?? []).map((o) => ({
+      userId: o.id,
+      name: o.full_name,
+      role: o.role,
+      shareRate: currentByUser.get(o.id) ?? 0,
+    }));
+  }),
+
+  /** Profit split for a period: entitlement vs taken vs owed, per owner. */
+  distribution: financeProcedure.input(periodInput).query(async ({ ctx, input }) => {
+    const { range, sales, expenses } = await gatherPeriod(ctx, input);
+    const pnl = netProfitFor(sales, expenses);
+
+    const [{ data: owners }, { data: shares }, { data: payouts }] =
+      await Promise.all([
+        ctx.supabase
+          .from("users")
+          .select("id, full_name, role")
+          .in("role", ["super_admin", "owner"])
+          .eq("is_active", true),
+        ctx.supabase.from("owner_shares").select("*"),
+        ctx.supabase
+          .from("account_transactions")
+          .select("related_id, amount_usd, occurred_at")
+          .eq("related_type", "owner_payout")
+          .gte("occurred_at", range.from)
+          .lt("occurred_at", range.to),
+      ]);
+
+    // Share active during the period (latest effective_from <= range end, and
+    // not ended before range start). Fallback 0.
+    const periodStart = range.from.slice(0, 10);
+    const shareFor = (userId: string): number => {
+      const applicable = (shares ?? [])
+        .filter((s) => s.user_id === userId)
+        .filter(
+          (s) =>
+            s.effective_from <= range.to.slice(0, 10) &&
+            (!s.effective_to || s.effective_to >= periodStart),
+        )
+        .sort((a, b) => (a.effective_from < b.effective_from ? 1 : -1));
+      return applicable.length ? Number(applicable[0].share_rate) : 0;
+    };
+
+    const takenByUser = new Map<string, number>();
+    for (const p of payouts ?? []) {
+      if (p.related_id)
+        takenByUser.set(
+          p.related_id,
+          (takenByUser.get(p.related_id) ?? 0) + Number(p.amount_usd ?? 0),
+        );
+    }
+
+    const result = computeDistribution(
+      pnl.netProfitUsd,
+      (owners ?? []).map((o) => ({
+        userId: o.id,
+        name: o.full_name,
+        shareRate: shareFor(o.id),
+        takenUsd: takenByUser.get(o.id) ?? 0,
+      })),
+    );
+
+    return {
+      ...result,
+      period: { from: periodStart, to: range.to.slice(0, 10) },
+      pnl,
+    };
+  }),
+
+  /** Set (or update) an owner's profit share %, effective from a date. */
+  setOwnerShare: superAdminProcedure
+    .input(
+      z.object({
+        userId: z.string().uuid(),
+        sharePercent: z.number().min(0).max(100),
+        effectiveFrom: z.string(),
+        note: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Close any open share for this owner.
+      await ctx.supabase
+        .from("owner_shares")
+        .update({ effective_to: input.effectiveFrom })
+        .eq("user_id", input.userId)
+        .is("effective_to", null);
+      const { error } = await ctx.supabase.from("owner_shares").insert({
+        user_id: input.userId,
+        share_rate: input.sharePercent / 100,
+        effective_from: input.effectiveFrom,
+        note: input.note ?? null,
+      });
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      return { ok: true };
+    }),
+
+  /** Record an owner taking money out (a drawing) — deducts a real account. */
+  recordOwnerPayout: superAdminProcedure
+    .input(
+      z.object({
+        userId: z.string().uuid(),
+        accountId: z.string().uuid(),
+        amountUsd: z.number().positive(),
+        occurredAt: z.string().optional(),
+        note: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const rate = await getCurrentRate(ctx.supabase);
+      const { data: owner } = await ctx.supabase
+        .from("users")
+        .select("full_name")
+        .eq("id", input.userId)
+        .maybeSingle();
+      await insertAccountEntry(ctx.supabase, {
+        accountId: input.accountId,
+        direction: "out",
+        kind: "owner_draw",
+        amountUsd: input.amountUsd,
+        rate: rate.rate,
+        description: input.note ?? `Egaga to'lov: ${owner?.full_name ?? ""}`.trim(),
+        relatedType: "owner_payout",
+        relatedId: input.userId,
+        createdBy: ctx.appUser.id,
+        occurredAt: input.occurredAt ?? new Date().toISOString(),
+      });
+      return { ok: true };
+    }),
+
+  /** Recent owner payouts (drawings). */
+  ownerPayouts: financeProcedure
+    .input(z.object({ limit: z.number().min(1).max(100).default(30) }).optional())
+    .query(async ({ ctx, input }) => {
+      const [{ data: payouts }, { data: owners }] = await Promise.all([
+        ctx.supabase
+          .from("account_transactions")
+          .select("*")
+          .eq("related_type", "owner_payout")
+          .order("occurred_at", { ascending: false })
+          .limit(input?.limit ?? 30),
+        ctx.supabase.from("users").select("id, full_name"),
+      ]);
+      const name = new Map((owners ?? []).map((u) => [u.id, u.full_name]));
+      return (payouts ?? []).map((p) => ({
+        ...p,
+        ownerName: p.related_id ? name.get(p.related_id) ?? "—" : "—",
+      }));
+    }),
 });

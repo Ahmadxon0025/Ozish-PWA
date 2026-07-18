@@ -12,6 +12,7 @@ import { commissionForSale, computeCommissions } from "@/lib/business/commission
 import { computeDistribution } from "@/lib/business/distribution";
 import { getCurrentRate } from "@/lib/business/exchange-rate";
 import { insertAccountEntry } from "@/lib/business/account-posting";
+import { round2 } from "@/lib/business/currency";
 import { SUPER_ADMIN_BONUS_RATE } from "@/lib/constants";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { sum, groupBy, resolveMonth, resolvePeriod } from "./_helpers";
@@ -19,6 +20,20 @@ import type { Range } from "@/lib/dates";
 
 // Finance is visible to super_admin, owner, and sales_manager.
 const financeProcedure = roleProcedure("super_admin", "owner", "sales_manager");
+
+// Internal moves (between own accounts) — excluded from real cashflow.
+const INTERNAL_KINDS = new Set(["transfer", "conversion"]);
+const UZ_MONTHS = ["Yan", "Fev", "Mar", "Apr", "May", "Iyn", "Iyl", "Avg", "Sen", "Okt", "Noy", "Dek"];
+const KIND_LABELS: Record<string, string> = {
+  deposit: "Kirim",
+  sale: "Sotuv",
+  withdraw: "Yechish",
+  expense: "Xarajat",
+  owner_draw: "Egaga to'lov",
+  manual: "Qo'lda",
+  adjustment: "Tuzatish",
+};
+const kindLabel = (k: string) => KIND_LABELS[k] ?? k;
 
 // Accepts either an explicit from/to range or a month key.
 const periodInput = z
@@ -90,39 +105,91 @@ export const financeRouter = createTRPCRouter({
    */
   cashflow: financeProcedure.input(periodInput).query(async ({ ctx, input }) => {
     const range: Range = resolvePeriod(input);
-    const { data: txns } = await ctx.supabase
-      .from("account_transactions")
-      .select("direction, kind, amount_usd, occurred_at")
-      .gte("occurred_at", range.from)
-      .lt("occurred_at", range.to);
-    const rows = txns ?? [];
+    const year = Number(range.from.slice(0, 4));
+    const yearStart = `${year}-01-01T00:00:00.000Z`;
+    const yearEnd = `${year + 1}-01-01T00:00:00.000Z`;
 
-    const inRows = rows.filter((t) => t.direction === "in");
-    const outRows = rows.filter((t) => t.direction === "out");
+    const [periodRes, yearRes, accRes] = await Promise.all([
+      ctx.supabase
+        .from("account_transactions")
+        .select("id, account_id, direction, kind, amount, currency, amount_usd, description, occurred_at")
+        .gte("occurred_at", range.from)
+        .lt("occurred_at", range.to)
+        .order("occurred_at", { ascending: false }),
+      ctx.supabase
+        .from("account_transactions")
+        .select("direction, kind, amount_usd, occurred_at")
+        .gte("occurred_at", yearStart)
+        .lt("occurred_at", yearEnd),
+      ctx.supabase.from("accounts").select("id, name"),
+    ]);
 
-    // Transfers/conversions move money BETWEEN own accounts — exclude from
-    // real in/out so cashflow reflects external money only.
-    const internal = new Set(["transfer", "conversion"]);
-    const realIn = inRows.filter((t) => !internal.has(t.kind));
-    const realOut = outRows.filter((t) => !internal.has(t.kind));
+    const rows = periodRes.data ?? [];
+    const accName = new Map((accRes.data ?? []).map((a) => [a.id, a.name]));
 
-    const byKind = (list: typeof rows) => {
+    const external = rows.filter((t) => !INTERNAL_KINDS.has(t.kind));
+    const realIn = external.filter((t) => t.direction === "in");
+    const realOut = external.filter((t) => t.direction === "out");
+
+    const byKind = (list: typeof external) => {
       const g = groupBy(list, (t) => t.kind);
       return Array.from(g.entries())
         .map(([kind, r]) => ({ kind, amount: sum(r, (x) => x.amount_usd) }))
         .sort((a, b) => b.amount - a.amount);
     };
 
-    const inflowUsd = sum(realIn, (t) => t.amount_usd);
-    const outflowUsd = sum(realOut, (t) => t.amount_usd);
+    const inflowUsd = round2(sum(realIn, (t) => t.amount_usd));
+    const outflowUsd = round2(sum(realOut, (t) => t.amount_usd));
+
+    // Transaction list (external movements only).
+    const transactions = external.map((t) => ({
+      id: t.id,
+      date: t.occurred_at,
+      direction: t.direction as "in" | "out",
+      kind: t.kind,
+      kindLabel: kindLabel(t.kind),
+      description: t.description,
+      accountName: t.account_id ? accName.get(t.account_id) ?? "—" : "—",
+      amount: Number(t.amount ?? 0),
+      currency: t.currency,
+      amountUsd: Number(t.amount_usd ?? 0),
+    }));
+
+    // Monthly roll-up for the year (12 buckets).
+    const buckets = new Map<string, { income: number; expense: number }>();
+    for (const t of yearRes.data ?? []) {
+      if (INTERNAL_KINDS.has(t.kind)) continue;
+      const key = t.occurred_at.slice(0, 7); // YYYY-MM
+      const b = buckets.get(key) ?? { income: 0, expense: 0 };
+      if (t.direction === "in") b.income += Number(t.amount_usd ?? 0);
+      else b.expense += Number(t.amount_usd ?? 0);
+      buckets.set(key, b);
+    }
+    const monthly = Array.from({ length: 12 }, (_, i) => {
+      const key = `${year}-${String(i + 1).padStart(2, "0")}`;
+      const b = buckets.get(key) ?? { income: 0, expense: 0 };
+      const income = round2(b.income);
+      const expense = round2(b.expense);
+      return { key, label: UZ_MONTHS[i], income, expense, net: round2(income - expense) };
+    });
+    const yearTotal = {
+      income: round2(sum(monthly, (m) => m.income)),
+      expense: round2(sum(monthly, (m) => m.expense)),
+      net: round2(sum(monthly, (m) => m.net)),
+    };
+
     return {
       period: { from: range.from.slice(0, 10), to: range.to.slice(0, 10) },
+      year,
       inflowUsd,
       outflowUsd,
-      netUsd: Math.round((inflowUsd - outflowUsd) * 100) / 100,
+      netUsd: round2(inflowUsd - outflowUsd),
       inflowByKind: byKind(realIn),
       outflowByKind: byKind(realOut),
-      transferCount: rows.filter((t) => internal.has(t.kind)).length,
+      transferCount: rows.filter((t) => INTERNAL_KINDS.has(t.kind)).length,
+      transactions,
+      monthly,
+      yearTotal,
     };
   }),
 

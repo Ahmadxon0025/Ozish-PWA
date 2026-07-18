@@ -19,7 +19,16 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatUsd, formatDate } from "@/lib/format";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { SimpleBarChart } from "@/components/charts/simple-bar-chart";
+import { formatUsd, formatUzs, formatDate, formatDateTime } from "@/lib/format";
 
 const KIND_LABELS: Record<string, string> = {
   sale: "Sotuv",
@@ -133,6 +142,137 @@ export default function CashflowPage() {
               <Skeleton className="h-32 w-full" />
             ) : (
               <KindBars rows={d.outflowByKind} total={d.outflowUsd} tone="out" />
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Transaction list */}
+      <Card className="mt-4">
+        <CardHeader>
+          <CardTitle className="text-base">Harakatlar</CardTitle>
+          <CardDescription>Davrdagi kirim/chiqimlar ro'yxati</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {cf.isLoading ? (
+            <Skeleton className="h-40 w-full" />
+          ) : d && d.transactions.length > 0 ? (
+            <ul className="divide-y">
+              {d.transactions.map((t) => {
+                const isIn = t.direction === "in";
+                const native =
+                  t.currency === "USD"
+                    ? formatUsd(t.amount, 2)
+                    : formatUzs(t.amount);
+                return (
+                  <li key={t.id} className="flex items-center gap-3 py-3">
+                    <div
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${isIn ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"}`}
+                    >
+                      {isIn ? (
+                        <ArrowDownToLine className="h-4 w-4" />
+                      ) : (
+                        <ArrowUpFromLine className="h-4 w-4" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">
+                        {t.description || t.kindLabel}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {t.kindLabel} · {t.accountName} · {formatDate(t.date)}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className={`font-semibold ${isIn ? "text-success" : "text-destructive"}`}>
+                        {isIn ? "+" : "−"}
+                        {native}
+                      </p>
+                      {t.currency !== "USD" && (
+                        <p className="text-xs text-muted-foreground">
+                          ≈ {formatUsd(t.amountUsd)}
+                        </p>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <EmptyState icon={Activity} title="Bu davrda harakatlar yo'q" />
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Monthly & yearly */}
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Oylik sof oqim</CardTitle>
+            <CardDescription>{d?.year} yil bo'yicha (USD)</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {cf.isLoading || !d ? (
+              <Skeleton className="h-[240px] w-full" />
+            ) : (
+              <SimpleBarChart
+                data={d.monthly.map((m) => ({ label: m.label, value: m.net }))}
+                valueFormatter={(v) => formatUsd(v)}
+              />
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Yillik jadval ({d?.year})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {cf.isLoading || !d ? (
+              <Skeleton className="h-[240px] w-full" />
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Oy</TableHead>
+                    <TableHead className="text-right">Kirim</TableHead>
+                    <TableHead className="text-right">Chiqim</TableHead>
+                    <TableHead className="text-right">Sof</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {d.monthly.map((m) => (
+                    <TableRow key={m.key}>
+                      <TableCell>{m.label}</TableCell>
+                      <TableCell className="text-right text-success">
+                        {m.income ? formatUsd(m.income) : "—"}
+                      </TableCell>
+                      <TableCell className="text-right text-destructive">
+                        {m.expense ? formatUsd(m.expense) : "—"}
+                      </TableCell>
+                      <TableCell
+                        className={`text-right font-medium ${m.net >= 0 ? "" : "text-destructive"}`}
+                      >
+                        {m.income || m.expense ? formatUsd(m.net) : "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow className="font-semibold">
+                    <TableCell>Jami</TableCell>
+                    <TableCell className="text-right text-success">
+                      {formatUsd(d.yearTotal.income)}
+                    </TableCell>
+                    <TableCell className="text-right text-destructive">
+                      {formatUsd(d.yearTotal.expense)}
+                    </TableCell>
+                    <TableCell
+                      className={`text-right ${d.yearTotal.net >= 0 ? "" : "text-destructive"}`}
+                    >
+                      {formatUsd(d.yearTotal.net)}
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
             )}
           </CardContent>
         </Card>

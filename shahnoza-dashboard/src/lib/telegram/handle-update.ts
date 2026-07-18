@@ -1,6 +1,7 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 import { requireAdminClient } from "@/lib/supabase/admin";
-import { toUsd } from "@/lib/business/currency";
+import { toUsd, round2 } from "@/lib/business/currency";
 import { getCurrentRate } from "@/lib/business/exchange-rate";
 import {
   insertAccountEntry,
@@ -11,6 +12,12 @@ import { todayKey } from "@/lib/dates";
 import { formatUsd } from "@/lib/format";
 import { sendMessage } from "./bot";
 import { parseExpense, isExpenseTrigger } from "./parse-expense";
+import {
+  isDepositTrigger,
+  isTransferTrigger,
+  parseDeposit,
+  parseTransfer,
+} from "./parse-command";
 import type { Database } from "@/types/database";
 
 type ExpenseUpdate = Database["public"]["Tables"]["expenses"]["Update"];
@@ -48,12 +55,74 @@ async function resolveAccountForMessage(
   return resolveDefaultAccountId(db, currency);
 }
 
+// --- Treasury command helpers (kirim / o'tkazma) ---
+const ALIAS_NEEDLES: Record<string, string[]> = {
+  visa: ["visa"],
+  naqd: ["naqd", "cash"],
+  karta: ["karta", "card"],
+  firma: ["firma", "firm"],
+};
+
+function toUsdAt(amount: number, currency: string | null, rate: number): number {
+  return currency === "USD" ? round2(amount) : round2(rate > 0 ? amount / rate : 0);
+}
+
+function groupThousands(n: number): string {
+  return Math.round(n)
+    .toString()
+    .replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+}
+
+function fmtMoney(amount: number, currency: string | null): string {
+  return currency === "USD" ? formatUsd(amount) : `${groupThousands(amount)} so'm`;
+}
+
+async function resolveAccountByAlias(db: AdminDb, alias: string) {
+  const { data: accounts } = await db
+    .from("accounts")
+    .select("id, name, currency, kind")
+    .eq("is_active", true);
+  const needles = ALIAS_NEEDLES[alias] ?? [alias];
+  return (
+    (accounts ?? []).find((a) => {
+      const hay = `${a.name} ${a.kind ?? ""}`.toLowerCase();
+      return needles.some((n) => hay.includes(n));
+    }) ?? null
+  );
+}
+
+async function accountBalance(db: AdminDb, accountId: string): Promise<number> {
+  const { data } = await db
+    .from("account_transactions")
+    .select("direction, amount")
+    .eq("account_id", accountId);
+  let bal = 0;
+  for (const r of data ?? []) bal += r.direction === "in" ? Number(r.amount) : -Number(r.amount);
+  return round2(bal);
+}
+
+async function resolveCreatedBy(db: AdminDb, fromId: string | null): Promise<string | null> {
+  if (!fromId) return null;
+  const { data } = await db
+    .from("users")
+    .select("id")
+    .eq("telegram_id", fromId)
+    .maybeSingle();
+  return data?.id ?? null;
+}
+
 const HELP = [
   "🤖 *Moliya boti*",
   "",
   "Xarajat qo'shish uchun shunday yozing:",
   "`rasxod 50$ facebook reklama`",
   "`rasxod 500000 video montaj`",
+  "",
+  "Pul kirimi (hisobga):",
+  "`kirim 6 mln firma`",
+  "",
+  "O'tkazma (hisoblar orasida):",
+  "`o'tkazma 3 mln firma viza`",
   "",
   "Tahrirlash: bot javobiga *reply* qilib yozing:",
   "`60$` — summani o'zgartiradi",
@@ -192,6 +261,137 @@ export async function handleTelegramUpdate(update: unknown): Promise<void> {
       return;
     }
     // replied to something untracked — fall through (maybe it's still an expense)
+  }
+
+  // --- Deposit (kirim): money IN to an account ---
+  if (isDepositTrigger(text)) {
+    const { amount, accountAlias } = parseDeposit(text);
+    if (amount == null || amount <= 0) {
+      await sendMessage(chatId, "❓ Summani topolmadim. Masalan: `kirim 6 mln firma`", {
+        replyToMessageId: msg.message_id,
+      });
+      return;
+    }
+    if (!accountAlias) {
+      await sendMessage(chatId, "❓ Qaysi hisob? Masalan: `kirim 6 mln firma`", {
+        replyToMessageId: msg.message_id,
+      });
+      return;
+    }
+    const account = await resolveAccountByAlias(db, accountAlias);
+    if (!account) {
+      await sendMessage(chatId, "❓ Bunday hisob topilmadi.", { replyToMessageId: msg.message_id });
+      return;
+    }
+    const rate = await getCurrentRate(db);
+    const createdBy = await resolveCreatedBy(db, fromId);
+    const { error } = await db.from("account_transactions").insert({
+      account_id: account.id,
+      direction: "in",
+      kind: "deposit",
+      amount,
+      currency: account.currency,
+      amount_usd: toUsdAt(amount, account.currency, rate.rate),
+      rate: rate.rate,
+      description: "Telegram kirim",
+      occurred_at: new Date().toISOString(),
+      created_by: createdBy,
+    });
+    if (error) {
+      await sendMessage(chatId, `⚠️ Xatolik: ${error.message}`, { replyToMessageId: msg.message_id });
+      return;
+    }
+    const bal = await accountBalance(db, account.id);
+    await sendMessage(
+      chatId,
+      [
+        `✅ *Kirim* — ${fmtMoney(amount, account.currency)} → 💳 ${account.name}`,
+        `Yangi balans: ${fmtMoney(bal, account.currency)}`,
+      ].join("\n"),
+      { replyToMessageId: msg.message_id },
+    );
+    return;
+  }
+
+  // --- Transfer (o'tkazma): move money between accounts, converting if needed ---
+  if (isTransferTrigger(text)) {
+    const { amount, fromAlias, toAlias } = parseTransfer(text);
+    if (amount == null || amount <= 0) {
+      await sendMessage(chatId, "❓ Summani topolmadim. Masalan: `o'tkazma 3 mln firma viza`", {
+        replyToMessageId: msg.message_id,
+      });
+      return;
+    }
+    if (!fromAlias || !toAlias) {
+      await sendMessage(chatId, "❓ Ikkita hisob kerak: `o'tkazma 3 mln firma viza`", {
+        replyToMessageId: msg.message_id,
+      });
+      return;
+    }
+    const from = await resolveAccountByAlias(db, fromAlias);
+    const to = await resolveAccountByAlias(db, toAlias);
+    if (!from || !to) {
+      await sendMessage(chatId, "❓ Hisob(lar) topilmadi.", { replyToMessageId: msg.message_id });
+      return;
+    }
+    if (from.id === to.id) {
+      await sendMessage(chatId, "❓ Bir xil hisob tanlandi.", { replyToMessageId: msg.message_id });
+      return;
+    }
+    const rate = (await getCurrentRate(db)).rate;
+    let toAmount = amount;
+    if (from.currency !== to.currency) {
+      if (from.currency === "UZS" && to.currency === "USD") toAmount = round2(amount / rate);
+      else if (from.currency === "USD" && to.currency === "UZS") toAmount = round2(amount * rate);
+    }
+    const kind = from.currency === to.currency ? "transfer" : "conversion";
+    const group = randomUUID();
+    const occurred = new Date().toISOString();
+    const createdBy = await resolveCreatedBy(db, fromId);
+    const { error } = await db.from("account_transactions").insert([
+      {
+        account_id: from.id,
+        direction: "out",
+        kind,
+        amount,
+        currency: from.currency,
+        amount_usd: toUsdAt(amount, from.currency, rate),
+        rate,
+        description: `→ ${to.name}`,
+        transfer_group: group,
+        occurred_at: occurred,
+        created_by: createdBy,
+      },
+      {
+        account_id: to.id,
+        direction: "in",
+        kind,
+        amount: toAmount,
+        currency: to.currency,
+        amount_usd: toUsdAt(toAmount, to.currency, rate),
+        rate,
+        description: `← ${from.name}`,
+        transfer_group: group,
+        occurred_at: occurred,
+        created_by: createdBy,
+      },
+    ]);
+    if (error) {
+      await sendMessage(chatId, `⚠️ Xatolik: ${error.message}`, { replyToMessageId: msg.message_id });
+      return;
+    }
+    const fromBal = await accountBalance(db, from.id);
+    const toBal = await accountBalance(db, to.id);
+    const lines = [
+      `🔄 *O'tkazma* — ${fmtMoney(amount, from.currency)}`,
+      `${from.name} → ${to.name}`,
+    ];
+    if (kind === "conversion") {
+      lines.push(`Konvertatsiya: ${fmtMoney(toAmount, to.currency)} (kurs ${groupThousands(rate)})`);
+    }
+    lines.push(`${from.name}: ${fmtMoney(fromBal, from.currency)} · ${to.name}: ${fmtMoney(toBal, to.currency)}`);
+    await sendMessage(chatId, lines.join("\n"), { replyToMessageId: msg.message_id });
+    return;
   }
 
   // --- New expense ---

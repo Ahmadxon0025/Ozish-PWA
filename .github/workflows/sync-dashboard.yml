@@ -41,12 +41,17 @@ jobs:
           git config user.name  "dashboard-sync-bot"
           git config user.email "dashboard-sync-bot@users.noreply.github.com"
 
+          # Diagnostic only (safe): length distinguishes a classic token (~40)
+          # from a fine-grained one (~93); 0 means the secret is empty.
+          echo "DASHBOARD_SYNC_TOKEN length: ${#TARGET_TOKEN}"
+
           # Produce a branch whose root is the contents of shahnoza-dashboard/.
           git subtree split --prefix=shahnoza-dashboard -b dashboard-main
 
           # Force-push it to the deploy repo's main (it's a mirror of this subtree).
+          # Token-as-username is the canonical PAT auth for git-over-HTTPS.
           git push --force \
-            "https://x-access-token:${TARGET_TOKEN}@github.com/Ahmadxon0025/shahnoza-dashboard.git" \
+            "https://${TARGET_TOKEN}@github.com/Ahmadxon0025/shahnoza-dashboard.git" \
             dashboard-main:main
 
           echo "Synced shahnoza-dashboard/ → Ahmadxon0025/shahnoza-dashboard@main"

@@ -135,6 +135,7 @@ const HELP = [
   "`o'chir` — xarajatni o'chiradi",
   "",
   "📋 *Vazifalar:*",
+  "`/kun` — bugungi hisobot: bajarilgan ✅ va qolgan ⬜",
   "`/vazifalar` — hammaning bugungi/muddati o'tgan vazifalari",
   "`/bajarilgan` — bugun bajarilgan vazifalar",
   "`/vazifalarim` — o'zingizning ochiq vazifalaringiz",
@@ -236,6 +237,18 @@ export async function handleTelegramUpdate(update: unknown): Promise<void> {
     await sendMessage(
       chatId,
       doneText ?? "Bugun hali bajarilgan vazifa yo'q.",
+      { replyToMessageId: msg.message_id },
+    );
+    return;
+  }
+  // Today's scorecard for everyone — done (✅) + still-open (⬜). Same view the
+  // evening cron sends at 20:00.
+  if (/^\/kun(@\w+)?\b/i.test(text)) {
+    const { buildTodayRecap } = await import("./task-reminders");
+    const recapText = await buildTodayRecap();
+    await sendMessage(
+      chatId,
+      recapText ?? "Bugun uchun vazifa yo'q.",
       { replyToMessageId: msg.message_id },
     );
     return;

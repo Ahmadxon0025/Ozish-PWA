@@ -199,9 +199,90 @@ export async function buildDoneToday(): Promise<string | null> {
   return lines.join("\n");
 }
 
-/** Send the evening "done today" recap to the tasks group. */
-export async function sendDoneTodayReport(): Promise<{ group: number }> {
-  const groupText = await buildDoneToday();
+/**
+ * Evening scorecard: each person's tasks for **today** — the ones they
+ * finished (✅) and the ones still due today but open (⬜), with a done/total
+ * count. Returns null when there's nothing for today.
+ */
+export async function buildTodayRecap(): Promise<string | null> {
+  const db = requireAdminClient();
+  const today = tashDate(Date.now());
+  const startUtc = new Date(`${today}T00:00:00+05:00`).toISOString();
+
+  const [{ data: doneTasks }, { data: openTasks }, { data: users }] =
+    await Promise.all([
+      db
+        .from("tasks")
+        .select("title, assigned_to")
+        .eq("status", "done")
+        .gte("completed_at", startUtc),
+      db
+        .from("tasks")
+        .select("title, assigned_to, due_date")
+        .in("status", OPEN)
+        .not("due_date", "is", null),
+      db.from("users").select("id, full_name").eq("is_active", true),
+    ]);
+
+  const nameById = new Map((users ?? []).map((u) => [u.id, u.full_name ?? "—"]));
+  const OTHER = "__other__";
+  type Bucket = { done: string[]; open: string[] };
+  const byUser = new Map<string, Bucket>();
+  const bucketFor = (id: string | null): Bucket => {
+    const key = id && nameById.has(id) ? id : OTHER;
+    let b = byUser.get(key);
+    if (!b) {
+      b = { done: [], open: [] };
+      byUser.set(key, b);
+    }
+    return b;
+  };
+
+  for (const t of doneTasks ?? []) bucketFor(t.assigned_to).done.push(t.title);
+  for (const t of openTasks ?? []) {
+    if (!t.due_date) continue;
+    if (tashDate(Date.parse(t.due_date)) !== today) continue; // only due today
+    bucketFor(t.assigned_to).open.push(t.title);
+  }
+
+  const people = Array.from(byUser.entries()).filter(
+    ([, b]) => b.done.length || b.open.length,
+  );
+  if (people.length === 0) return null;
+
+  // Most finished first, then biggest workload.
+  people.sort((a, b) => {
+    const [, ba] = a;
+    const [, bb] = b;
+    return (
+      bb.done.length - ba.done.length ||
+      bb.done.length + bb.open.length - (ba.done.length + ba.open.length)
+    );
+  });
+
+  const doneTotal = people.reduce((s, [, b]) => s + b.done.length, 0);
+  const allTotal = people.reduce((s, [, b]) => s + b.done.length + b.open.length, 0);
+  const lines: string[] = [
+    `📋 *BUGUNGI VAZIFALAR* — ${doneTotal}/${allTotal} bajarildi`,
+  ];
+  const cap = 10;
+  for (const [key, b] of people) {
+    const name = key === OTHER ? "Boshqa" : nameById.get(key);
+    const total = b.done.length + b.open.length;
+    const rows = [
+      ...b.done.map((t) => `  ✅ ${t}`),
+      ...b.open.map((t) => `  ⬜ ${t}`),
+    ];
+    const shown = rows.slice(0, cap);
+    if (rows.length > cap) shown.push(`  • …va yana ${rows.length - cap} ta`);
+    lines.push(`\n*${name}* — ${b.done.length}/${total} bajarildi\n${shown.join("\n")}`);
+  }
+  return lines.join("\n");
+}
+
+/** Send the evening "today's tasks" scorecard to the tasks group. */
+export async function sendTodayRecap(): Promise<{ group: number }> {
+  const groupText = await buildTodayRecap();
   if (!groupText) return { group: 0 };
   const ok = (await sendMessage(tasksChatId(), groupText)) !== null;
   return { group: ok ? 1 : 0 };

@@ -15,8 +15,8 @@ function authorized(request: NextRequest): boolean {
 
 /**
  * Evening task recap. Scheduled at 15:00 UTC (= 20:00 Asia/Tashkent) via
- * vercel.json. Posts everything the team finished today to the tasks group.
- * Also callable manually with the CRON_SECRET bearer token.
+ * vercel.json. Posts each person's today tasks — done (✅) and still-open
+ * (⬜) — to the tasks group. Also callable manually with the CRON_SECRET.
  */
 export async function GET(request: NextRequest) {
   if (!authorized(request)) {
@@ -29,15 +29,13 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  let done = { group: 0 };
+  let recap = { group: 0 };
   try {
-    const { sendDoneTodayReport } = await import(
-      "@/lib/telegram/task-reminders"
-    );
-    done = await sendDoneTodayReport();
+    const { sendTodayRecap } = await import("@/lib/telegram/task-reminders");
+    recap = await sendTodayRecap();
   } catch {
     // non-fatal
   }
 
-  return NextResponse.json({ ok: true, done });
+  return NextResponse.json({ ok: true, recap });
 }

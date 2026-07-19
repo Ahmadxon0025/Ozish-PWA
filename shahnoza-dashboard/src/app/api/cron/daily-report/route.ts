@@ -62,8 +62,8 @@ export async function GET(request: NextRequest) {
       const { buildWeeklySummary } = await import("@/lib/ai/weekly-summary");
       const text = await buildWeeklySummary();
       if (text) {
-        const { broadcast } = await import("@/lib/telegram/bot");
-        await broadcast(`🗓️ *HAFTALIK XULOSA (AI)*\n\n${text}`);
+        const { sendMessage, tasksChatId } = await import("@/lib/telegram/bot");
+        await sendMessage(tasksChatId(), `🗓️ *HAFTALIK XULOSA (AI)*\n\n${text}`);
         weekly = true;
       }
     } catch {

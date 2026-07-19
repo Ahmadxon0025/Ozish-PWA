@@ -36,6 +36,9 @@ export const env = {
   TELEGRAM_OWNER_CHAT_ID: process.env.TELEGRAM_OWNER_CHAT_ID ?? "",
   // Group chat that receives the daily finance report + accepts /rasxod commands.
   TELEGRAM_FINANCE_CHAT_ID: process.env.TELEGRAM_FINANCE_CHAT_ID ?? "",
+  // Group that receives task reminders + the weekly summary. Falls back to the
+  // finance chat if unset.
+  TELEGRAM_TASKS_CHAT_ID: process.env.TELEGRAM_TASKS_CHAT_ID ?? "",
   // Secret token Telegram echoes back on every webhook call (X-Telegram-Bot-Api-Secret-Token).
   TELEGRAM_WEBHOOK_SECRET: process.env.TELEGRAM_WEBHOOK_SECRET ?? "",
   AMOCRM_SUBDOMAIN: process.env.AMOCRM_SUBDOMAIN ?? "",

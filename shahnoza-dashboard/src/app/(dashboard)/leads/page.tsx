@@ -2,7 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Search, ChevronLeft, ChevronRight, Users2 } from "lucide-react";
+import {
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  Users2,
+  KanbanSquare,
+} from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { PageHeader } from "@/components/layout/page-header";
 import { KpiCard } from "@/components/dashboard/kpi-card";
@@ -88,6 +94,13 @@ export default function LeadsPage() {
       <PageHeader
         title="Leadlar"
         description="Barcha potentsial mijozlar va ularning holati."
+        actions={
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/leads/board">
+              <KanbanSquare className="h-4 w-4" /> Doska
+            </Link>
+          </Button>
+        }
       />
 
       {/* Funnel summary */}

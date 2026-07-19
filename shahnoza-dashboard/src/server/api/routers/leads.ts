@@ -5,8 +5,72 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import type { Database } from "@/types/database";
+import { LEAD_STATUSES } from "@/lib/constants";
+import { groupBy } from "./_helpers";
 
 export const leadsRouter = createTRPCRouter({
+  /** Leads grouped by pipeline stage, for the CRM board. RLS scopes which
+   *  leads each person sees (managers: all; a salesperson: their own). */
+  board: protectedProcedure
+    .input(z.object({ assignedTo: z.string().uuid().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      let q = ctx.supabase
+        .from("leads")
+        .select("*")
+        .order("last_activity_at", { ascending: false, nullsFirst: false })
+        .limit(1000);
+      if (input?.assignedTo) q = q.eq("assigned_to", input.assignedTo);
+      const [{ data: leads }, { data: users }] = await Promise.all([
+        q,
+        ctx.supabase.from("users").select("id, full_name"),
+      ]);
+      const nameById = new Map((users ?? []).map((u) => [u.id, u.full_name]));
+      const withMeta = (leads ?? []).map((l) => ({
+        ...l,
+        assignedName: l.assigned_to ? nameById.get(l.assigned_to) ?? "—" : null,
+        fromAmocrm: l.amocrm_lead_id != null,
+      }));
+      const byStatus = groupBy(withMeta, (l) => l.status);
+      return LEAD_STATUSES.map((s) => ({
+        status: s,
+        leads: byStatus.get(s) ?? [],
+      }));
+    }),
+
+  /** Manually add a lead. Non-managers can only create leads owned by them
+   *  (enforced by RLS); the owner defaults to the current user. */
+  create: protectedProcedure
+    .input(
+      z.object({
+        fullName: z.string().min(1),
+        phone: z.string().optional(),
+        email: z.string().optional(),
+        telegramUsername: z.string().optional(),
+        assignedTo: z.string().uuid().nullable().optional(),
+        status: z.string().default("new"),
+        utmSource: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const assignedTo =
+        input.assignedTo === undefined ? ctx.appUser.id : input.assignedTo;
+      const { data, error } = await ctx.supabase
+        .from("leads")
+        .insert({
+          full_name: input.fullName,
+          phone: input.phone ?? null,
+          email: input.email ?? null,
+          telegram_username: input.telegramUsername ?? null,
+          assigned_to: assignedTo,
+          status: input.status,
+          utm_source: input.utmSource ?? null,
+          last_activity_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      return data;
+    }),
   list: protectedProcedure
     .input(
       z

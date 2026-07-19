@@ -14,7 +14,6 @@ import {
   Plus,
   Pencil,
   Trash2,
-  Lock,
 } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { PageHeader } from "@/components/layout/page-header";
@@ -790,8 +789,10 @@ type Txn = {
 const LOCKED_KINDS = ["expense", "sale", "sale_refund"];
 
 function TxnActions({ txn, onDone }: { txn: Txn; onDone: () => void }) {
-  const locked = LOCKED_KINDS.includes(txn.related_type ?? "");
-  const del = api.accounts.deleteTransaction.useMutation({
+  const linked = LOCKED_KINDS.includes(txn.related_type ?? "");
+  const isSale =
+    txn.related_type === "sale" || txn.related_type === "sale_refund";
+  const del = api.accounts.deleteSource.useMutation({
     onSuccess: () => {
       toast({ title: "O'chirildi", variant: "success" });
       onDone();
@@ -799,26 +800,33 @@ function TxnActions({ txn, onDone }: { txn: Txn; onDone: () => void }) {
     onError: (e) => toast({ title: "Xato", description: e.message, variant: "destructive" }),
   });
 
-  if (locked) {
-    return (
-      <span
-        className="inline-flex items-center gap-1 text-xs text-muted-foreground"
-        title="Bu yozuv avtomatik — Sotuvlar sahifasida yoki xarajatni o'chirib tahrirlang"
-      >
-        <Lock className="h-3.5 w-3.5" /> manba
-      </span>
-    );
-  }
+  // A source-linked row deletes its whole expense/sale — warn accordingly.
+  const confirmMsg = isSale
+    ? "Bu SOTUVni butunlay o'chiradi — unga bog'liq komissiya va to'lovlar bilan. Ortga qaytarib bo'lmaydi. Davom etilsinmi?"
+    : txn.related_type === "expense"
+      ? "Bu XARAJATni butunlay o'chiradi. Ortga qaytarib bo'lmaydi. Davom etilsinmi?"
+      : "Bu harakatni o'chirasizmi?";
 
   return (
-    <div className="flex justify-end gap-1">
-      <EditTxnDialog txn={txn} onDone={onDone} />
+    <div className="flex items-center justify-end gap-1">
+      {linked ? (
+        <span
+          className="text-xs text-muted-foreground"
+          title="Avtomatik yozuv — o'chirilsa manba xarajat/sotuv ham o'chadi"
+        >
+          manba
+        </span>
+      ) : (
+        <EditTxnDialog txn={txn} onDone={onDone} />
+      )}
       <Button
         variant="ghost"
         size="icon"
         className="h-9 w-9 text-destructive"
+        disabled={del.isPending}
+        title={linked ? "Manba xarajat/sotuvni o'chirish" : "O'chirish"}
         onClick={() => {
-          if (confirm("Bu harakatni o'chirasizmi?")) del.mutate({ id: txn.id });
+          if (confirm(confirmMsg)) del.mutate({ id: txn.id });
         }}
       >
         <Trash2 className="h-4 w-4" />

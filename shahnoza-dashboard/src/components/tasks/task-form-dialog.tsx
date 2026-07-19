@@ -90,6 +90,9 @@ export function TaskFormDialog({
   );
   const [labels, setLabels] = useState((initial?.labels ?? []).join(", "));
   const [recurrence, setRecurrence] = useState(initial?.recurrence ?? NO_RECUR);
+  // Subtasks staged during creation (created after the parent is saved).
+  const [pendingSubtasks, setPendingSubtasks] = useState<string[]>([]);
+  const [subInput, setSubInput] = useState("");
 
   // Prefill collaborators once the detail loads (edit mode).
   useEffect(() => {
@@ -115,11 +118,22 @@ export function TaskFormDialog({
       setLabels("");
       setRecurrence(NO_RECUR);
       setAiText("");
+      setPendingSubtasks([]);
+      setSubInput("");
     }
   }
 
+  // Bare mutation for creating the staged subtasks after the parent exists.
+  const createSub = api.tasks.create.useMutation();
   const create = api.tasks.create.useMutation({
-    onSuccess: () => {
+    onSuccess: async (data) => {
+      for (const t of pendingSubtasks) {
+        try {
+          await createSub.mutateAsync({ title: t, parentTaskId: data.id });
+        } catch {
+          /* best-effort; the parent is already created */
+        }
+      }
       toast({ title: "Vazifa yaratildi", variant: "success" });
       onSaved();
       reset();
@@ -449,6 +463,63 @@ export function TaskFormDialog({
               placeholder="masalan: instagram, avgust oqimi"
             />
           </div>
+
+          {/* Subtasks while creating — staged, created after the parent saves. */}
+          {mode === "create" && (
+            <div className="space-y-2 rounded-md border p-3">
+              <Label className="text-sm font-medium">
+                Ichki vazifalar (subtasklar)
+              </Label>
+              {pendingSubtasks.length > 0 && (
+                <div className="space-y-1">
+                  {pendingSubtasks.map((t, i) => (
+                    <div key={i} className="flex items-center gap-2 text-sm">
+                      <span className="min-w-0 flex-1 truncate">• {t}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive"
+                        onClick={() =>
+                          setPendingSubtasks((p) => p.filter((_, j) => j !== i))
+                        }
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <Input
+                  value={subInput}
+                  onChange={(e) => setSubInput(e.target.value)}
+                  placeholder="Yangi ichki vazifa"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && subInput.trim()) {
+                      e.preventDefault();
+                      setPendingSubtasks((p) => [...p, subInput.trim()]);
+                      setSubInput("");
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={!subInput.trim()}
+                  onClick={() => {
+                    setPendingSubtasks((p) => [...p, subInput.trim()]);
+                    setSubInput("");
+                  }}
+                >
+                  <Plus className="h-4 w-4" /> Qo&apos;shish
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Saqlagach ular alohida vazifa sifatida qo&apos;shiladi.
+              </p>
+            </div>
+          )}
 
           {/* Subtasks (edit mode only — needs a saved parent task). */}
           {mode === "edit" && initial && (

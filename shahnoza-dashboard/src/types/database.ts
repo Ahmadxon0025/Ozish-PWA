@@ -510,6 +510,36 @@ export interface Database {
         >;
         Relationships: [];
       };
+      files: {
+        Row: {
+          id: string;
+          space_id: string | null;
+          task_id: string | null;
+          kind: "upload" | "link";
+          name: string;
+          storage_path: string | null;
+          url: string | null;
+          mime_type: string | null;
+          size_bytes: number | null;
+          uploaded_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          space_id?: string | null;
+          task_id?: string | null;
+          kind?: "upload" | "link";
+          name: string;
+          storage_path?: string | null;
+          url?: string | null;
+          mime_type?: string | null;
+          size_bytes?: number | null;
+          uploaded_by?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["files"]["Insert"]>;
+        Relationships: [];
+      };
       push_subscriptions: {
         Row: {
           id: string;

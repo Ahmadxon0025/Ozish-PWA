@@ -1,7 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Settings2, Trash2, Check, X, Pencil, LayoutGrid } from "lucide-react";
+import {
+  Plus,
+  Settings2,
+  Trash2,
+  Check,
+  X,
+  Pencil,
+  LayoutGrid,
+  Paperclip,
+} from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +25,7 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
+import { FilesPanel } from "@/components/files/files-panel";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import type { UserRole } from "@/types/database";
@@ -39,6 +49,7 @@ export function SpaceBar({
   const spaces = spacesQuery.data ?? [];
   const me = api.users.me.useQuery();
   const canManage = MANAGER_ROLES.includes((me.data?.role ?? "") as UserRole);
+  const selectedSpace = spaces.find((s) => s.id === selected) ?? null;
 
   return (
     <div className="mb-4 flex items-center gap-2 overflow-x-auto pb-1">
@@ -60,13 +71,45 @@ export function SpaceBar({
           {s.name}
         </Pill>
       ))}
-      {canManage && (
-        <div className="flex shrink-0 items-center gap-2">
-          <CreateSpaceButton onCreated={(id) => onSelect(id)} />
-          {spaces.length > 0 && <ManageSpacesDialog onDeletedSelected={() => onSelect(ALL_SPACES)} selected={selected} />}
-        </div>
-      )}
+      <div className="flex shrink-0 items-center gap-2">
+        {selectedSpace && <SpaceFilesDialog spaceId={selectedSpace.id} name={selectedSpace.name} />}
+        {canManage && (
+          <>
+            <CreateSpaceButton onCreated={(id) => onSelect(id)} />
+            {spaces.length > 0 && (
+              <ManageSpacesDialog
+                onDeletedSelected={() => onSelect(ALL_SPACES)}
+                selected={selected}
+              />
+            )}
+          </>
+        )}
+      </div>
     </div>
+  );
+}
+
+/** A bo'lim's own files (Segmentatsiya materiallari kabi). */
+function SpaceFilesDialog({ spaceId, name }: { spaceId: string; name: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm" className="shrink-0 rounded-full">
+          <Paperclip className="h-4 w-4" /> Fayllar
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{name} — fayllar</DialogTitle>
+          <DialogDescription>
+            Bu bo&apos;limga oid hujjat va havolalar. Fayl yuklang yoki Google
+            hujjat/jadval havolasini qo&apos;shing.
+          </DialogDescription>
+        </DialogHeader>
+        <FilesPanel spaceId={spaceId} />
+      </DialogContent>
+    </Dialog>
   );
 }
 

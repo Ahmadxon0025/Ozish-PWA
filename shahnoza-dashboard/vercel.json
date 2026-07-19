@@ -2,12 +2,12 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
     {
-      "path": "/api/cron/sync-amocrm",
-      "schedule": "0 5 * * *"
-    },
-    {
       "path": "/api/cron/daily-report",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/evening-report",
+      "schedule": "0 15 * * *"
     }
   ]
 }

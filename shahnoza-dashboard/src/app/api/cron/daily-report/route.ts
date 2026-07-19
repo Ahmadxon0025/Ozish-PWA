@@ -4,6 +4,7 @@ import {
   isTelegramConfigured,
   isServiceRoleConfigured,
   isAiConfigured,
+  isAmocrmConfigured,
 } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +30,17 @@ export async function GET(request: NextRequest) {
       const { requireAdminClient } = await import("@/lib/supabase/admin");
       const { refreshFxRate } = await import("@/lib/business/exchange-rate");
       await refreshFxRate(requireAdminClient());
+    } catch {
+      // non-fatal
+    }
+  }
+
+  // AmoCRM sync — folded into the daily cron so the second Hobby-plan cron slot
+  // is free for the evening task recap. No-ops if AmoCRM isn't configured.
+  if (isAmocrmConfigured()) {
+    try {
+      const { runAmocrmSync } = await import("@/lib/amocrm/sync");
+      await runAmocrmSync();
     } catch {
       // non-fatal
     }

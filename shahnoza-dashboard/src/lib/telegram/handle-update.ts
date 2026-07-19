@@ -134,6 +134,11 @@ const HELP = [
   "`instagram` — kategoriyani o'zgartiradi",
   "`o'chir` — xarajatni o'chiradi",
   "",
+  "📋 *Vazifalar:*",
+  "`/vazifalar` — hammaning bugungi/muddati o'tgan vazifalari",
+  "`/bajarilgan` — bugun bajarilgan vazifalar",
+  "`/vazifalarim` — o'zingizning ochiq vazifalaringiz",
+  "",
   "`/id` — shu guruh ID sini ko'rsatadi",
 ].join("\n");
 
@@ -185,6 +190,56 @@ export async function handleTelegramUpdate(update: unknown): Promise<void> {
   }
 
   const db = requireAdminClient();
+
+  // --- Task commands ---
+  // One person's open tasks (uses the sender's linked account). Checked before
+  // the group command: "/vazifalarim" must not be swallowed by "/vazifalar".
+  if (/^\/vazifalarim(@\w+)?\b/i.test(text)) {
+    const { data: me } = await db
+      .from("users")
+      .select("id, full_name")
+      .eq("telegram_id", fromId ?? "")
+      .eq("is_active", true)
+      .maybeSingle();
+    if (!me) {
+      await sendMessage(
+        chatId,
+        `❓ Hisobingiz ulanmagan. Sizning Telegram ID: \`${fromId ?? "—"}\` — buni administratorga bering.`,
+        { replyToMessageId: msg.message_id },
+      );
+      return;
+    }
+    const { personalTasksText } = await import("./task-reminders");
+    const txt = await personalTasksText(db, me.id, me.full_name ?? "");
+    await sendMessage(
+      chatId,
+      txt ?? `✅ ${me.full_name ?? "Siz"}, ochiq vazifangiz yo'q.`,
+      { replyToMessageId: msg.message_id },
+    );
+    return;
+  }
+  // Everyone's tasks due today / overdue (for the group).
+  if (/^\/(vazifalar|eslatma|bugun)(@\w+)?\b/i.test(text)) {
+    const { buildTaskReminders } = await import("./task-reminders");
+    const { groupText } = await buildTaskReminders();
+    await sendMessage(
+      chatId,
+      groupText ?? "✅ Hozircha muddati bugun yoki o'tib ketgan ochiq vazifa yo'q.",
+      { replyToMessageId: msg.message_id },
+    );
+    return;
+  }
+  // Everything the team finished today.
+  if (/^\/bajarilgan(@\w+)?\b/i.test(text)) {
+    const { buildDoneToday } = await import("./task-reminders");
+    const doneText = await buildDoneToday();
+    await sendMessage(
+      chatId,
+      doneText ?? "Bugun hali bajarilgan vazifa yo'q.",
+      { replyToMessageId: msg.message_id },
+    );
+    return;
+  }
 
   // --- Edit / delete: a reply to a tracked expense message ---
   if (msg.reply_to_message) {

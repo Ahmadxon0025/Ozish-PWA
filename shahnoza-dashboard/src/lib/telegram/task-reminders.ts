@@ -23,6 +23,12 @@ function listTasks(rows: Row[], cap = 6): string {
   return shown.join("\n");
 }
 
+function bulletTitles(titles: string[], cap = 8): string {
+  const shown = titles.slice(0, cap).map((t) => `  • ${t}`);
+  if (titles.length > cap) shown.push(`  • …va yana ${titles.length - cap} ta`);
+  return shown.join("\n");
+}
+
 /**
  * Build the daily task reminder: which people have tasks due **today** or
  * **overdue** (open tasks with a due date). Returns a team summary for the
@@ -103,6 +109,102 @@ export async function buildTaskReminders(): Promise<{
   }
 
   return { groupText, perUser };
+}
+
+/**
+ * A single person's open tasks, grouped overdue / today / upcoming — for the
+ * `/vazifalarim` bot command. Returns null if they have no open tasks.
+ */
+export async function personalTasksText(
+  db: ReturnType<typeof requireAdminClient>,
+  userId: string,
+  name: string,
+): Promise<string | null> {
+  const { data: tasks } = await db
+    .from("tasks")
+    .select("title, due_date, status")
+    .eq("assigned_to", userId)
+    .in("status", OPEN)
+    .order("due_date", { ascending: true, nullsFirst: false });
+  if (!tasks || tasks.length === 0) return null;
+
+  const today = tashDate(Date.now());
+  const overdue: string[] = [];
+  const dueToday: string[] = [];
+  const upcoming: string[] = [];
+  const noDate: string[] = [];
+  for (const t of tasks) {
+    if (!t.due_date) {
+      noDate.push(`  • ${t.title}`);
+      continue;
+    }
+    const due = tashDate(Date.parse(t.due_date));
+    if (due < today) overdue.push(`  • ${t.title} (${due})`);
+    else if (due === today) dueToday.push(`  • ${t.title}`);
+    else upcoming.push(`  • ${t.title} (${due})`);
+  }
+
+  const out: string[] = [`📋 *Vazifalaringiz, ${name}*`];
+  if (overdue.length) out.push(`\n🔴 *Muddati o'tgan (${overdue.length})*\n${overdue.join("\n")}`);
+  if (dueToday.length) out.push(`\n🟡 *Bugun (${dueToday.length})*\n${dueToday.join("\n")}`);
+  if (upcoming.length) out.push(`\n🔵 *Keyingi (${upcoming.length})*\n${upcoming.slice(0, 10).join("\n")}`);
+  if (noDate.length) out.push(`\n⚪ *Muddatsiz (${noDate.length})*\n${noDate.slice(0, 10).join("\n")}`);
+  return out.join("\n");
+}
+
+/**
+ * Evening recap: everything the team marked **done today** (Tashkent day),
+ * grouped by person. Returns null when nobody completed anything today.
+ */
+export async function buildDoneToday(): Promise<string | null> {
+  const db = requireAdminClient();
+  const today = tashDate(Date.now());
+  // Start of the Tashkent day, expressed as a UTC instant.
+  const startUtc = new Date(`${today}T00:00:00+05:00`).toISOString();
+
+  const [{ data: tasks }, { data: users }] = await Promise.all([
+    db
+      .from("tasks")
+      .select("title, assigned_to, completed_at")
+      .eq("status", "done")
+      .gte("completed_at", startUtc),
+    db.from("users").select("id, full_name").eq("is_active", true),
+  ]);
+  if (!tasks || tasks.length === 0) return null;
+
+  const nameById = new Map((users ?? []).map((u) => [u.id, u.full_name ?? "—"]));
+  const byUser = new Map<string, string[]>();
+  const other: string[] = [];
+  for (const t of tasks) {
+    if (t.assigned_to && nameById.has(t.assigned_to)) {
+      const arr =
+        byUser.get(t.assigned_to) ??
+        byUser.set(t.assigned_to, []).get(t.assigned_to)!;
+      arr.push(t.title);
+    } else {
+      other.push(t.title);
+    }
+  }
+
+  const lines: string[] = [`✅ *BUGUN BAJARILGAN VAZIFALAR* (${tasks.length})`];
+  const entries = Array.from(byUser.entries()).sort(
+    (a, b) => b[1].length - a[1].length,
+  );
+  for (const [uid, titles] of entries) {
+    lines.push(`\n*${nameById.get(uid)}* — ${titles.length} ta:\n${bulletTitles(titles)}`);
+  }
+  if (other.length) {
+    lines.push(`\n*Boshqa* — ${other.length} ta:\n${bulletTitles(other)}`);
+  }
+  return lines.join("\n");
+}
+
+/** Send the evening "done today" recap to the tasks group. */
+export async function sendDoneTodayReport(): Promise<{ group: number }> {
+  const groupText = await buildDoneToday();
+  if (!groupText) return { group: 0 };
+  const ok = (await sendMessage(tasksChatId(), groupText)) !== null;
+  return { group: ok ? 1 : 0 };
 }
 
 /** Send the daily task reminders (team summary + personal DMs). */

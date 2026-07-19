@@ -3,9 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, Stethoscope } from "lucide-react";
+import { Menu, Stethoscope, Bell } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { api } from "@/lib/trpc/react";
 import { UserMenu, type SessionUser } from "./user-menu";
 import { visibleNav } from "@/lib/nav";
 import { APP_NAME } from "@/lib/constants";
@@ -15,6 +16,26 @@ import type { UserRole } from "@/types/database";
 function isActive(pathname: string, href: string) {
   if (href === "/dashboard") return pathname === href;
   return pathname === href || pathname.startsWith(href + "/");
+}
+
+/** Notification bell — links to the in-app inbox with a live count. */
+function InboxBell() {
+  const inbox = api.tasks.inbox.useQuery(undefined, { refetchInterval: 60_000 });
+  const count = inbox.data?.count ?? 0;
+  return (
+    <Link
+      href="/inbox"
+      aria-label="Bildirishnomalar"
+      className="relative flex h-9 w-9 items-center justify-center rounded-md hover:bg-accent"
+    >
+      <Bell className="h-5 w-5" />
+      {count > 0 && (
+        <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
+          {count > 9 ? "9+" : count}
+        </span>
+      )}
+    </Link>
+  );
 }
 
 export function Topbar({
@@ -82,7 +103,8 @@ export function Topbar({
         <span className="text-base font-semibold lg:hidden">{APP_NAME}</span>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
+        <InboxBell />
         <UserMenu user={user} />
       </div>
     </header>

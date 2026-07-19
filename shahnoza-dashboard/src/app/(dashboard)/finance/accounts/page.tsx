@@ -14,7 +14,6 @@ import {
   Plus,
   Pencil,
   Trash2,
-  Lock,
 } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { PageHeader } from "@/components/layout/page-header";
@@ -57,7 +56,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { formatUsd, formatNumber, formatDateTime } from "@/lib/format";
+import { formatUsd, formatNumber, formatDateTime, formatDate } from "@/lib/format";
 
 function fmtNative(amount: number, currency: string) {
   return currency === "USD"
@@ -205,6 +204,9 @@ export default function AccountsPage() {
           </div>
         )}
       </div>
+
+      {/* Orphan expenses — in P&L but not in the ledger (no account posted). */}
+      <OrphanExpenses />
 
       {/* Transactions (all accounts) */}
       <Card className="mt-4">
@@ -789,9 +791,73 @@ type Txn = {
 
 const LOCKED_KINDS = ["expense", "sale", "sale_refund"];
 
+/** Expenses posted to no account — in P&L but missing from the ledger/cashflow.
+ *  Shown only when some exist, so the owner can reconcile by deleting them. */
+function OrphanExpenses() {
+  const utils = api.useUtils();
+  const q = api.accounts.orphanExpenses.useQuery();
+  const del = api.accounts.deleteSource.useMutation({
+    onSuccess: () => {
+      toast({ title: "O'chirildi", variant: "success" });
+      utils.accounts.orphanExpenses.invalidate();
+      utils.accounts.transactions.invalidate();
+      utils.accounts.list.invalidate();
+    },
+    onError: (e) => toast({ title: "Xato", description: e.message, variant: "destructive" }),
+  });
+  const rows = q.data ?? [];
+  if (rows.length === 0) return null;
+  return (
+    <Card className="mt-4 border-amber-400/60">
+      <CardHeader>
+        <CardTitle className="text-base">Hisobsiz xarajatlar</CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Hisobga bog&apos;lanmagan xarajatlar — P&amp;L da bor, lekin Pul oqimi
+          va harakatlarda yo&apos;q. Kelishtirish uchun o&apos;chiring.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {rows.map((e) => (
+          <div
+            key={e.id}
+            className="flex items-center justify-between gap-2 rounded-md border p-2 text-sm"
+          >
+            <div className="min-w-0">
+              <div className="truncate font-medium">
+                {e.description || e.category || "Xarajat"}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {formatDate(e.date)} · {e.category ?? "—"}
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <span className="font-medium text-destructive">
+                -{formatUsd(e.amountUsd ?? 0)}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-destructive"
+                disabled={del.isPending}
+                onClick={() => {
+                  if (confirm("Bu xarajatni o'chirasizmi?")) del.mutate({ id: e.id });
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
 function TxnActions({ txn, onDone }: { txn: Txn; onDone: () => void }) {
-  const locked = LOCKED_KINDS.includes(txn.related_type ?? "");
-  const del = api.accounts.deleteTransaction.useMutation({
+  const linked = LOCKED_KINDS.includes(txn.related_type ?? "");
+  const isSale =
+    txn.related_type === "sale" || txn.related_type === "sale_refund";
+  const del = api.accounts.deleteSource.useMutation({
     onSuccess: () => {
       toast({ title: "O'chirildi", variant: "success" });
       onDone();
@@ -799,26 +865,33 @@ function TxnActions({ txn, onDone }: { txn: Txn; onDone: () => void }) {
     onError: (e) => toast({ title: "Xato", description: e.message, variant: "destructive" }),
   });
 
-  if (locked) {
-    return (
-      <span
-        className="inline-flex items-center gap-1 text-xs text-muted-foreground"
-        title="Bu yozuv avtomatik — Sotuvlar sahifasida yoki xarajatni o'chirib tahrirlang"
-      >
-        <Lock className="h-3.5 w-3.5" /> manba
-      </span>
-    );
-  }
+  // A source-linked row deletes its whole expense/sale — warn accordingly.
+  const confirmMsg = isSale
+    ? "Bu SOTUVni butunlay o'chiradi — unga bog'liq komissiya va to'lovlar bilan. Ortga qaytarib bo'lmaydi. Davom etilsinmi?"
+    : txn.related_type === "expense"
+      ? "Bu XARAJATni butunlay o'chiradi. Ortga qaytarib bo'lmaydi. Davom etilsinmi?"
+      : "Bu harakatni o'chirasizmi?";
 
   return (
-    <div className="flex justify-end gap-1">
-      <EditTxnDialog txn={txn} onDone={onDone} />
+    <div className="flex items-center justify-end gap-1">
+      {linked ? (
+        <span
+          className="text-xs text-muted-foreground"
+          title="Avtomatik yozuv — o'chirilsa manba xarajat/sotuv ham o'chadi"
+        >
+          manba
+        </span>
+      ) : (
+        <EditTxnDialog txn={txn} onDone={onDone} />
+      )}
       <Button
         variant="ghost"
         size="icon"
         className="h-9 w-9 text-destructive"
+        disabled={del.isPending}
+        title={linked ? "Manba xarajat/sotuvni o'chirish" : "O'chirish"}
         onClick={() => {
-          if (confirm("Bu harakatni o'chirasizmi?")) del.mutate({ id: txn.id });
+          if (confirm(confirmMsg)) del.mutate({ id: txn.id });
         }}
       >
         <Trash2 className="h-4 w-4" />

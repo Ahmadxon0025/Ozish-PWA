@@ -6,6 +6,7 @@ import {
   superAdminProcedure,
 } from "@/server/api/trpc";
 import { ROLES } from "@/lib/constants";
+import { requireAdminClient } from "@/lib/supabase/admin";
 import type { Database, UserRole } from "@/types/database";
 
 const roleEnum = z.enum(ROLES as [string, ...string[]]);
@@ -80,6 +81,87 @@ export const usersRouter = createTRPCRouter({
         .single();
       if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
       return data;
+    }),
+
+  /**
+   * Generate a one-tap login link for a user WITHOUT sending email (bypasses
+   * the Supabase email rate limit). The owner shares it via Telegram/etc.
+   * Already-linked users get a magiclink; not-yet-logged-in invitees get an
+   * invite link (creates their auth user, linked to their row by the 0008
+   * trigger). Redirect must match the login flow's `${origin}/auth/callback`.
+   */
+  loginLink: superAdminProcedure
+    .input(z.object({ userId: z.string().uuid(), redirectTo: z.string().url() }))
+    .mutation(async ({ input }) => {
+      const admin = requireAdminClient();
+      const { data: user } = await admin
+        .from("users")
+        .select("email, auth_id")
+        .eq("id", input.userId)
+        .maybeSingle();
+      if (!user?.email) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const gen = user.auth_id
+        ? await admin.auth.admin.generateLink({
+            type: "magiclink",
+            email: user.email,
+            options: { redirectTo: input.redirectTo },
+          })
+        : await admin.auth.admin.generateLink({
+            type: "invite",
+            email: user.email,
+            options: { redirectTo: input.redirectTo },
+          });
+      if (gen.error || !gen.data?.properties?.action_link) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: gen.error?.message ?? "Havola yaratib bo'lmadi.",
+        });
+      }
+      return { link: gen.data.properties.action_link, email: user.email };
+    }),
+
+  /**
+   * Permanently delete a user (row + linked auth account). The DB blocks this
+   * (RESTRICT FKs) if they have real records — sales, tasks, expenses,
+   * commissions — so only truly empty accounts (e.g. mistaken invites) can be
+   * removed; everyone with history must be deactivated instead. Can't delete
+   * yourself.
+   */
+  delete: superAdminProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      if (input.id === ctx.appUser.id) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "O'zingizni o'chira olmaysiz.",
+        });
+      }
+      const admin = requireAdminClient();
+      const { data: user } = await admin
+        .from("users")
+        .select("id, auth_id")
+        .eq("id", input.id)
+        .maybeSingle();
+      if (!user) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const { error } = await admin.from("users").delete().eq("id", input.id);
+      if (error) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Bu foydalanuvchida ma'lumotlar bor (sotuv, vazifa yoki xarajat). O'chirish o'rniga uni nofaol qiling.",
+        });
+      }
+      // Row gone → remove the linked auth account too (best-effort).
+      if (user.auth_id) {
+        try {
+          await admin.auth.admin.deleteUser(user.auth_id);
+        } catch {
+          /* non-fatal */
+        }
+      }
+      return { ok: true };
     }),
 
   update: superAdminProcedure

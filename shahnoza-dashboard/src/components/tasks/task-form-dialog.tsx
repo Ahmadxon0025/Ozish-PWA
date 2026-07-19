@@ -32,7 +32,7 @@ import {
   ROLE_LABELS,
 } from "@/lib/constants";
 import type { UserRole } from "@/types/database";
-import { statusVariant } from "@/lib/task-ui";
+import { statusVariant, combineDue, dueToInputs } from "@/lib/task-ui";
 import { toast } from "@/hooks/use-toast";
 
 const UNASSIGNED = "unassigned";
@@ -81,13 +81,18 @@ export function TaskFormDialog({
   const [collaborators, setCollaborators] = useState<string[]>([]);
   const [priority, setPriority] = useState(initial?.priority ?? "medium");
   const [status, setStatus] = useState<string>(defaultStatus);
-  const [dueDate, setDueDate] = useState(initial?.due_date?.slice(0, 10) ?? "");
+  const initialDue = dueToInputs(initial?.due_date ?? null);
+  const [dueDate, setDueDate] = useState(initialDue.date);
+  const [dueTime, setDueTime] = useState(initialDue.time);
   const [startDate, setStartDate] = useState(initial?.start_date?.slice(0, 10) ?? "");
   const [estimate, setEstimate] = useState(
     initial?.estimate_hours != null ? String(initial.estimate_hours) : "",
   );
   const [labels, setLabels] = useState((initial?.labels ?? []).join(", "));
   const [recurrence, setRecurrence] = useState(initial?.recurrence ?? NO_RECUR);
+  // Subtasks staged during creation (created after the parent is saved).
+  const [pendingSubtasks, setPendingSubtasks] = useState<string[]>([]);
+  const [subInput, setSubInput] = useState("");
 
   // Prefill collaborators once the detail loads (edit mode).
   useEffect(() => {
@@ -107,16 +112,28 @@ export function TaskFormDialog({
       setPriority("medium");
       setStatus(defaultStatus);
       setDueDate("");
+      setDueTime("");
       setStartDate("");
       setEstimate("");
       setLabels("");
       setRecurrence(NO_RECUR);
       setAiText("");
+      setPendingSubtasks([]);
+      setSubInput("");
     }
   }
 
+  // Bare mutation for creating the staged subtasks after the parent exists.
+  const createSub = api.tasks.create.useMutation();
   const create = api.tasks.create.useMutation({
-    onSuccess: () => {
+    onSuccess: async (data) => {
+      for (const t of pendingSubtasks) {
+        try {
+          await createSub.mutateAsync({ title: t, parentTaskId: data.id });
+        } catch {
+          /* best-effort; the parent is already created */
+        }
+      }
       toast({ title: "Vazifa yaratildi", variant: "success" });
       onSaved();
       reset();
@@ -159,10 +176,20 @@ export function TaskFormDialog({
     onError: (e) => toast({ title: "AI xato", description: e.message, variant: "destructive" }),
   });
 
+  const del = api.tasks.delete.useMutation({
+    onSuccess: () => {
+      toast({ title: "Vazifa o'chirildi", variant: "success" });
+      onSaved();
+      setOpen(false);
+    },
+    onError: (e) => toast({ title: "Xato", description: e.message, variant: "destructive" }),
+  });
+
   const pending = create.isPending || update.isPending;
   const labelList = labels.split(",").map((s) => s.trim()).filter(Boolean);
   const estimateNum = estimate ? Number(estimate) : undefined;
   const collabList = collaborators.filter((id) => id !== assignedTo);
+  const dueValue = combineDue(dueDate, dueTime);
 
   function toggleCollaborator(id: string) {
     setCollaborators((prev) =>
@@ -178,7 +205,6 @@ export function TaskFormDialog({
     const common = {
       title: title.trim(),
       priority: priority as (typeof TASK_PRIORITIES)[number],
-      dueDate: dueDate || undefined,
       startDate: startDate || undefined,
       estimateHours: estimateNum,
       labels: labelList,
@@ -188,6 +214,7 @@ export function TaskFormDialog({
       update.mutate({
         id: initial.id,
         ...common,
+        dueDate: dueValue,
         description: description || null,
         assignedTo: assignedTo === UNASSIGNED ? null : assignedTo,
         recurrence: recurrence === NO_RECUR ? null : (recurrence as "daily" | "weekly" | "monthly"),
@@ -195,6 +222,7 @@ export function TaskFormDialog({
     } else {
       create.mutate({
         ...common,
+        dueDate: dueValue ?? undefined,
         description: description || undefined,
         assignedTo: assignedTo === UNASSIGNED ? undefined : assignedTo,
         status: status as (typeof TASK_FLOW_STATUSES)[number],
@@ -364,9 +392,20 @@ export function TaskFormDialog({
               <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label>Muddat (deadline)</Label>
+              <Label>Muddat (sana)</Label>
               <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Muddat vaqti (ixtiyoriy)</Label>
+            <Input
+              type="time"
+              value={dueTime}
+              onChange={(e) => setDueTime(e.target.value)}
+              className="w-40"
+              disabled={!dueDate}
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -425,6 +464,63 @@ export function TaskFormDialog({
             />
           </div>
 
+          {/* Subtasks while creating — staged, created after the parent saves. */}
+          {mode === "create" && (
+            <div className="space-y-2 rounded-md border p-3">
+              <Label className="text-sm font-medium">
+                Ichki vazifalar (subtasklar)
+              </Label>
+              {pendingSubtasks.length > 0 && (
+                <div className="space-y-1">
+                  {pendingSubtasks.map((t, i) => (
+                    <div key={i} className="flex items-center gap-2 text-sm">
+                      <span className="min-w-0 flex-1 truncate">• {t}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive"
+                        onClick={() =>
+                          setPendingSubtasks((p) => p.filter((_, j) => j !== i))
+                        }
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <Input
+                  value={subInput}
+                  onChange={(e) => setSubInput(e.target.value)}
+                  placeholder="Yangi ichki vazifa"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && subInput.trim()) {
+                      e.preventDefault();
+                      setPendingSubtasks((p) => [...p, subInput.trim()]);
+                      setSubInput("");
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={!subInput.trim()}
+                  onClick={() => {
+                    setPendingSubtasks((p) => [...p, subInput.trim()]);
+                    setSubInput("");
+                  }}
+                >
+                  <Plus className="h-4 w-4" /> Qo&apos;shish
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Saqlagach ular alohida vazifa sifatida qo&apos;shiladi.
+              </p>
+            </div>
+          )}
+
           {/* Subtasks (edit mode only — needs a saved parent task). */}
           {mode === "edit" && initial && (
             <SubtasksPanel taskId={initial.id} users={users} onChanged={onSaved} />
@@ -432,6 +528,19 @@ export function TaskFormDialog({
         </div>
 
         <DialogFooter>
+          {mode === "edit" && initial && (
+            <Button
+              variant="destructive"
+              className="mr-auto"
+              disabled={del.isPending}
+              onClick={() => {
+                if (window.confirm(`"${initial.title}" o'chirilsinmi?`))
+                  del.mutate({ id: initial.id });
+              }}
+            >
+              <Trash2 className="h-4 w-4" /> O&apos;chirish
+            </Button>
+          )}
           <DialogClose asChild>
             <Button variant="ghost">Bekor</Button>
           </DialogClose>
@@ -445,7 +554,7 @@ export function TaskFormDialog({
 }
 
 /** Subtasks of a task — each is a real task with its own assignee + due date. */
-function SubtasksPanel({
+export function SubtasksPanel({
   taskId,
   users,
   onChanged,

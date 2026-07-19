@@ -9,10 +9,14 @@ import {
 } from "@/server/api/trpc";
 import { getCurrentRate } from "@/lib/business/exchange-rate";
 import { round2 } from "@/lib/business/currency";
+import { deleteRelatedEntries } from "@/lib/business/account-posting";
+import { requireAdminClient } from "@/lib/supabase/admin";
 import { groupBy, sum } from "./_helpers";
 
 // Finance roles can read; managers (+super admin) can move money.
 const financeProcedure = roleProcedure("super_admin", "owner", "sales_manager");
+// Deleting a source record (expense/sale) is an owner-level correction.
+const ownerProcedure = roleProcedure("super_admin", "owner");
 
 function toUsdAt(amount: number, currency: string, uzsPerUsd: number): number {
   if (currency === "USD") return round2(amount);
@@ -115,6 +119,33 @@ export const accountsRouter = createTRPCRouter({
             : null,
       }));
     }),
+
+  /**
+   * Expenses posted to NO account — counted in P&L but absent from the ledger
+   * and cashflow (hence P&L/cashflow can disagree). Surfaced so the owner can
+   * fix or delete them. Delete via accounts.deleteSource (passes the id here).
+   */
+  orphanExpenses: financeProcedure.query(async ({ ctx }) => {
+    const [{ data: exp }, { data: cats }] = await Promise.all([
+      ctx.supabase
+        .from("expenses")
+        .select("id, amount, amount_usd, currency, description, expense_date, category_id")
+        .is("account_id", null)
+        .order("expense_date", { ascending: false })
+        .limit(100),
+      ctx.supabase.from("expense_categories").select("id, name"),
+    ]);
+    const catName = new Map((cats ?? []).map((c) => [c.id, c.name]));
+    return (exp ?? []).map((e) => ({
+      id: e.id,
+      amount: e.amount,
+      amountUsd: e.amount_usd,
+      currency: e.currency,
+      description: e.description,
+      date: e.expense_date,
+      category: e.category_id ? catName.get(e.category_id) ?? null : null,
+    }));
+  }),
 
   /** Deposit money into an account (e.g. incoming from abroad to the Visa card). */
   deposit: managerProcedure
@@ -420,6 +451,72 @@ export const accountsRouter = createTRPCRouter({
         await ctx.supabase.from("account_transactions").delete().eq("id", input.id);
       }
       return { ok: true };
+    }),
+
+  /**
+   * Delete the SOURCE behind a ledger row — its expense or sale, WITH every
+   * dependent record — so the books stay consistent (no orphaned commissions,
+   * payments, or ledger legs). Owner/super-admin only; irreversible. Manual
+   * (source-less) rows are removed directly, like deleteTransaction.
+   */
+  deleteSource: ownerProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const { data: txn } = await ctx.supabase
+        .from("account_transactions")
+        .select("id, related_type, related_id, transfer_group")
+        .eq("id", input.id)
+        .maybeSingle();
+
+      // Elevated client: the role gate above is the authorization boundary; use
+      // the service role so the delete isn't blocked by per-table RLS.
+      const db = requireAdminClient();
+
+      // No ledger row for this id → it's an orphan expense (no account posted)
+      // surfaced in the ledger. Delete the expense directly.
+      if (!txn) {
+        const { data: exp } = await ctx.supabase
+          .from("expenses")
+          .select("id")
+          .eq("id", input.id)
+          .maybeSingle();
+        if (!exp) throw new TRPCError({ code: "NOT_FOUND" });
+        await deleteRelatedEntries(db, "expense", exp.id);
+        const { error } = await db.from("expenses").delete().eq("id", exp.id);
+        if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        return { ok: true, kind: "expense" as const };
+      }
+
+      const rid = txn.related_id;
+
+      if (txn.related_type === "expense" && rid) {
+        await deleteRelatedEntries(db, "expense", rid);
+        const { error } = await db.from("expenses").delete().eq("id", rid);
+        if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        return { ok: true, kind: "expense" as const };
+      }
+
+      if ((txn.related_type === "sale" || txn.related_type === "sale_refund") && rid) {
+        // No FK cascade on sales → clear dependents first, then the ledger legs
+        // (both "sale" and "sale_refund"), then the sale itself.
+        await db.from("commissions").delete().eq("sale_id", rid);
+        await db.from("payments").delete().eq("sale_id", rid);
+        await db.from("account_transactions").delete().eq("related_id", rid);
+        const { error } = await db.from("sales").delete().eq("id", rid);
+        if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        return { ok: true, kind: "sale" as const };
+      }
+
+      // Source-less manual entry: remove both transfer legs (or the single row).
+      if (txn.transfer_group) {
+        await db
+          .from("account_transactions")
+          .delete()
+          .eq("transfer_group", txn.transfer_group);
+      } else {
+        await db.from("account_transactions").delete().eq("id", input.id);
+      }
+      return { ok: true, kind: "manual" as const };
     }),
 
   /** Manually refresh the CBU rate now (super admin). */

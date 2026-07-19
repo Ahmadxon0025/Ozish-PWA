@@ -53,6 +53,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
+import { SpaceBar, ALL_SPACES } from "@/components/tasks/space-bar";
 import { initials } from "@/lib/format";
 import {
   TASK_STATUS_LABELS,
@@ -495,10 +496,14 @@ function patchInCache(
 export default function KanbanPage() {
   const utils = api.useUtils();
   const [assignee, setAssignee] = useState<string>(ALL);
+  const [space, setSpace] = useState<string>(ALL_SPACES);
   const [activeTask, setActiveTask] = useState<BoardTask | null>(null);
   const [activeStatus, setActiveStatus] = useState<string | null>(null);
   const assignees = api.tasks.assignees.useQuery();
-  const boardInput = { assignedTo: assignee === ALL ? undefined : assignee };
+  const boardInput = {
+    assignedTo: assignee === ALL ? undefined : assignee,
+    spaceId: space === ALL_SPACES ? undefined : space,
+  };
   const board = api.tasks.board.useQuery(boardInput);
 
   const users: UserLite[] = assignees.data ?? [];
@@ -625,10 +630,13 @@ export default function KanbanPage() {
                 </Button>
               }
               onSaved={invalidate}
+              defaultSpaceId={space === ALL_SPACES ? null : space}
             />
           </div>
         }
       />
+
+      <SpaceBar selected={space} onSelect={setSpace} />
 
       {board.isLoading ? (
         <div className="flex gap-4 overflow-x-auto pb-2">

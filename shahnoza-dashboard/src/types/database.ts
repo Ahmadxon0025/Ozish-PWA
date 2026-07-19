@@ -384,6 +384,7 @@ export interface Database {
           recurrence: string | null;
           telegram_chat_id: string | null;
           telegram_confirm_message_id: number | null;
+          space_id: string | null;
         };
         Insert: {
           id?: string;
@@ -408,8 +409,27 @@ export interface Database {
           recurrence?: string | null;
           telegram_chat_id?: string | null;
           telegram_confirm_message_id?: number | null;
+          space_id?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["tasks"]["Insert"]>;
+        Relationships: [];
+      };
+      task_spaces: {
+        Row: {
+          id: string;
+          name: string;
+          color: string | null;
+          position: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          color?: string | null;
+          position?: number;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["task_spaces"]["Insert"]>;
         Relationships: [];
       };
       ai_usage_log: {
@@ -487,6 +507,60 @@ export interface Database {
         };
         Update: Partial<
           Database["public"]["Tables"]["task_checklist_items"]["Insert"]
+        >;
+        Relationships: [];
+      };
+      files: {
+        Row: {
+          id: string;
+          space_id: string | null;
+          task_id: string | null;
+          kind: "upload" | "link";
+          name: string;
+          storage_path: string | null;
+          url: string | null;
+          mime_type: string | null;
+          size_bytes: number | null;
+          uploaded_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          space_id?: string | null;
+          task_id?: string | null;
+          kind?: "upload" | "link";
+          name: string;
+          storage_path?: string | null;
+          url?: string | null;
+          mime_type?: string | null;
+          size_bytes?: number | null;
+          uploaded_by?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["files"]["Insert"]>;
+        Relationships: [];
+      };
+      push_subscriptions: {
+        Row: {
+          id: string;
+          user_id: string;
+          endpoint: string;
+          p256dh: string;
+          auth: string;
+          user_agent: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          endpoint: string;
+          p256dh: string;
+          auth: string;
+          user_agent?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["push_subscriptions"]["Insert"]
         >;
         Relationships: [];
       };
@@ -691,6 +765,7 @@ export type ExpenseRow = T["expenses"]["Row"];
 export type CommissionRow = T["commissions"]["Row"];
 export type MonthlyBonusRow = T["monthly_bonuses"]["Row"];
 export type TaskRow = T["tasks"]["Row"];
+export type TaskSpaceRow = T["task_spaces"]["Row"];
 export type TaskCommentRow = T["task_comments"]["Row"];
 export type IntegrationTokenRow = T["integration_tokens"]["Row"];
 export type SyncLogRow = T["sync_logs"]["Row"];

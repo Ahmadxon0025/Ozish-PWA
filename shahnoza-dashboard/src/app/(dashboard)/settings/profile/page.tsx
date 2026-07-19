@@ -21,6 +21,7 @@ import { initials } from "@/lib/format";
 import { ROLE_LABELS } from "@/lib/constants";
 import type { UserRole } from "@/types/database";
 import { toast } from "@/hooks/use-toast";
+import { PushToggle } from "@/components/pwa/push-toggle";
 
 export default function ProfilePage() {
   const utils = api.useUtils();
@@ -193,6 +194,19 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
       )}
+
+      <Card className="mt-4 max-w-2xl">
+        <CardHeader>
+          <CardTitle>Bildirishnomalar</CardTitle>
+          <CardDescription>
+            Yangi vazifa yuklatilganda telefon/brauzerga push bildirishnoma
+            oling. Har bir qurilmada alohida yoqiladi.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <PushToggle />
+        </CardContent>
+      </Card>
     </div>
   );
 }

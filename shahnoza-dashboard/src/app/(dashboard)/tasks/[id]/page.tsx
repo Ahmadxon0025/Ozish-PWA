@@ -30,6 +30,7 @@ import {
   TaskFormDialog,
   SubtasksPanel,
 } from "@/components/tasks/task-form-dialog";
+import { FilesPanel } from "@/components/files/files-panel";
 import { formatDue, statusVariant, priorityVariant } from "@/lib/task-ui";
 import { formatDateTime, initials } from "@/lib/format";
 import {
@@ -251,6 +252,7 @@ export default function TaskDetailPage() {
     estimate_hours: task.estimate_hours,
     labels: task.labels,
     recurrence: task.recurrence,
+    space_id: task.space_id,
   };
 
   return (
@@ -371,6 +373,8 @@ export default function TaskDetailPage() {
       <SubtasksPanel taskId={id} users={users} onChanged={refetch} />
 
       <ChecklistPanel taskId={id} items={checklist} onChanged={refetch} />
+
+      <FilesPanel taskId={id} />
 
       <CommentsPanel taskId={id} />
     </div>

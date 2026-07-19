@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import Link from "next/link";
 import { Plus, Trash2, Users2, Sparkles, Wand2 } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,7 @@ import { toast } from "@/hooks/use-toast";
 
 const UNASSIGNED = "unassigned";
 const NO_RECUR = "none";
+const NO_SPACE = "none";
 
 export interface TaskInitial {
   id: string;
@@ -49,6 +51,7 @@ export interface TaskInitial {
   estimate_hours: number | null;
   labels: string[] | null;
   recurrence: string | null;
+  space_id?: string | null;
 }
 
 type UserLite = { id: string; full_name: string | null; role: string | null };
@@ -59,15 +62,19 @@ export function TaskFormDialog({
   mode = "create",
   initial,
   defaultStatus = "todo",
+  defaultSpaceId,
 }: {
   trigger: ReactNode;
   onSaved: () => void;
   mode?: "create" | "edit";
   initial?: TaskInitial;
   defaultStatus?: (typeof TASK_FLOW_STATUSES)[number];
+  defaultSpaceId?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const assignees = api.tasks.assignees.useQuery(undefined, { enabled: open });
+  const spacesQuery = api.tasks.spaces.useQuery(undefined, { enabled: open });
+  const spaces = spacesQuery.data ?? [];
   const users: UserLite[] = assignees.data ?? [];
   // In edit mode, load current collaborators + subtasks.
   const detail = api.tasks.get.useQuery(
@@ -90,6 +97,9 @@ export function TaskFormDialog({
   );
   const [labels, setLabels] = useState((initial?.labels ?? []).join(", "));
   const [recurrence, setRecurrence] = useState(initial?.recurrence ?? NO_RECUR);
+  const [spaceId, setSpaceId] = useState(
+    initial?.space_id ?? defaultSpaceId ?? NO_SPACE,
+  );
   // Subtasks staged during creation (created after the parent is saved).
   const [pendingSubtasks, setPendingSubtasks] = useState<string[]>([]);
   const [subInput, setSubInput] = useState("");
@@ -117,6 +127,7 @@ export function TaskFormDialog({
       setEstimate("");
       setLabels("");
       setRecurrence(NO_RECUR);
+      setSpaceId(defaultSpaceId ?? NO_SPACE);
       setAiText("");
       setPendingSubtasks([]);
       setSubInput("");
@@ -218,6 +229,7 @@ export function TaskFormDialog({
         description: description || null,
         assignedTo: assignedTo === UNASSIGNED ? null : assignedTo,
         recurrence: recurrence === NO_RECUR ? null : (recurrence as "daily" | "weekly" | "monthly"),
+        spaceId: spaceId === NO_SPACE ? null : spaceId,
       });
     } else {
       create.mutate({
@@ -227,6 +239,7 @@ export function TaskFormDialog({
         assignedTo: assignedTo === UNASSIGNED ? undefined : assignedTo,
         status: status as (typeof TASK_FLOW_STATUSES)[number],
         recurrence: recurrence === NO_RECUR ? undefined : (recurrence as "daily" | "weekly" | "monthly"),
+        spaceId: spaceId === NO_SPACE ? null : spaceId,
       });
     }
   }
@@ -464,6 +477,24 @@ export function TaskFormDialog({
             />
           </div>
 
+          {/* Bo'lim (ClickUp Space) — group the task into a work area. */}
+          <div className="space-y-1.5">
+            <Label>Bo&apos;lim</Label>
+            <Select value={spaceId} onValueChange={setSpaceId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Bo'limsiz" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_SPACE}>Bo&apos;limsiz</SelectItem>
+                {spaces.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           {/* Subtasks while creating — staged, created after the parent saves. */}
           {mode === "create" && (
             <div className="space-y-2 rounded-md border p-3">
@@ -597,6 +628,10 @@ export function SubtasksPanel({
     onSuccess: refresh,
     onError: (e) => toast({ title: "Xato", description: e.message, variant: "destructive" }),
   });
+  const update = api.tasks.update.useMutation({
+    onSuccess: refresh,
+    onError: (e) => toast({ title: "Xato", description: e.message, variant: "destructive" }),
+  });
   const del = api.tasks.delete.useMutation({
     onSuccess: refresh,
     onError: (e) => toast({ title: "Xato", description: e.message, variant: "destructive" }),
@@ -668,7 +703,10 @@ export function SubtasksPanel({
       {subs.length > 0 && (
         <div className="space-y-1">
           {subs.map((s) => (
-            <div key={s.id} className="flex items-center gap-2 rounded px-1 py-1 text-sm">
+            <div
+              key={s.id}
+              className="flex flex-wrap items-center gap-2 rounded-md border px-2 py-1.5 text-sm"
+            >
               <input
                 type="checkbox"
                 className="h-4 w-4 shrink-0"
@@ -677,17 +715,41 @@ export function SubtasksPanel({
                   setStatus.mutate({ id: s.id, status: e.target.checked ? "done" : "todo" })
                 }
               />
-              <span className={`min-w-0 flex-1 truncate ${s.status === "done" ? "text-muted-foreground line-through" : ""}`}>
+              <Link
+                href={`/tasks/${s.id}`}
+                className={`min-w-0 flex-1 truncate hover:underline ${s.status === "done" ? "text-muted-foreground line-through" : ""}`}
+                title="Ochish / to'liq tahrirlash"
+              >
                 {s.title}
-              </span>
-              {s.status !== "done" && s.status !== "todo" && (
-                <Badge variant={statusVariant(s.status)} className="shrink-0 text-[10px]">
-                  {TASK_STATUS_LABELS[s.status] ?? s.status}
-                </Badge>
-              )}
-              <span className="shrink-0 text-xs text-muted-foreground">
-                {s.assignedName ?? "—"}
-              </span>
+              </Link>
+              {/* Inline assignee */}
+              <Select
+                value={s.assigned_to ?? UNASSIGNED}
+                onValueChange={(v) =>
+                  update.mutate({ id: s.id, assignedTo: v === UNASSIGNED ? null : v })
+                }
+              >
+                <SelectTrigger className="h-7 w-28 shrink-0 text-xs">
+                  <SelectValue placeholder="Mas'ul" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={UNASSIGNED}>—</SelectItem>
+                  {users.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      {u.full_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {/* Inline due date */}
+              <Input
+                type="date"
+                value={s.due_date ? s.due_date.slice(0, 10) : ""}
+                onChange={(e) =>
+                  update.mutate({ id: s.id, dueDate: e.target.value || null })
+                }
+                className="h-7 w-[130px] shrink-0 text-xs"
+              />
               <Button
                 variant="ghost"
                 size="icon"

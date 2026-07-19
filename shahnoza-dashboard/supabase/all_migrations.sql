@@ -1012,3 +1012,120 @@ CREATE POLICY checklist_write ON task_checklist_items FOR ALL TO authenticated
     OR public.can_manage_task(task_id)
     OR public.is_task_collaborator(task_id)
   );
+
+
+-- 0020_task_spaces.sql
+-- Additive. ClickUp-style "Spaces" (bo'limlar) to group tasks into areas
+-- (Reklama, Sotuv, Kontent, ...) so the board doesn't get crowded. A task
+-- optionally belongs to one space.
+
+CREATE TABLE IF NOT EXISTS task_spaces (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name       TEXT NOT NULL,
+  color      TEXT,
+  position   INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE tasks
+  ADD COLUMN IF NOT EXISTS space_id UUID REFERENCES task_spaces(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_tasks_space ON tasks(space_id);
+
+ALTER TABLE task_spaces ENABLE ROW LEVEL SECURITY;
+
+-- Everyone signed in can see the spaces (to filter by); finance/manager roles
+-- manage them.
+DROP POLICY IF EXISTS task_spaces_select ON task_spaces;
+CREATE POLICY task_spaces_select ON task_spaces FOR SELECT TO authenticated
+  USING (true);
+
+DROP POLICY IF EXISTS task_spaces_write ON task_spaces;
+CREATE POLICY task_spaces_write ON task_spaces FOR ALL TO authenticated
+  USING (public.can_read_all())
+  WITH CHECK (public.can_read_all());
+
+
+-- 0021_push_subscriptions.sql
+-- Additive. Web Push (VAPID) subscriptions so the app/PWA can send browser
+-- notifications (new task assigned, reminders). One row per browser endpoint;
+-- a user may have several (phone, laptop). Best-effort — deleting a stale
+-- subscription never affects app data.
+
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  endpoint   TEXT NOT NULL UNIQUE,
+  p256dh     TEXT NOT NULL,
+  auth       TEXT NOT NULL,
+  user_agent TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions(user_id);
+
+ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
+
+-- A user manages only their own subscriptions. The server (service role) sends
+-- pushes and bypasses RLS, so no broad read policy is needed here.
+DROP POLICY IF EXISTS push_subscriptions_own ON push_subscriptions;
+CREATE POLICY push_subscriptions_own ON push_subscriptions FOR ALL TO authenticated
+  USING (user_id = public.app_uid())
+  WITH CHECK (user_id = public.app_uid());
+
+
+-- 0022_files.sql
+-- Additive. File attachments for tasks and bo'limlar (ClickUp-style). Two
+-- kinds: 'upload' (a real file stored in the 'task-files' Storage bucket) and
+-- 'link' (a Google Doc/Sheet/Drive/Figma URL that lives elsewhere — zero
+-- storage). A file belongs to a task OR a bo'lim (space).
+
+CREATE TABLE IF NOT EXISTS files (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  space_id     UUID REFERENCES task_spaces(id) ON DELETE CASCADE,
+  task_id      UUID REFERENCES tasks(id) ON DELETE CASCADE,
+  kind         TEXT NOT NULL DEFAULT 'upload' CHECK (kind IN ('upload', 'link')),
+  name         TEXT NOT NULL,
+  storage_path TEXT,          -- set for kind='upload'
+  url          TEXT,          -- set for kind='link'
+  mime_type    TEXT,
+  size_bytes   BIGINT,
+  uploaded_by  UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_files_space ON files(space_id);
+CREATE INDEX IF NOT EXISTS idx_files_task ON files(task_id);
+
+ALTER TABLE files ENABLE ROW LEVEL SECURITY;
+
+-- Everyone signed in can see attachments; the uploader (or a manager) can
+-- delete; anyone can add their own.
+DROP POLICY IF EXISTS files_select ON files;
+CREATE POLICY files_select ON files FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS files_insert ON files;
+CREATE POLICY files_insert ON files FOR INSERT TO authenticated
+  WITH CHECK (uploaded_by = public.app_uid());
+
+DROP POLICY IF EXISTS files_delete ON files;
+CREATE POLICY files_delete ON files FOR DELETE TO authenticated
+  USING (uploaded_by = public.app_uid() OR public.can_read_all());
+
+-- Private Storage bucket for uploaded files.
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('task-files', 'task-files', false)
+ON CONFLICT (id) DO NOTHING;
+
+-- Authenticated users may read/upload/delete objects in this bucket (internal
+-- app — logical visibility is governed by the files table above).
+DROP POLICY IF EXISTS task_files_read ON storage.objects;
+CREATE POLICY task_files_read ON storage.objects FOR SELECT TO authenticated
+  USING (bucket_id = 'task-files');
+
+DROP POLICY IF EXISTS task_files_insert ON storage.objects;
+CREATE POLICY task_files_insert ON storage.objects FOR INSERT TO authenticated
+  WITH CHECK (bucket_id = 'task-files');
+
+DROP POLICY IF EXISTS task_files_delete ON storage.objects;
+CREATE POLICY task_files_delete ON storage.objects FOR DELETE TO authenticated
+  USING (bucket_id = 'task-files');

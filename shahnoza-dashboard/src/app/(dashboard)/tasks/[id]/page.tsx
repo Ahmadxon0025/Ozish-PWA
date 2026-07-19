@@ -251,6 +251,7 @@ export default function TaskDetailPage() {
     estimate_hours: task.estimate_hours,
     labels: task.labels,
     recurrence: task.recurrence,
+    space_id: task.space_id,
   };
 
   return (

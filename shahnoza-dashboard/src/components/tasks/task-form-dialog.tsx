@@ -38,6 +38,7 @@ import { toast } from "@/hooks/use-toast";
 
 const UNASSIGNED = "unassigned";
 const NO_RECUR = "none";
+const NO_SPACE = "none";
 
 export interface TaskInitial {
   id: string;
@@ -50,6 +51,7 @@ export interface TaskInitial {
   estimate_hours: number | null;
   labels: string[] | null;
   recurrence: string | null;
+  space_id?: string | null;
 }
 
 type UserLite = { id: string; full_name: string | null; role: string | null };
@@ -60,15 +62,19 @@ export function TaskFormDialog({
   mode = "create",
   initial,
   defaultStatus = "todo",
+  defaultSpaceId,
 }: {
   trigger: ReactNode;
   onSaved: () => void;
   mode?: "create" | "edit";
   initial?: TaskInitial;
   defaultStatus?: (typeof TASK_FLOW_STATUSES)[number];
+  defaultSpaceId?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const assignees = api.tasks.assignees.useQuery(undefined, { enabled: open });
+  const spacesQuery = api.tasks.spaces.useQuery(undefined, { enabled: open });
+  const spaces = spacesQuery.data ?? [];
   const users: UserLite[] = assignees.data ?? [];
   // In edit mode, load current collaborators + subtasks.
   const detail = api.tasks.get.useQuery(
@@ -91,6 +97,9 @@ export function TaskFormDialog({
   );
   const [labels, setLabels] = useState((initial?.labels ?? []).join(", "));
   const [recurrence, setRecurrence] = useState(initial?.recurrence ?? NO_RECUR);
+  const [spaceId, setSpaceId] = useState(
+    initial?.space_id ?? defaultSpaceId ?? NO_SPACE,
+  );
   // Subtasks staged during creation (created after the parent is saved).
   const [pendingSubtasks, setPendingSubtasks] = useState<string[]>([]);
   const [subInput, setSubInput] = useState("");
@@ -118,6 +127,7 @@ export function TaskFormDialog({
       setEstimate("");
       setLabels("");
       setRecurrence(NO_RECUR);
+      setSpaceId(defaultSpaceId ?? NO_SPACE);
       setAiText("");
       setPendingSubtasks([]);
       setSubInput("");
@@ -219,6 +229,7 @@ export function TaskFormDialog({
         description: description || null,
         assignedTo: assignedTo === UNASSIGNED ? null : assignedTo,
         recurrence: recurrence === NO_RECUR ? null : (recurrence as "daily" | "weekly" | "monthly"),
+        spaceId: spaceId === NO_SPACE ? null : spaceId,
       });
     } else {
       create.mutate({
@@ -228,6 +239,7 @@ export function TaskFormDialog({
         assignedTo: assignedTo === UNASSIGNED ? undefined : assignedTo,
         status: status as (typeof TASK_FLOW_STATUSES)[number],
         recurrence: recurrence === NO_RECUR ? undefined : (recurrence as "daily" | "weekly" | "monthly"),
+        spaceId: spaceId === NO_SPACE ? null : spaceId,
       });
     }
   }
@@ -463,6 +475,24 @@ export function TaskFormDialog({
               onChange={(e) => setLabels(e.target.value)}
               placeholder="masalan: instagram, avgust oqimi"
             />
+          </div>
+
+          {/* Bo'lim (ClickUp Space) — group the task into a work area. */}
+          <div className="space-y-1.5">
+            <Label>Bo&apos;lim</Label>
+            <Select value={spaceId} onValueChange={setSpaceId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Bo'limsiz" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_SPACE}>Bo&apos;limsiz</SelectItem>
+                {spaces.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Subtasks while creating — staged, created after the parent saves. */}

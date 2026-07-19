@@ -64,6 +64,71 @@ async function syncAssignees(
 }
 
 export const tasksRouter = createTRPCRouter({
+  /** ClickUp-style "Spaces" (bo'limlar) to group tasks into separate areas. */
+  spaces: protectedProcedure.query(async ({ ctx }) => {
+    const { data } = await ctx.supabase
+      .from("task_spaces")
+      .select("*")
+      .order("position", { ascending: true })
+      .order("created_at", { ascending: true });
+    return data ?? [];
+  }),
+
+  createSpace: managerProcedure
+    .input(z.object({ name: z.string().min(1).max(60), color: z.string().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      // New space goes to the end of the list.
+      const { data: last } = await ctx.supabase
+        .from("task_spaces")
+        .select("position")
+        .order("position", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const { data, error } = await ctx.supabase
+        .from("task_spaces")
+        .insert({
+          name: input.name.trim(),
+          color: input.color ?? null,
+          position: (last?.position ?? 0) + 1,
+        })
+        .select()
+        .single();
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      return data;
+    }),
+
+  renameSpace: managerProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        name: z.string().min(1).max(60).optional(),
+        color: z.string().nullable().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const patch: Database["public"]["Tables"]["task_spaces"]["Update"] = {};
+      if (input.name !== undefined) patch.name = input.name.trim();
+      if (input.color !== undefined) patch.color = input.color;
+      const { error } = await ctx.supabase
+        .from("task_spaces")
+        .update(patch)
+        .eq("id", input.id);
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      return { ok: true };
+    }),
+
+  /** Delete a bo'lim. Tasks in it are kept (space_id set to null by FK). */
+  deleteSpace: managerProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const { error } = await ctx.supabase
+        .from("task_spaces")
+        .delete()
+        .eq("id", input.id);
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      return { ok: true };
+    }),
+
   /** Active users, for the assignee/collaborator pickers. */
   assignees: protectedProcedure.query(async ({ ctx }) => {
     const { data } = await ctx.supabase
@@ -203,7 +268,14 @@ export const tasksRouter = createTRPCRouter({
   /** Top-level tasks grouped by the flow statuses (kanban). Subtasks roll up
    * onto their parent as a done/total count; RLS scopes visibility. */
   board: protectedProcedure
-    .input(z.object({ assignedTo: z.string().uuid().optional() }).optional())
+    .input(
+      z
+        .object({
+          assignedTo: z.string().uuid().optional(),
+          spaceId: z.string().uuid().optional(),
+        })
+        .optional(),
+    )
     .query(async ({ ctx, input }) => {
       const [{ data: tasks }, { data: users }, { data: assignees }] =
         await Promise.all([
@@ -242,6 +314,7 @@ export const tasksRouter = createTRPCRouter({
       const visible = all.filter((t) => t.status !== "cancelled");
       const withMeta = visible
         .filter((t) => !input?.assignedTo || t.assigned_to === input.assignedTo)
+        .filter((t) => !input?.spaceId || t.space_id === input.spaceId)
         .map((t) => {
           const sub = subByParent.get(t.id) ?? { total: 0, done: 0 };
           const asg = (asgByTask.get(t.id) ?? []).sort(
@@ -376,10 +449,21 @@ export const tasksRouter = createTRPCRouter({
         labels: z.array(z.string()).optional(),
         parentTaskId: z.string().uuid().optional(),
         recurrence: z.enum(["daily", "weekly", "monthly"]).optional(),
+        spaceId: z.string().uuid().nullable().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       const primaryId = input.assignedTo ?? ctx.appUser.id;
+      // A subtask inherits its parent's bo'lim unless one is given explicitly.
+      let spaceId = input.spaceId ?? null;
+      if (spaceId === null && input.parentTaskId) {
+        const { data: parent } = await ctx.supabase
+          .from("tasks")
+          .select("space_id")
+          .eq("id", input.parentTaskId)
+          .maybeSingle();
+        spaceId = parent?.space_id ?? null;
+      }
       const { error, data } = await ctx.supabase
         .from("tasks")
         .insert({
@@ -396,6 +480,7 @@ export const tasksRouter = createTRPCRouter({
           labels: input.labels && input.labels.length ? input.labels : null,
           parent_task_id: input.parentTaskId ?? null,
           recurrence: input.recurrence ?? null,
+          space_id: spaceId,
           started_at: input.status === "in_progress" ? new Date().toISOString() : null,
         })
         .select()
@@ -421,6 +506,7 @@ export const tasksRouter = createTRPCRouter({
         estimateHours: z.number().nonnegative().nullable().optional(),
         labels: z.array(z.string()).optional(),
         recurrence: z.enum(["daily", "weekly", "monthly"]).nullable().optional(),
+        spaceId: z.string().uuid().nullable().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -435,6 +521,7 @@ export const tasksRouter = createTRPCRouter({
       if (input.estimateHours !== undefined) patch.estimate_hours = input.estimateHours;
       if (input.labels !== undefined) patch.labels = input.labels.length ? input.labels : null;
       if (input.recurrence !== undefined) patch.recurrence = input.recurrence;
+      if (input.spaceId !== undefined) patch.space_id = input.spaceId;
       const { error } = await ctx.supabase.from("tasks").update(patch).eq("id", input.id);
       if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
 

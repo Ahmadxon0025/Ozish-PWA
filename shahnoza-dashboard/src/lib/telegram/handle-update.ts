@@ -214,14 +214,28 @@ async function createTaskFromText(
     .map((u) => u.full_name)
     .filter((n): n is string => Boolean(n));
 
-  const { parseTaskFromMessage, resolveAssignee, createCapturedTask, priorityLabel } =
-    await import("@/lib/ai/task-capture");
+  const cap = await import("@/lib/ai/task-capture");
 
   const createdBy = opts.fromId
     ? list.find((u) => u.telegram_id === opts.fromId)?.id ?? null
     : null;
 
-  const parsed = await parseTaskFromMessage(names, opts.text, createdBy);
+  // The AI call can throw (timeout / bad JSON) — in forced mode always tell the
+  // user, so /vazifa never fails silently.
+  let parsed: Awaited<ReturnType<typeof cap.parseTaskFromMessage>>;
+  try {
+    parsed = await cap.parseTaskFromMessage(names, opts.text, createdBy);
+  } catch (err) {
+    console.error("Task capture parse failed:", err);
+    if (opts.force) {
+      await sendMessage(
+        opts.chatId,
+        "⚠️ AI javob bermadi. Birozdan so'ng qaytadan urinib ko'ring.",
+        { replyToMessageId: opts.replyTo },
+      );
+    }
+    return false;
+  }
   if (!opts.force && !parsed.isTask) return false;
   if (!parsed.title) {
     if (opts.force) {
@@ -238,9 +252,9 @@ async function createTaskFromText(
   if (opts.mentionedTgId) {
     assignedTo = list.find((u) => u.telegram_id === opts.mentionedTgId)?.id ?? null;
   }
-  if (!assignedTo) assignedTo = resolveAssignee(list, parsed.assigneeName);
+  if (!assignedTo) assignedTo = cap.resolveAssignee(list, parsed.assigneeName);
 
-  const taskId = await createCapturedTask(db, {
+  const taskId = await cap.createCapturedTask(db, {
     title: parsed.title,
     description: parsed.description,
     assignedTo,
@@ -263,7 +277,7 @@ async function createTaskFromText(
     `📌 ${parsed.title}`,
     `👤 ${assigneeName ?? "Belgilanmagan"}`,
     `📅 ${parsed.dueDate ?? "muddat yo'q"}`,
-    `⚡️ ${priorityLabel(parsed.priority)}`,
+    `⚡️ ${cap.priorityLabel(parsed.priority)}`,
   ];
   if (parsed.description) lines.push(`📝 ${parsed.description}`);
   if (parsed.assigneeName && !assignedTo) {
@@ -791,14 +805,28 @@ export async function handleTelegramUpdate(update: unknown): Promise<void> {
     return;
   }
 
-  // --- AI task capture (tasks group only) ---
-  // A free-form message that tags a teammate becomes a task in the app. Gated
-  // to the explicitly-configured tasks group so it never fires in the finance
-  // group, and only when a teammate is referenced (keeps AI calls off chatter).
+  // --- AI task capture ---
+  // A free-form message that tags a teammate becomes a task in the app. Allowed
+  // in the tasks group (or, if none is configured, any group that isn't a
+  // finance/admin/owner chat) and in private DMs — never in the finance group.
+  // Only fires when a teammate is referenced (keeps AI calls off chatter).
+  const chatType = msg.chat.type ?? "";
+  const financeSide = new Set(
+    [
+      env.TELEGRAM_FINANCE_CHAT_ID,
+      env.TELEGRAM_ADMIN_CHAT_ID,
+      env.TELEGRAM_OWNER_CHAT_ID,
+    ].filter(Boolean),
+  );
+  const captureChat =
+    (Boolean(env.TELEGRAM_TASKS_CHAT_ID) &&
+      String(chatId) === env.TELEGRAM_TASKS_CHAT_ID) ||
+    chatType === "private" ||
+    ((chatType === "group" || chatType === "supergroup") &&
+      !financeSide.has(String(chatId)));
   if (
     isAiConfigured() &&
-    env.TELEGRAM_TASKS_CHAT_ID &&
-    String(chatId) === env.TELEGRAM_TASKS_CHAT_ID &&
+    captureChat &&
     !msg.reply_to_message &&
     !msg.from?.is_bot &&
     !text.startsWith("/") &&

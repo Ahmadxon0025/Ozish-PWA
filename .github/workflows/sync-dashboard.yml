@@ -1,0 +1,61 @@
+name: Sync dashboard to deploy repo
+
+# Mirrors the shahnoza-dashboard/ subfolder to the standalone
+# Ahmadxon0025/shahnoza-dashboard repo (main branch), which Vercel deploys.
+# Runs automatically whenever the dashboard changes on the dev branch.
+
+on:
+  push:
+    branches:
+      - claude/shahnoza-dashboard-phase1-ip6srv
+    paths:
+      - "shahnoza-dashboard/**"
+      - ".github/workflows/sync-dashboard.yml"
+  workflow_dispatch: {}
+
+# Only one sync at a time; newer pushes cancel older in-flight runs.
+concurrency:
+  group: sync-dashboard
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout (full history for subtree split)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Don't let checkout persist the default GITHUB_TOKEN in git config —
+          # its http.extraheader would override our PAT and it can't see the
+          # deploy repo (→ "Repository not found"). We push with the PAT in the URL.
+          persist-credentials: false
+
+      - name: Split the subfolder and push to the deploy repo
+        env:
+          TARGET_TOKEN: ${{ secrets.DASHBOARD_SYNC_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TARGET_TOKEN:-}" ]; then
+            echo "::error::Missing secret DASHBOARD_SYNC_TOKEN. Add it in repo Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          git config user.name  "dashboard-sync-bot"
+          git config user.email "dashboard-sync-bot@users.noreply.github.com"
+
+          # Diagnostic only (safe): length distinguishes a classic token (~40)
+          # from a fine-grained one (~93); 0 means the secret is empty.
+          echo "DASHBOARD_SYNC_TOKEN length: ${#TARGET_TOKEN}"
+
+          # Produce a branch whose root is the contents of shahnoza-dashboard/.
+          git subtree split --prefix=shahnoza-dashboard -b dashboard-main
+
+          # Force-push it to the deploy repo's main (it's a mirror of this subtree).
+          # Token-as-username is the canonical PAT auth for git-over-HTTPS.
+          git push --force \
+            "https://${TARGET_TOKEN}@github.com/Ahmadxon0025/shahnoza-dashboard.git" \
+            dashboard-main:main
+
+          echo "Synced shahnoza-dashboard/ → Ahmadxon0025/shahnoza-dashboard@main"

@@ -1,0 +1,622 @@
+import { z } from "zod";
+import { TRPCError } from "@trpc/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database";
+import {
+  createTRPCRouter,
+  protectedProcedure,
+  roleProcedure,
+} from "@/server/api/trpc";
+import {
+  TASK_STATUSES,
+  TASK_FLOW_STATUSES,
+  TASK_OPEN_STATUSES,
+  TASK_WORKLOAD_STATUSES,
+  TASK_PRIORITIES,
+} from "@/lib/constants";
+import { groupBy } from "./_helpers";
+import { resolvePeriod } from "./_helpers";
+
+const statusEnum = z.enum(TASK_STATUSES);
+const priorityEnum = z.enum(TASK_PRIORITIES);
+
+// Task performance is a manager view (per research self-critique: leaderboard
+// to managers; each person sees their own stats via `myStats`).
+const managerProcedure = roleProcedure("super_admin", "owner", "sales_manager");
+
+const OPEN = [...TASK_OPEN_STATUSES];
+const WORKLOAD = new Set<string>(TASK_WORKLOAD_STATUSES);
+
+/** Shift an ISO date by a recurrence rule (for spawning the next occurrence). */
+function shiftDate(iso: string, rule: string): string | null {
+  const d = new Date(iso);
+  if (rule === "daily") d.setUTCDate(d.getUTCDate() + 1);
+  else if (rule === "weekly") d.setUTCDate(d.getUTCDate() + 7);
+  else if (rule === "monthly") d.setUTCMonth(d.getUTCMonth() + 1);
+  else return null;
+  return d.toISOString();
+}
+
+/**
+ * Rewrite a task's assignee rows: one primary (DRI) + collaborators. Keeps
+ * `tasks.assigned_to` (the primary) as the source of truth for metrics — the
+ * join table just adds visibility/notifications for collaborators.
+ */
+async function syncAssignees(
+  db: SupabaseClient<Database>,
+  taskId: string,
+  primaryId: string | null,
+  collaboratorIds: string[],
+): Promise<void> {
+  await db.from("task_assignees").delete().eq("task_id", taskId);
+  const seen = new Set<string>();
+  const rows: Database["public"]["Tables"]["task_assignees"]["Insert"][] = [];
+  if (primaryId) {
+    rows.push({ task_id: taskId, user_id: primaryId, is_primary: true });
+    seen.add(primaryId);
+  }
+  for (const uid of collaboratorIds) {
+    if (!uid || seen.has(uid)) continue;
+    seen.add(uid);
+    rows.push({ task_id: taskId, user_id: uid, is_primary: false });
+  }
+  if (rows.length) await db.from("task_assignees").insert(rows);
+}
+
+export const tasksRouter = createTRPCRouter({
+  /** Active users, for the assignee/collaborator pickers. */
+  assignees: protectedProcedure.query(async ({ ctx }) => {
+    const { data } = await ctx.supabase
+      .from("users")
+      .select("id, full_name, role")
+      .eq("is_active", true)
+      .order("full_name", { ascending: true });
+    return data ?? [];
+  }),
+
+  /** Tasks assigned to, created by, or collaborated on by the current user. */
+  my: protectedProcedure
+    .input(z.object({ status: statusEnum.optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      const me = ctx.appUser.id;
+      const { data: collab } = await ctx.supabase
+        .from("task_assignees")
+        .select("task_id")
+        .eq("user_id", me);
+      const collabIds = (collab ?? []).map((r) => r.task_id);
+      let orFilter = `assigned_to.eq.${me},created_by.eq.${me}`;
+      if (collabIds.length) orFilter += `,id.in.(${collabIds.join(",")})`;
+
+      let q = ctx.supabase
+        .from("tasks")
+        .select("*")
+        .or(orFilter)
+        .order("due_date", { ascending: true, nullsFirst: false });
+      if (input?.status) q = q.eq("status", input.status);
+      const { data } = await q;
+      return data ?? [];
+    }),
+
+  /** The caller's own headline stats (last 30 days) — shown on "my tasks". */
+  myStats: protectedProcedure.query(async ({ ctx }) => {
+    const now = new Date();
+    const from = new Date(now.getTime() - 30 * 24 * 3600 * 1000).toISOString();
+    const nowISO = now.toISOString();
+    const [{ data: completed }, { data: open }, { data: collab }] = await Promise.all([
+      ctx.supabase
+        .from("tasks")
+        .select("due_date, completed_at")
+        .eq("assigned_to", ctx.appUser.id)
+        .eq("status", "done")
+        .gte("completed_at", from),
+      ctx.supabase
+        .from("tasks")
+        .select("due_date, status")
+        .eq("assigned_to", ctx.appUser.id)
+        .in("status", OPEN),
+      ctx.supabase
+        .from("task_assignees")
+        .select("task_id")
+        .eq("user_id", ctx.appUser.id)
+        .eq("is_primary", false),
+    ]);
+    const done = completed ?? [];
+    const withDue = done.filter((t) => t.due_date);
+    const onTime = withDue.filter(
+      (t) => t.completed_at && t.due_date && t.completed_at <= t.due_date,
+    ).length;
+    const openRows = open ?? [];
+    return {
+      completed: done.length,
+      onTimePct: withDue.length ? Math.round((onTime / withDue.length) * 100) : null,
+      open: openRows.length,
+      overdue: openRows.filter((t) => t.due_date && t.due_date < nowISO).length,
+      collaborations: (collab ?? []).length,
+    };
+  }),
+
+  /** Top-level tasks grouped by the flow statuses (kanban). Subtasks roll up
+   * onto their parent as a done/total count; RLS scopes visibility. */
+  board: protectedProcedure
+    .input(z.object({ assignedTo: z.string().uuid().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      const [{ data: tasks }, { data: users }, { data: assignees }] =
+        await Promise.all([
+          ctx.supabase
+            .from("tasks")
+            .select("*")
+            .order("due_date", { ascending: true, nullsFirst: false }),
+          ctx.supabase.from("users").select("id, full_name"),
+          ctx.supabase.from("task_assignees").select("task_id, user_id, is_primary"),
+        ]);
+      const userName = new Map((users ?? []).map((u) => [u.id, u.full_name]));
+      const all = tasks ?? [];
+
+      // Subtask roll-up: done/total per parent.
+      const subByParent = new Map<string, { total: number; done: number }>();
+      for (const t of all) {
+        if (!t.parent_task_id) continue;
+        const b = subByParent.get(t.parent_task_id) ?? { total: 0, done: 0 };
+        b.total += 1;
+        if (t.status === "done") b.done += 1;
+        subByParent.set(t.parent_task_id, b);
+      }
+
+      // Assignee avatars per task (primary first).
+      const asgByTask = new Map<string, { userId: string; name: string; isPrimary: boolean }[]>();
+      for (const a of assignees ?? []) {
+        const arr = asgByTask.get(a.task_id) ?? [];
+        arr.push({ userId: a.user_id, name: userName.get(a.user_id) ?? "—", isPrimary: a.is_primary });
+        asgByTask.set(a.task_id, arr);
+      }
+
+      const nowISO = new Date().toISOString();
+      const topLevel = all.filter((t) => !t.parent_task_id && t.status !== "cancelled");
+      const withMeta = topLevel
+        .filter((t) => !input?.assignedTo || t.assigned_to === input.assignedTo)
+        .map((t) => {
+          const sub = subByParent.get(t.id) ?? { total: 0, done: 0 };
+          const asg = (asgByTask.get(t.id) ?? []).sort(
+            (a, b) => Number(b.isPrimary) - Number(a.isPrimary),
+          );
+          return {
+            ...t,
+            assignedName: t.assigned_to ? userName.get(t.assigned_to) ?? "—" : null,
+            assignees: asg,
+            subtaskTotal: sub.total,
+            subtaskDone: sub.done,
+            isOverdue: t.status !== "done" && !!t.due_date && t.due_date < nowISO,
+          };
+        });
+      const byStatus = groupBy(withMeta, (t) => t.status);
+      return TASK_FLOW_STATUSES.map((s) => ({
+        status: s,
+        tasks: byStatus.get(s) ?? [],
+      }));
+    }),
+
+  /** One task with its assignees and subtasks (for the detail / edit view). */
+  get: protectedProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const [{ data: task }, { data: subs }, { data: asg }, { data: users }] =
+        await Promise.all([
+          ctx.supabase.from("tasks").select("*").eq("id", input.id).maybeSingle(),
+          ctx.supabase
+            .from("tasks")
+            .select("*")
+            .eq("parent_task_id", input.id)
+            .order("created_at", { ascending: true }),
+          ctx.supabase.from("task_assignees").select("*").eq("task_id", input.id),
+          ctx.supabase.from("users").select("id, full_name"),
+        ]);
+      if (!task) throw new TRPCError({ code: "NOT_FOUND" });
+      const nameById = new Map((users ?? []).map((u) => [u.id, u.full_name]));
+      return {
+        task,
+        assignees: (asg ?? [])
+          .map((a) => ({
+            userId: a.user_id,
+            name: nameById.get(a.user_id) ?? "—",
+            isPrimary: a.is_primary,
+          }))
+          .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary)),
+        subtasks: (subs ?? []).map((s) => ({
+          ...s,
+          assignedName: s.assigned_to ? nameById.get(s.assigned_to) ?? "—" : null,
+        })),
+      };
+    }),
+
+  create: protectedProcedure
+    .input(
+      z.object({
+        title: z.string().min(1),
+        description: z.string().optional(),
+        assignedTo: z.string().uuid().optional(),
+        collaboratorIds: z.array(z.string().uuid()).optional(),
+        priority: priorityEnum.default("medium"),
+        status: statusEnum.default("todo"),
+        category: z.string().optional(),
+        dueDate: z.string().optional(),
+        startDate: z.string().optional(),
+        estimateHours: z.number().nonnegative().optional(),
+        labels: z.array(z.string()).optional(),
+        parentTaskId: z.string().uuid().optional(),
+        recurrence: z.enum(["daily", "weekly", "monthly"]).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const primaryId = input.assignedTo ?? ctx.appUser.id;
+      const { error, data } = await ctx.supabase
+        .from("tasks")
+        .insert({
+          title: input.title,
+          description: input.description ?? null,
+          assigned_to: primaryId,
+          created_by: ctx.appUser.id,
+          priority: input.priority,
+          status: input.status,
+          category: input.category ?? null,
+          due_date: input.dueDate ?? null,
+          start_date: input.startDate ?? null,
+          estimate_hours: input.estimateHours ?? null,
+          labels: input.labels && input.labels.length ? input.labels : null,
+          parent_task_id: input.parentTaskId ?? null,
+          recurrence: input.recurrence ?? null,
+          started_at: input.status === "in_progress" ? new Date().toISOString() : null,
+        })
+        .select()
+        .single();
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      await syncAssignees(ctx.supabase, data.id, primaryId, input.collaboratorIds ?? []);
+      return data;
+    }),
+
+  /** Edit task fields (not status — use updateStatus for state moves). */
+  update: protectedProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        title: z.string().min(1).optional(),
+        description: z.string().nullable().optional(),
+        assignedTo: z.string().uuid().nullable().optional(),
+        collaboratorIds: z.array(z.string().uuid()).optional(),
+        priority: priorityEnum.optional(),
+        category: z.string().nullable().optional(),
+        dueDate: z.string().nullable().optional(),
+        startDate: z.string().nullable().optional(),
+        estimateHours: z.number().nonnegative().nullable().optional(),
+        labels: z.array(z.string()).optional(),
+        recurrence: z.enum(["daily", "weekly", "monthly"]).nullable().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const patch: Database["public"]["Tables"]["tasks"]["Update"] = {};
+      if (input.title !== undefined) patch.title = input.title;
+      if (input.description !== undefined) patch.description = input.description;
+      if (input.assignedTo !== undefined) patch.assigned_to = input.assignedTo;
+      if (input.priority !== undefined) patch.priority = input.priority;
+      if (input.category !== undefined) patch.category = input.category;
+      if (input.dueDate !== undefined) patch.due_date = input.dueDate;
+      if (input.startDate !== undefined) patch.start_date = input.startDate;
+      if (input.estimateHours !== undefined) patch.estimate_hours = input.estimateHours;
+      if (input.labels !== undefined) patch.labels = input.labels.length ? input.labels : null;
+      if (input.recurrence !== undefined) patch.recurrence = input.recurrence;
+      const { error } = await ctx.supabase.from("tasks").update(patch).eq("id", input.id);
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+
+      // Keep the assignee rows in sync when the owner or collaborators change.
+      if (input.collaboratorIds !== undefined || input.assignedTo !== undefined) {
+        let primaryId = input.assignedTo ?? null;
+        if (input.assignedTo === undefined) {
+          const { data: cur } = await ctx.supabase
+            .from("tasks")
+            .select("assigned_to")
+            .eq("id", input.id)
+            .maybeSingle();
+          primaryId = cur?.assigned_to ?? null;
+        }
+        let collaborators = input.collaboratorIds;
+        if (collaborators === undefined) {
+          const { data: existing } = await ctx.supabase
+            .from("task_assignees")
+            .select("user_id, is_primary")
+            .eq("task_id", input.id);
+          collaborators = (existing ?? [])
+            .filter((r) => !r.is_primary)
+            .map((r) => r.user_id);
+        }
+        await syncAssignees(ctx.supabase, input.id, primaryId, collaborators);
+      }
+      return { ok: true };
+    }),
+
+  updateStatus: protectedProcedure
+    .input(z.object({ id: z.string().uuid(), status: statusEnum }))
+    .mutation(async ({ ctx, input }) => {
+      const { data: current } = await ctx.supabase
+        .from("tasks")
+        .select("*")
+        .eq("id", input.id)
+        .maybeSingle();
+      if (!current) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const now = new Date().toISOString();
+      const patch: Database["public"]["Tables"]["tasks"]["Update"] = {
+        status: input.status,
+        completed_at: input.status === "done" ? now : null,
+      };
+      if (input.status === "in_progress" && !current.started_at) {
+        patch.started_at = now;
+      }
+      const { error } = await ctx.supabase.from("tasks").update(patch).eq("id", input.id);
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+
+      // Recurring task completed → spawn the next occurrence (carry assignees).
+      if (input.status === "done" && current.recurrence && current.status !== "done") {
+        const nextDue = current.due_date ? shiftDate(current.due_date, current.recurrence) : null;
+        const nextStart = current.start_date
+          ? shiftDate(current.start_date, current.recurrence)
+          : null;
+        const { data: spawned } = await ctx.supabase
+          .from("tasks")
+          .insert({
+            title: current.title,
+            description: current.description,
+            assigned_to: current.assigned_to,
+            created_by: current.created_by,
+            priority: current.priority,
+            status: "todo",
+            category: current.category,
+            due_date: nextDue,
+            start_date: nextStart,
+            estimate_hours: current.estimate_hours,
+            labels: current.labels,
+            parent_task_id: current.parent_task_id,
+            recurrence: current.recurrence,
+          })
+          .select("id")
+          .single();
+        if (spawned) {
+          const { data: asg } = await ctx.supabase
+            .from("task_assignees")
+            .select("user_id, is_primary")
+            .eq("task_id", input.id);
+          const rows = (asg ?? []).map((a) => ({
+            task_id: spawned.id,
+            user_id: a.user_id,
+            is_primary: a.is_primary,
+          }));
+          if (rows.length) await ctx.supabase.from("task_assignees").insert(rows);
+        }
+      }
+      return { ok: true };
+    }),
+
+  delete: protectedProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const { error } = await ctx.supabase.from("tasks").delete().eq("id", input.id);
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      return { ok: true };
+    }),
+
+  comments: protectedProcedure
+    .input(z.object({ taskId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const { data } = await ctx.supabase
+        .from("task_comments")
+        .select("*")
+        .eq("task_id", input.taskId)
+        .order("created_at", { ascending: true });
+      return data ?? [];
+    }),
+
+  addComment: protectedProcedure
+    .input(z.object({ taskId: z.string().uuid(), content: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const { error } = await ctx.supabase.from("task_comments").insert({
+        task_id: input.taskId,
+        user_id: ctx.appUser.id,
+        content: input.content,
+      });
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      return { ok: true };
+    }),
+
+  /** Tasks with a start and/or due date, for the timeline view. */
+  timeline: protectedProcedure
+    .input(z.object({ assignedTo: z.string().uuid().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      let q = ctx.supabase
+        .from("tasks")
+        .select("id, title, status, priority, assigned_to, parent_task_id, start_date, due_date")
+        .not("due_date", "is", null)
+        .neq("status", "cancelled")
+        .order("due_date", { ascending: true });
+      if (input?.assignedTo) q = q.eq("assigned_to", input.assignedTo);
+      const [{ data: tasks }, { data: users }] = await Promise.all([
+        q,
+        ctx.supabase.from("users").select("id, full_name"),
+      ]);
+      const nameById = new Map((users ?? []).map((u) => [u.id, u.full_name]));
+      const nowISO = new Date().toISOString();
+      return (tasks ?? []).map((t) => ({
+        ...t,
+        assignedName: t.assigned_to ? nameById.get(t.assigned_to) ?? "—" : null,
+        isOverdue: t.status !== "done" && !!t.due_date && t.due_date < nowISO,
+      }));
+    }),
+
+  /**
+   * Per-person + per-role performance for a period (default: last 30 days).
+   * Metrics attribute to the primary owner (`assigned_to`) only, so multiple
+   * assignees never double-count; collaborations are a separate, non-ranked
+   * signal. Cancelled tasks are excluded.
+   */
+  performance: managerProcedure
+    .input(z.object({ from: z.string().optional(), to: z.string().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      let fromISO: string;
+      let toISO: string;
+      if (input?.from && input?.to) {
+        const r = resolvePeriod({ from: input.from, to: input.to });
+        fromISO = r.from;
+        toISO = r.to;
+      } else {
+        const now = new Date();
+        fromISO = new Date(now.getTime() - 30 * 24 * 3600 * 1000).toISOString();
+        toISO = now.toISOString();
+      }
+      const nowISO = new Date().toISOString();
+
+      const [{ data: users }, { data: completed }, { data: open }, { data: collab }] =
+        await Promise.all([
+          ctx.supabase.from("users").select("id, full_name, role").eq("is_active", true),
+          ctx.supabase
+            .from("tasks")
+            .select("assigned_to, due_date, completed_at, started_at, created_at")
+            .eq("status", "done")
+            .gte("completed_at", fromISO)
+            .lt("completed_at", toISO),
+          ctx.supabase
+            .from("tasks")
+            .select("assigned_to, due_date, status")
+            .in("status", OPEN),
+          ctx.supabase.from("task_assignees").select("user_id").eq("is_primary", false),
+        ]);
+
+      type Acc = {
+        userId: string;
+        name: string;
+        role: string;
+        completed: number;
+        completedWithDue: number;
+        onTime: number;
+        open: number;
+        overdue: number;
+        workload: number;
+        collaborations: number;
+        cycleMs: number;
+        cycleCount: number;
+      };
+      const acc = new Map<string, Acc>();
+      for (const u of users ?? []) {
+        acc.set(u.id, {
+          userId: u.id,
+          name: u.full_name ?? "—",
+          role: u.role ?? "—",
+          completed: 0,
+          completedWithDue: 0,
+          onTime: 0,
+          open: 0,
+          overdue: 0,
+          workload: 0,
+          collaborations: 0,
+          cycleMs: 0,
+          cycleCount: 0,
+        });
+      }
+
+      for (const t of completed ?? []) {
+        if (!t.assigned_to) continue;
+        const a = acc.get(t.assigned_to);
+        if (!a) continue;
+        a.completed += 1;
+        if (t.due_date) {
+          a.completedWithDue += 1;
+          if (t.completed_at && t.completed_at <= t.due_date) a.onTime += 1;
+        }
+        const startRef = t.started_at ?? t.created_at;
+        if (t.completed_at && startRef) {
+          const ms = new Date(t.completed_at).getTime() - new Date(startRef).getTime();
+          if (ms >= 0) {
+            a.cycleMs += ms;
+            a.cycleCount += 1;
+          }
+        }
+      }
+      for (const t of open ?? []) {
+        if (!t.assigned_to) continue;
+        const a = acc.get(t.assigned_to);
+        if (!a) continue;
+        a.open += 1;
+        if (WORKLOAD.has(t.status)) a.workload += 1;
+        if (t.due_date && t.due_date < nowISO) a.overdue += 1;
+      }
+      for (const c of collab ?? []) {
+        const a = acc.get(c.user_id);
+        if (a) a.collaborations += 1;
+      }
+
+      const derive = (a: Acc) => ({
+        userId: a.userId,
+        name: a.name,
+        role: a.role,
+        completed: a.completed,
+        onTimePct: a.completedWithDue
+          ? Math.round((a.onTime / a.completedWithDue) * 100)
+          : null,
+        onTime: a.onTime,
+        completedWithDue: a.completedWithDue,
+        open: a.open,
+        overdue: a.overdue,
+        workload: a.workload,
+        collaborations: a.collaborations,
+        avgCycleDays: a.cycleCount
+          ? Math.round((a.cycleMs / a.cycleCount / 86400000) * 10) / 10
+          : null,
+      });
+
+      const people = Array.from(acc.values())
+        .filter((a) => a.completed > 0 || a.open > 0 || a.collaborations > 0)
+        .map(derive)
+        .sort((x, y) => {
+          const ax = x.onTimePct ?? -1;
+          const ay = y.onTimePct ?? -1;
+          if (ay !== ax) return ay - ax;
+          return y.completed - x.completed;
+        });
+
+      const byRole = groupBy(Array.from(acc.values()), (a) => a.role);
+      const roles = Array.from(byRole.entries())
+        .map(([role, list]) => {
+          const completedSum = list.reduce((s, a) => s + a.completed, 0);
+          const withDue = list.reduce((s, a) => s + a.completedWithDue, 0);
+          const onTimeSum = list.reduce((s, a) => s + a.onTime, 0);
+          const openSum = list.reduce((s, a) => s + a.open, 0);
+          const overdueSum = list.reduce((s, a) => s + a.overdue, 0);
+          const workloadSum = list.reduce((s, a) => s + a.workload, 0);
+          return {
+            role,
+            people: list.filter((a) => a.completed > 0 || a.open > 0).length,
+            completed: completedSum,
+            onTimePct: withDue ? Math.round((onTimeSum / withDue) * 100) : null,
+            open: openSum,
+            overdue: overdueSum,
+            workload: workloadSum,
+          };
+        })
+        .filter((r) => r.completed > 0 || r.open > 0)
+        .sort((a, b) => b.completed - a.completed);
+
+      const totals = {
+        completed: people.reduce((s, p) => s + p.completed, 0),
+        open: people.reduce((s, p) => s + p.open, 0),
+        overdue: people.reduce((s, p) => s + p.overdue, 0),
+        onTimePct: (() => {
+          const wd = Array.from(acc.values()).reduce((s, a) => s + a.completedWithDue, 0);
+          const ot = Array.from(acc.values()).reduce((s, a) => s + a.onTime, 0);
+          return wd ? Math.round((ot / wd) * 100) : null;
+        })(),
+      };
+
+      return {
+        period: { from: fromISO.slice(0, 10), to: toISO.slice(0, 10) },
+        people,
+        roles,
+        totals,
+      };
+    }),
+});

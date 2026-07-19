@@ -49,6 +49,19 @@ export const integrationsRouter = createTRPCRouter({
       return data ?? [];
     }),
 
+  /** Read-only AmoCRM structure: pipelines, statuses, custom-field catalog.
+   *  Used to map fields precisely before a full sync. */
+  amocrmStructure: superAdminProcedure.mutation(async () => {
+    if (!isAmocrmConfigured()) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "AmoCRM sozlanmagan.",
+      });
+    }
+    const { probeAmocrm } = await import("@/lib/amocrm/probe");
+    return probeAmocrm();
+  }),
+
   /** Kick off an AmoCRM sync now (super admin). */
   triggerAmocrmSync: superAdminProcedure.mutation(async () => {
     if (!isAmocrmConfigured()) {

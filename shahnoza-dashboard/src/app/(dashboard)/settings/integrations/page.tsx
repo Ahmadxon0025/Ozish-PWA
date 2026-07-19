@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   XCircle,
   History,
+  Search,
 } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { PageHeader } from "@/components/layout/page-header";
@@ -220,6 +221,11 @@ function AmocrmCard({
     },
   });
 
+  const structure = api.integrations.amocrmStructure.useMutation({
+    onError: (err) =>
+      toast({ title: "Xatolik", description: err.message, variant: "destructive" }),
+  });
+
   function copyRedirect() {
     void navigator.clipboard?.writeText(amocrm.redirectUri).then(
       () =>
@@ -305,7 +311,71 @@ function AmocrmCard({
             )}
             Hozir sinxronlash
           </Button>
+          <Button
+            variant="secondary"
+            disabled={!amocrm.connected || structure.isPending}
+            onClick={() => structure.mutate()}
+          >
+            {structure.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Search className="h-4 w-4" />
+            )}
+            Tuzilmani ko&apos;rish
+          </Button>
         </div>
+
+        {structure.data && (
+          <div className="space-y-4 rounded-lg border bg-muted/30 p-3 text-sm">
+            <div>
+              <p className="font-semibold">Namuna (1-sahifa)</p>
+              <p className="text-muted-foreground">
+                {structure.data.sample.page1Count} ta lead qaytdi ·{" "}
+                {structure.data.sample.hasNext ? "keyingi sahifa bor" : "keyingi sahifa yo'q"}
+              </p>
+            </div>
+
+            <div>
+              <p className="mb-1 font-semibold">Pipelinelar va bosqichlar</p>
+              <div className="space-y-1.5">
+                {structure.data.pipelines.map((p) => (
+                  <div key={p.id} className="rounded border bg-background p-2">
+                    <p className="font-medium">
+                      {p.name}
+                      {p.isMain ? " (asosiy)" : ""}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {p.statuses.map((s) => s.name).join(" → ")}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-1 font-semibold">
+                Maxsus maydonlar ({structure.data.fields.length})
+              </p>
+              <div className="max-h-72 space-y-1 overflow-y-auto">
+                {structure.data.fields.map((f) => (
+                  <div key={f.id} className="rounded border bg-background p-1.5 text-xs">
+                    <span className="font-medium">{f.name}</span>
+                    <span className="text-muted-foreground">
+                      {" "}· {f.type}
+                      {f.code ? ` · ${f.code}` : ""}
+                    </span>
+                    {f.enums.length > 0 && (
+                      <div className="mt-0.5 text-muted-foreground">
+                        {f.enums.slice(0, 12).join(", ")}
+                        {f.enums.length > 12 ? " …" : ""}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

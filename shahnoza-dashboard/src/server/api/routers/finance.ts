@@ -101,6 +101,21 @@ function netProfitFor(
   return computePnl({ grossRevenueUsd, refundsUsd, operatingExpensesUsd, commissionsUsd });
 }
 
+/** Business-wide reinvestment reserve fraction (0..1). Defaults to 0 when the
+ * setting is missing/unreadable, so distribution is unchanged until 0015 runs
+ * (which seeds 0.30). */
+async function getReserveRate(
+  supabase: ReturnType<typeof createServerSupabase>,
+): Promise<number> {
+  const { data } = await supabase
+    .from("app_settings")
+    .select("value")
+    .eq("key", "reinvestment_rate")
+    .maybeSingle();
+  const n = Number(data?.value);
+  return Number.isFinite(n) && n >= 0 && n <= 1 ? n : 0;
+}
+
 export const financeRouter = createTRPCRouter({
   /** Real-time P&L for any period (from/to or month) + waterfall steps. */
   pnl: financeProcedure.input(periodInput).query(async ({ ctx, input }) => {
@@ -398,6 +413,7 @@ export const financeRouter = createTRPCRouter({
   distribution: financeProcedure.input(periodInput).query(async ({ ctx, input }) => {
     const { range, sales, expenses, refundsUsd } = await gatherPeriod(ctx, input);
     const pnl = netProfitFor(sales, expenses, refundsUsd);
+    const reserveRate = await getReserveRate(ctx.supabase);
 
     const [{ data: owners }, { data: shares }, { data: payouts }] =
       await Promise.all([
@@ -464,14 +480,39 @@ export const financeRouter = createTRPCRouter({
           takenUsd: takenByUser.get(o.id) ?? 0,
         };
       }),
+      reserveRate,
     );
 
     return {
       ...result,
+      reserveRate,
       period: { from: periodStart, to: range.to.slice(0, 10) },
       pnl,
     };
   }),
+
+  /** Current reinvestment reserve fraction (0..1). */
+  reserveRate: financeProcedure.query(async ({ ctx }) => {
+    return { rate: await getReserveRate(ctx.supabase) };
+  }),
+
+  /** Set the reinvestment reserve % (0..100). Super admin only. */
+  setReserveRate: superAdminProcedure
+    .input(z.object({ percent: z.number().min(0).max(100) }))
+    .mutation(async ({ ctx, input }) => {
+      const value = String(round2(input.percent / 100));
+      const { error } = await ctx.supabase.from("app_settings").upsert(
+        {
+          key: "reinvestment_rate",
+          value,
+          updated_at: new Date().toISOString(),
+          updated_by: ctx.appUser.id,
+        },
+        { onConflict: "key" },
+      );
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      return { ok: true };
+    }),
 
   /** Set (or update) an owner's profit share %, effective from a date. */
   setOwnerShare: superAdminProcedure

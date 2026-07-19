@@ -408,6 +408,22 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["tasks"]["Insert"]>;
         Relationships: [];
       };
+      app_settings: {
+        Row: {
+          key: string;
+          value: string | null;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          key: string;
+          value?: string | null;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["app_settings"]["Insert"]>;
+        Relationships: [];
+      };
       task_assignees: {
         Row: {
           task_id: string;

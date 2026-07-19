@@ -848,3 +848,22 @@ DROP POLICY IF EXISTS tasks_update_collaborator ON tasks;
 CREATE POLICY tasks_update_collaborator ON tasks FOR UPDATE TO authenticated
   USING (EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = id AND ta.user_id = public.app_uid()))
   WITH CHECK (EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = id AND ta.user_id = public.app_uid()));
+
+-- ============================================================================
+-- 0015_app_settings.sql
+-- ============================================================================
+-- Additive. Key/value business settings. First use: reinvestment reserve %.
+
+CREATE TABLE IF NOT EXISTS app_settings (
+  key        TEXT PRIMARY KEY,
+  value      TEXT,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_by UUID REFERENCES users(id)
+);
+ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY app_settings_select ON app_settings FOR SELECT TO authenticated
+  USING (public.can_read_all());
+CREATE POLICY app_settings_write ON app_settings FOR ALL TO authenticated
+  USING (public.is_super_admin()) WITH CHECK (public.is_super_admin());
+INSERT INTO app_settings (key, value) VALUES ('reinvestment_rate', '0.30')
+ON CONFLICT (key) DO NOTHING;

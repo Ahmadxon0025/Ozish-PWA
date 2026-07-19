@@ -34,21 +34,25 @@ export interface DistributionResult {
 /**
  * Split a period's result across owners.
  *
- *  - PROFIT (net ≥ 0): entitlement = share × profit for each owner; the
- *    unallocated remainder (100% − Σshares) stays in the business.
+ *  - PROFIT (net ≥ 0): a reinvestment reserve (`reserveRate`) is set aside FIRST
+ *    and stays in the business; the remaining "distributable" profit is split by
+ *    each owner's ownership share. With ownership summing to 100%, the whole
+ *    non-reserve part is paid out and the reserve is what's retained.
  *  - LOSS (net < 0): owners who don't bear loss get 0; the loss is absorbed
  *    entirely by the loss-bearing owner(s), split among them by their share.
  *    (So the "true owner" eats the whole loss; a pure profit-share partner
- *    never goes negative.)
+ *    never goes negative.) The reserve does not apply to a loss.
  *  - Fallback: if a loss occurs but nobody is marked as loss-bearer, it's
  *    split by share so it isn't silently dropped.
  */
 export function computeDistribution(
   netProfitUsd: number,
   owners: OwnerInput[],
+  reserveRate = 0,
 ): DistributionResult {
   const net = round2(netProfitUsd);
   const isLoss = net < 0;
+  const reserve = Math.min(1, Math.max(0, reserveRate));
 
   let entitlementOf: (o: OwnerInput) => number;
   let retainedUsd = 0;
@@ -57,9 +61,12 @@ export function computeDistribution(
   const distributedRate = round2(owners.reduce((a, o) => a + o.shareRate, 0));
 
   if (!isLoss) {
-    entitlementOf = (o) => round2(net * o.shareRate);
-    retainedRate = Math.max(0, round2(1 - distributedRate));
-    retainedUsd = round2(net * retainedRate);
+    // Reserve first, then split the remaining profit by ownership share.
+    const reserveUsd = round2(net * reserve);
+    const distributable = round2(net - reserveUsd);
+    entitlementOf = (o) => round2(distributable * o.shareRate);
+    retainedRate = reserve;
+    retainedUsd = reserveUsd;
   } else {
     const bearers = owners.filter((o) => o.bearsLoss);
     if (bearers.length > 0) {

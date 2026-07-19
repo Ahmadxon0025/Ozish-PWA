@@ -9,6 +9,7 @@ import {
   HandCoins,
   Plus,
   AlertTriangle,
+  PiggyBank,
 } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { PageHeader } from "@/components/layout/page-header";
@@ -69,12 +70,14 @@ export default function OwnersPage() {
   const dist = api.finance.distribution.useQuery({ from: period.from, to: period.to });
   const shares = api.finance.ownerShares.useQuery();
   const payouts = api.finance.ownerPayouts.useQuery({ limit: 30 });
+  const reserve = api.finance.reserveRate.useQuery();
   const d = dist.data;
 
   const invalidate = () => {
     utils.finance.distribution.invalidate();
     utils.finance.ownerShares.invalidate();
     utils.finance.ownerPayouts.invalidate();
+    utils.finance.reserveRate.invalidate();
     utils.accounts.list.invalidate();
   };
 
@@ -86,6 +89,7 @@ export default function OwnersPage() {
         actions={
           <div className="flex flex-wrap gap-2">
             <PeriodSelect value={period} onChange={setPeriod} />
+            <SetReserveDialog current={reserve.data?.rate ?? 0} onDone={invalidate} />
             <SetShareDialog owners={shares.data ?? []} onDone={invalidate} />
             <PayoutDialog owners={shares.data ?? []} onDone={invalidate} />
           </div>
@@ -118,9 +122,9 @@ export default function OwnersPage() {
               icon={HandCoins}
             />
             <KpiCard
-              label="Biznesda qoldi"
+              label="Biznesda qoldi (rezerv)"
               value={formatUsd(d.retainedUsd)}
-              sub={`${formatPct100(d.retainedRate * 100)} reinvestitsiya`}
+              sub={`${formatPct100(d.retainedRate * 100)} reinvestitsiya rezervi`}
               icon={Landmark}
               tone="warning"
             />
@@ -273,6 +277,79 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
       <span className="text-muted-foreground">{label}</span>
       <span className={strong ? "font-semibold" : "font-medium"}>{value}</span>
     </div>
+  );
+}
+
+function SetReserveDialog({
+  current,
+  onDone,
+}: {
+  current: number;
+  onDone: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [percent, setPercent] = useState(String(Math.round(current * 100)));
+
+  const m = api.finance.setReserveRate.useMutation({
+    onSuccess: () => {
+      toast({ title: "Rezerv saqlandi", variant: "success" });
+      onDone();
+      setOpen(false);
+    },
+    onError: (e) => toast({ title: "Xato", description: e.message, variant: "destructive" }),
+  });
+
+  const pct = Number(percent);
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (o) setPercent(String(Math.round(current * 100)));
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline">
+          <PiggyBank className="h-4 w-4" /> Rezerv ({Math.round(current * 100)}%)
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Reinvestitsiya rezervi</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Foydadan avval biznesda qoldiriladigan ulush. Qolgan foyda egalar
+            ulushiga qarab bo&apos;linadi. Masalan 30% — sof foydaning 30% biznesda
+            qoladi, 70% egalarga taqsimlanadi.
+          </p>
+          <div className="space-y-1.5">
+            <Label>Rezerv (%)</Label>
+            <Input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              max="100"
+              value={percent}
+              onChange={(e) => setPercent(e.target.value)}
+              placeholder="30"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button variant="ghost">Bekor</Button>
+          </DialogClose>
+          <Button
+            disabled={!(pct >= 0 && pct <= 100) || m.isPending}
+            onClick={() => m.mutate({ percent: pct })}
+          >
+            Saqlash
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

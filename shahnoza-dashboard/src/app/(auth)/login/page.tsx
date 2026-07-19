@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Stethoscope, Mail, Loader2, CheckCircle2 } from "lucide-react";
+import { Stethoscope, LogIn, Loader2, CheckCircle2, Mail } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/env";
 import { Button } from "@/components/ui/button";
@@ -16,14 +16,40 @@ import {
 } from "@/components/ui/card";
 import { APP_NAME } from "@/lib/constants";
 
-export default function LoginPage() {
-  const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<"idle" | "loading" | "sent" | "error">("idle");
-  const [message, setMessage] = useState("");
+type Status = "idle" | "loading" | "sent" | "error";
 
+/** Friendlier Uzbek messages for the common Supabase auth errors. */
+function friendly(msg: string): string {
+  if (/invalid login credentials/i.test(msg)) return "Email yoki parol noto'g'ri.";
+  if (/email rate limit/i.test(msg)) return "Juda ko'p urinish — birozdan so'ng qayta urinib ko'ring.";
+  return msg;
+}
+
+export default function LoginPage() {
+  const [mode, setMode] = useState<"password" | "magic">("password");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [status, setStatus] = useState<Status>("idle");
+  const [message, setMessage] = useState("");
   const configured = isSupabaseConfigured();
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function loginWithPassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email || !password) return;
+    setStatus("loading");
+    setMessage("");
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      window.location.href = "/dashboard";
+    } catch (err) {
+      setStatus("error");
+      setMessage(friendly(err instanceof Error ? err.message : "Xatolik yuz berdi."));
+    }
+  }
+
+  async function sendMagicLink(e: React.FormEvent) {
     e.preventDefault();
     if (!email) return;
     setStatus("loading");
@@ -32,15 +58,13 @@ export default function LoginPage() {
       const supabase = createClient();
       const { error } = await supabase.auth.signInWithOtp({
         email,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        },
+        options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
       });
       if (error) throw error;
       setStatus("sent");
     } catch (err) {
       setStatus("error");
-      setMessage(err instanceof Error ? err.message : "Xatolik yuz berdi.");
+      setMessage(friendly(err instanceof Error ? err.message : "Xatolik yuz berdi."));
     }
   }
 
@@ -59,8 +83,7 @@ export default function LoginPage() {
         <CardContent>
           {!configured && (
             <div className="mb-4 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-warning-foreground">
-              Supabase hali sozlanmagan. <code>.env.local</code> faylini
-              to'ldiring.
+              Supabase hali sozlanmagan. <code>.env.local</code> faylini to&apos;ldiring.
             </div>
           )}
 
@@ -71,29 +94,37 @@ export default function LoginPage() {
                 <p className="font-medium">Havola yuborildi!</p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   <b>{email}</b> pochtangizga kirish havolasini yubordik.
-                  Havolani bosing va tizimga kiring.
                 </p>
               </div>
-              <Button
-                variant="ghost"
-                onClick={() => setStatus("idle")}
-                className="mt-2"
-              >
-                Boshqa email bilan urinish
+              <Button variant="ghost" onClick={() => setStatus("idle")} className="mt-2">
+                Ortga
               </Button>
             </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
+          ) : mode === "password" ? (
+            <form onSubmit={loginWithPassword} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Email manzil</Label>
                 <Input
                   id="email"
                   type="email"
                   inputMode="email"
-                  autoComplete="email"
+                  autoComplete="username"
                   placeholder="siz@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  required
+                  disabled={!configured || status === "loading"}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password">Parol</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  autoComplete="current-password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   required
                   disabled={!configured || status === "loading"}
                 />
@@ -111,6 +142,54 @@ export default function LoginPage() {
               >
                 {status === "loading" ? (
                   <>
+                    <Loader2 className="h-4 w-4 animate-spin" /> Kirilyapti…
+                  </>
+                ) : (
+                  <>
+                    <LogIn className="h-4 w-4" /> Kirish
+                  </>
+                )}
+              </Button>
+              <button
+                type="button"
+                className="w-full text-center text-xs text-muted-foreground hover:underline"
+                onClick={() => {
+                  setMode("magic");
+                  setStatus("idle");
+                  setMessage("");
+                }}
+              >
+                Parolni bilmayapsizmi? Email orqali kirish
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={sendMagicLink} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="memail">Email manzil</Label>
+                <Input
+                  id="memail"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  placeholder="siz@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  disabled={!configured || status === "loading"}
+                />
+              </div>
+              {status === "error" && (
+                <p className="text-sm text-destructive">{message}</p>
+              )}
+              <Button
+                type="submit"
+                className="w-full"
+                size="lg"
+                variant="secondary"
+                disabled={!configured || status === "loading"}
+              >
+                {status === "loading" ? (
+                  <>
                     <Loader2 className="h-4 w-4 animate-spin" /> Yuborilmoqda…
                   </>
                 ) : (
@@ -119,9 +198,17 @@ export default function LoginPage() {
                   </>
                 )}
               </Button>
-              <p className="text-center text-xs text-muted-foreground">
-                Parol kerak emas — emailga sehrli havola yuboramiz.
-              </p>
+              <button
+                type="button"
+                className="w-full text-center text-xs text-muted-foreground hover:underline"
+                onClick={() => {
+                  setMode("password");
+                  setStatus("idle");
+                  setMessage("");
+                }}
+              >
+                Parol bilan kirish
+              </button>
             </form>
           )}
         </CardContent>

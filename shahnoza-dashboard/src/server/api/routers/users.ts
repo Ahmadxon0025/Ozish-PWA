@@ -122,6 +122,38 @@ export const usersRouter = createTRPCRouter({
     }),
 
   /**
+   * Set (or reset) a user's password so they can log in with email + password.
+   * Creates their auth account if they've never logged in (linked to their row
+   * by the 0008 trigger), otherwise updates the existing one. No email sent.
+   */
+  setPassword: superAdminProcedure
+    .input(z.object({ userId: z.string().uuid(), password: z.string().min(6) }))
+    .mutation(async ({ input }) => {
+      const admin = requireAdminClient();
+      const { data: user } = await admin
+        .from("users")
+        .select("email, auth_id")
+        .eq("id", input.userId)
+        .maybeSingle();
+      if (!user?.email) throw new TRPCError({ code: "NOT_FOUND" });
+
+      if (user.auth_id) {
+        const { error } = await admin.auth.admin.updateUserById(user.auth_id, {
+          password: input.password,
+        });
+        if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      } else {
+        const { error } = await admin.auth.admin.createUser({
+          email: user.email,
+          password: input.password,
+          email_confirm: true, // no confirmation email
+        });
+        if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      }
+      return { ok: true };
+    }),
+
+  /**
    * Permanently delete a user (row + linked auth account). The DB blocks this
    * (RESTRICT FKs) if they have real records — sales, tasks, expenses,
    * commissions — so only truly empty accounts (e.g. mistaken invites) can be

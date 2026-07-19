@@ -20,9 +20,17 @@ export const dashboardRouter = createTRPCRouter({
   summary: protectedProcedure.query(async ({ ctx }) => {
     const month = monthRange();
     const yesterday = yesterdayRange();
+    const today = todayRange();
 
-    const [salesMonthRes, salesYdayRes, leadsMonthRes, expMonthRes, expYdayRes, refundedMonthRes] =
-      await Promise.all([
+    const [
+      salesMonthRes,
+      salesYdayRes,
+      salesTodayRes,
+      leadsMonthRes,
+      expMonthRes,
+      expYdayRes,
+      refundedMonthRes,
+    ] = await Promise.all([
         ctx.supabase
           .from("sales")
           .select("total_amount_usd, sold_at, is_refunded, refund_amount_usd, sales_person_id")
@@ -33,6 +41,11 @@ export const dashboardRouter = createTRPCRouter({
           .select("total_amount_usd")
           .gte("sold_at", yesterday.from)
           .lt("sold_at", yesterday.to),
+        ctx.supabase
+          .from("sales")
+          .select("total_amount_usd")
+          .gte("sold_at", today.from)
+          .lt("sold_at", today.to),
         ctx.supabase
           .from("leads")
           .select("status, created_at, qualified_at, sold_at, lost_at")
@@ -58,10 +71,12 @@ export const dashboardRouter = createTRPCRouter({
 
     const salesMonth = salesMonthRes.data ?? [];
     const salesYday = salesYdayRes.data ?? [];
+    const salesToday = salesTodayRes.data ?? [];
     const leadsMonth = leadsMonthRes.data ?? [];
 
     const monthAmount = sum(salesMonth, (s) => s.total_amount_usd);
     const ydayAmount = sum(salesYday, (s) => s.total_amount_usd);
+    const todayAmount = sum(salesToday, (s) => s.total_amount_usd);
     // Refunds recognized by refunded_at (may differ from the sale month).
     const refundsMonth = sum(refundedMonthRes.data ?? [], (r) => r.refund_amount_usd);
     const expMonth = sum(expMonthRes.data ?? [], (e) => e.amount_usd);
@@ -92,6 +107,8 @@ export const dashboardRouter = createTRPCRouter({
 
     return {
       sales: {
+        todayCount: salesToday.length,
+        todayAmount,
         yesterdayCount: salesYday.length,
         yesterdayAmount: ydayAmount,
         monthCount: salesMonth.length,

@@ -97,6 +97,71 @@ export const tasksRouter = createTRPCRouter({
       return data ?? [];
     }),
 
+  /** In-app inbox: my overdue + due-today tasks and recent comments on my
+   *  tasks (by others). Powers the notification bell / inbox screen. */
+  inbox: protectedProcedure.query(async ({ ctx }) => {
+    const me = ctx.appUser.id;
+    const { data: collab } = await ctx.supabase
+      .from("task_assignees")
+      .select("task_id")
+      .eq("user_id", me);
+    const collabIds = (collab ?? []).map((r) => r.task_id);
+    let orFilter = `assigned_to.eq.${me},created_by.eq.${me}`;
+    if (collabIds.length) orFilter += `,id.in.(${collabIds.join(",")})`;
+
+    const { data: myTasks } = await ctx.supabase
+      .from("tasks")
+      .select("id, title, status, due_date, priority")
+      .or(orFilter);
+    const tasks = myTasks ?? [];
+    const myTaskIds = tasks.map((t) => t.id);
+
+    const today = new Date(Date.now() + 5 * 3600 * 1000).toISOString().slice(0, 10);
+    const tashDay = (iso: string) =>
+      new Date(Date.parse(iso) + 5 * 3600 * 1000).toISOString().slice(0, 10);
+    const open = tasks.filter((t) => t.status !== "done" && t.status !== "cancelled");
+    const overdue = open.filter((t) => t.due_date && tashDay(t.due_date) < today);
+    const dueToday = open.filter((t) => t.due_date && tashDay(t.due_date) === today);
+
+    let recentComments: {
+      id: string;
+      taskId: string;
+      taskTitle: string;
+      author: string;
+      content: string | null;
+      createdAt: string;
+    }[] = [];
+    if (myTaskIds.length) {
+      const [{ data: cmts }, { data: users }] = await Promise.all([
+        ctx.supabase
+          .from("task_comments")
+          .select("id, task_id, user_id, content, created_at")
+          .in("task_id", myTaskIds)
+          .neq("user_id", me)
+          .order("created_at", { ascending: false })
+          .limit(20),
+        ctx.supabase.from("users").select("id, full_name"),
+      ]);
+      const nameById = new Map((users ?? []).map((u) => [u.id, u.full_name]));
+      const titleById = new Map(tasks.map((t) => [t.id, t.title]));
+      recentComments = (cmts ?? []).map((c) => ({
+        id: c.id,
+        taskId: c.task_id ?? "",
+        taskTitle: c.task_id ? titleById.get(c.task_id) ?? "—" : "—",
+        author: c.user_id ? nameById.get(c.user_id) ?? "—" : "—",
+        content: c.content,
+        createdAt: c.created_at,
+      }));
+    }
+
+    return {
+      overdue,
+      dueToday,
+      recentComments,
+      count: overdue.length + dueToday.length + recentComments.length,
+    };
+  }),
+
   /** The caller's own headline stats (last 30 days) — shown on "my tasks". */
   myStats: protectedProcedure.query(async ({ ctx }) => {
     const now = new Date();

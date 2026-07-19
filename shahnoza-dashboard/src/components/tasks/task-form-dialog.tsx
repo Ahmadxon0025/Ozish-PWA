@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import Link from "next/link";
 import { Plus, Trash2, Users2, Sparkles, Wand2 } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { Button } from "@/components/ui/button";
@@ -597,6 +598,10 @@ export function SubtasksPanel({
     onSuccess: refresh,
     onError: (e) => toast({ title: "Xato", description: e.message, variant: "destructive" }),
   });
+  const update = api.tasks.update.useMutation({
+    onSuccess: refresh,
+    onError: (e) => toast({ title: "Xato", description: e.message, variant: "destructive" }),
+  });
   const del = api.tasks.delete.useMutation({
     onSuccess: refresh,
     onError: (e) => toast({ title: "Xato", description: e.message, variant: "destructive" }),
@@ -668,7 +673,10 @@ export function SubtasksPanel({
       {subs.length > 0 && (
         <div className="space-y-1">
           {subs.map((s) => (
-            <div key={s.id} className="flex items-center gap-2 rounded px-1 py-1 text-sm">
+            <div
+              key={s.id}
+              className="flex flex-wrap items-center gap-2 rounded-md border px-2 py-1.5 text-sm"
+            >
               <input
                 type="checkbox"
                 className="h-4 w-4 shrink-0"
@@ -677,17 +685,41 @@ export function SubtasksPanel({
                   setStatus.mutate({ id: s.id, status: e.target.checked ? "done" : "todo" })
                 }
               />
-              <span className={`min-w-0 flex-1 truncate ${s.status === "done" ? "text-muted-foreground line-through" : ""}`}>
+              <Link
+                href={`/tasks/${s.id}`}
+                className={`min-w-0 flex-1 truncate hover:underline ${s.status === "done" ? "text-muted-foreground line-through" : ""}`}
+                title="Ochish / to'liq tahrirlash"
+              >
                 {s.title}
-              </span>
-              {s.status !== "done" && s.status !== "todo" && (
-                <Badge variant={statusVariant(s.status)} className="shrink-0 text-[10px]">
-                  {TASK_STATUS_LABELS[s.status] ?? s.status}
-                </Badge>
-              )}
-              <span className="shrink-0 text-xs text-muted-foreground">
-                {s.assignedName ?? "—"}
-              </span>
+              </Link>
+              {/* Inline assignee */}
+              <Select
+                value={s.assigned_to ?? UNASSIGNED}
+                onValueChange={(v) =>
+                  update.mutate({ id: s.id, assignedTo: v === UNASSIGNED ? null : v })
+                }
+              >
+                <SelectTrigger className="h-7 w-28 shrink-0 text-xs">
+                  <SelectValue placeholder="Mas'ul" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={UNASSIGNED}>—</SelectItem>
+                  {users.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      {u.full_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {/* Inline due date */}
+              <Input
+                type="date"
+                value={s.due_date ? s.due_date.slice(0, 10) : ""}
+                onChange={(e) =>
+                  update.mutate({ id: s.id, dueDate: e.target.value || null })
+                }
+                className="h-7 w-[130px] shrink-0 text-xs"
+              />
               <Button
                 variant="ghost"
                 size="icon"

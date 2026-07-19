@@ -42,11 +42,18 @@ export default function DashboardPage() {
       {/* KPI cards */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {summary.isLoading || !s ? (
-          Array.from({ length: 4 }).map((_, i) => (
+          Array.from({ length: 5 }).map((_, i) => (
             <Skeleton key={i} className="h-28 rounded-xl" />
           ))
         ) : (
           <>
+            <KpiCard
+              label="Bugun sotuv"
+              value={formatUsd(s.sales.todayAmount)}
+              sub={`${s.sales.todayCount} ta bitim`}
+              icon={ShoppingCart}
+              tone="success"
+            />
             <KpiCard
               label="Kecha sotuv"
               value={formatUsd(s.sales.yesterdayAmount)}

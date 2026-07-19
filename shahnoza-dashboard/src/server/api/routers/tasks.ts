@@ -171,8 +171,11 @@ export const tasksRouter = createTRPCRouter({
       }
 
       const nowISO = new Date().toISOString();
-      const topLevel = all.filter((t) => !t.parent_task_id && t.status !== "cancelled");
-      const withMeta = topLevel
+      // Subtasks are first-class: they appear as their own cards (with a link
+      // back to the parent) AND still roll up onto the parent's done/total.
+      const titleById = new Map(all.map((t) => [t.id, t.title]));
+      const visible = all.filter((t) => t.status !== "cancelled");
+      const withMeta = visible
         .filter((t) => !input?.assignedTo || t.assigned_to === input.assignedTo)
         .map((t) => {
           const sub = subByParent.get(t.id) ?? { total: 0, done: 0 };
@@ -185,6 +188,9 @@ export const tasksRouter = createTRPCRouter({
             assignees: asg,
             subtaskTotal: sub.total,
             subtaskDone: sub.done,
+            parentTitle: t.parent_task_id
+              ? titleById.get(t.parent_task_id) ?? null
+              : null,
             isOverdue: t.status !== "done" && !!t.due_date && t.due_date < nowISO,
           };
         });

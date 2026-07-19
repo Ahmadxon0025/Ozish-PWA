@@ -156,19 +156,26 @@ function TaskCardBody({
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 items-start gap-1">
             {dragHandle}
-            <TaskFormDialog
-              mode="edit"
-              initial={task}
-              onSaved={onSaved}
-              trigger={
-                <button
-                  onPointerDown={stop}
-                  className="text-left text-sm font-medium hover:underline"
-                >
-                  {task.title}
-                </button>
-              }
-            />
+            <div className="min-w-0">
+              {task.parentTitle && (
+                <div className="truncate text-[11px] text-muted-foreground">
+                  ↳ {task.parentTitle}
+                </div>
+              )}
+              <TaskFormDialog
+                mode="edit"
+                initial={task}
+                onSaved={onSaved}
+                trigger={
+                  <button
+                    onPointerDown={stop}
+                    className="text-left text-sm font-medium hover:underline"
+                  >
+                    {task.title}
+                  </button>
+                }
+              />
+            </div>
           </div>
           <div className="flex shrink-0 items-center gap-1">
             {onPatch && editing === "priority" ? (

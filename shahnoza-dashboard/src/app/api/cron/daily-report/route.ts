@@ -44,6 +44,16 @@ export async function GET(request: NextRequest) {
   const { sendDailyReport } = await import("@/lib/telegram/report");
   const { sent } = await sendDailyReport();
 
+  // Daily task reminders — who has tasks due today or overdue. Team summary to
+  // the group + owner, plus a personal DM to anyone with a Telegram id.
+  let reminders = { group: 0, dms: 0 };
+  try {
+    const { sendTaskReminders } = await import("@/lib/telegram/task-reminders");
+    reminders = await sendTaskReminders();
+  } catch {
+    // non-fatal
+  }
+
   // Weekly AI summary on Mondays (04:00 UTC = 09:00 Tashkent) — folded into the
   // daily cron to stay within the Hobby-plan 2-cron limit. Aggregates only.
   let weekly = false;
@@ -61,5 +71,5 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, sent, weekly });
+  return NextResponse.json({ ok: true, sent, reminders, weekly });
 }

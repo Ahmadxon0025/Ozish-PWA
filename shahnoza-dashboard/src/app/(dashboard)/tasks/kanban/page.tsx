@@ -8,6 +8,7 @@ import {
   Plus,
   Repeat,
   AlertTriangle,
+  ListChecks,
 } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { PageHeader } from "@/components/layout/page-header";
@@ -25,6 +26,30 @@ import {
 } from "@/components/ui/select";
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
 import { formatDate, initials } from "@/lib/format";
+
+/** Overlapping avatars for a task's assignees (primary first). */
+function AssigneeStack({
+  assignees,
+  fallback,
+}: {
+  assignees: { userId: string; name: string; isPrimary: boolean }[];
+  fallback: string | null;
+}) {
+  const list =
+    assignees.length > 0
+      ? assignees
+      : [{ userId: "f", name: fallback ?? "?", isPrimary: true }];
+  const shown = list.slice(0, 3);
+  return (
+    <div className="flex -space-x-2">
+      {shown.map((a) => (
+        <Avatar key={a.userId} className="h-7 w-7 border-2 border-background">
+          <AvatarFallback className="text-xs">{initials(a.name)}</AvatarFallback>
+        </Avatar>
+      ))}
+    </div>
+  );
+}
 import {
   TASK_STATUS_LABELS,
   TASK_FLOW_STATUSES,
@@ -149,18 +174,24 @@ export default function KanbanPage() {
 
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex min-w-0 items-center gap-2">
-                              <Avatar className="h-7 w-7">
-                                <AvatarFallback className="text-xs">
-                                  {initials(t.assignedName)}
-                                </AvatarFallback>
-                              </Avatar>
+                              <AssigneeStack
+                                assignees={t.assignees}
+                                fallback={t.assignedName}
+                              />
                               <span className="truncate text-xs text-muted-foreground">
                                 {t.assignedName ?? "Belgilanmagan"}
+                                {t.assignees.length > 1 && ` +${t.assignees.length - 1}`}
                               </span>
                             </div>
-                            {t.recurrence && (
-                              <Repeat className="h-3.5 w-3.5 text-muted-foreground" />
-                            )}
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                              {t.subtaskTotal > 0 && (
+                                <span className="flex items-center gap-0.5 text-xs">
+                                  <ListChecks className="h-3.5 w-3.5" />
+                                  {t.subtaskDone}/{t.subtaskTotal}
+                                </span>
+                              )}
+                              {t.recurrence && <Repeat className="h-3.5 w-3.5" />}
+                            </div>
                           </div>
 
                           <div className="flex items-center justify-between gap-2">

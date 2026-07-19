@@ -15,6 +15,7 @@ import {
   CheckSquare,
   KanbanSquare,
   Trophy,
+  GanttChartSquare,
   Settings,
   UserCog,
   Plug,
@@ -67,6 +68,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: "Mening vazifalarim", href: "/tasks/my", icon: CheckSquare },
       { label: "Kanban", href: "/tasks/kanban", icon: KanbanSquare },
+      { label: "Vaqt jadvali", href: "/tasks/timeline", icon: GanttChartSquare },
       {
         label: "Samaradorlik",
         href: "/tasks/performance",

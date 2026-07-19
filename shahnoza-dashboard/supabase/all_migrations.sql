@@ -799,3 +799,52 @@ ALTER TABLE tasks ADD COLUMN IF NOT EXISTS recurrence TEXT;
 CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_task_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_completed_at ON tasks(completed_at);
 CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date);
+
+-- ============================================================================
+-- 0014_task_assignees.sql
+-- ============================================================================
+-- Additive. Multiple assignees = one primary (DRI, = tasks.assigned_to) +
+-- collaborators. Subtasks reuse the existing parent_task_id (no new table).
+
+CREATE TABLE IF NOT EXISTS task_assignees (
+  task_id    UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  is_primary BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (task_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_task_assignees_user ON task_assignees(user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_task_primary ON task_assignees(task_id) WHERE is_primary;
+
+ALTER TABLE task_assignees ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS task_assignees_select ON task_assignees;
+CREATE POLICY task_assignees_select ON task_assignees FOR SELECT TO authenticated
+  USING (
+    public.can_read_all()
+    OR user_id = public.app_uid()
+    OR EXISTS (SELECT 1 FROM tasks t WHERE t.id = task_id
+      AND (t.assigned_to = public.app_uid() OR t.created_by = public.app_uid()))
+  );
+
+DROP POLICY IF EXISTS task_assignees_write ON task_assignees;
+CREATE POLICY task_assignees_write ON task_assignees FOR ALL TO authenticated
+  USING (
+    public.can_manage_sales()
+    OR EXISTS (SELECT 1 FROM tasks t WHERE t.id = task_id
+      AND (t.assigned_to = public.app_uid() OR t.created_by = public.app_uid()))
+  )
+  WITH CHECK (
+    public.can_manage_sales()
+    OR EXISTS (SELECT 1 FROM tasks t WHERE t.id = task_id
+      AND (t.assigned_to = public.app_uid() OR t.created_by = public.app_uid()))
+  );
+
+DROP POLICY IF EXISTS tasks_select_collaborator ON tasks;
+CREATE POLICY tasks_select_collaborator ON tasks FOR SELECT TO authenticated
+  USING (EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = id AND ta.user_id = public.app_uid()));
+
+DROP POLICY IF EXISTS tasks_update_collaborator ON tasks;
+CREATE POLICY tasks_update_collaborator ON tasks FOR UPDATE TO authenticated
+  USING (EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = id AND ta.user_id = public.app_uid()))
+  WITH CHECK (EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = id AND ta.user_id = public.app_uid()));

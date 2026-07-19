@@ -7,6 +7,7 @@ import {
 } from "@/server/api/trpc";
 import { monthRange } from "@/lib/dates";
 import { commissionForSale } from "@/lib/business/commission";
+import { round2 } from "@/lib/business/currency";
 import { getCurrentRate } from "@/lib/business/exchange-rate";
 import { insertAccountEntry } from "@/lib/business/account-posting";
 import { PAYMENT_PROVIDERS } from "@/lib/constants";
@@ -87,36 +88,147 @@ export const salesRouter = createTRPCRouter({
     };
   }),
 
-  /** Overview: totals by product and by traffic source for a month. */
+  /** Overview: totals + breakdowns (product / person / source / provider),
+   *  avg deal, lead→sale conversion, and month-over-month change. */
   overview: protectedProcedure
     .input(z.object({ month: z.string().optional() }).optional())
     .query(async ({ ctx, input }) => {
       const range = resolveMonth(input?.month);
-      const [{ data: sales }, { data: products }] = await Promise.all([
+      // Previous month = same-length window ending at this month's start.
+      const prevStart = new Date(range.from);
+      prevStart.setUTCMonth(prevStart.getUTCMonth() - 1);
+      const prevFrom = prevStart.toISOString();
+
+      const [
+        { data: sales },
+        { data: products },
+        { data: users },
+        { data: prevSales },
+        { data: monthLeads },
+      ] = await Promise.all([
         ctx.supabase
           .from("sales")
-          .select("total_amount_usd, product_id, sold_at, is_refunded, refund_amount_usd")
+          .select(
+            "total_amount_usd, product_id, sold_at, is_refunded, refund_amount_usd, sales_person_id, lead_id, payment_provider",
+          )
           .gte("sold_at", range.from)
           .lt("sold_at", range.to),
         ctx.supabase.from("products").select("id, name"),
+        ctx.supabase.from("users").select("id, full_name"),
+        ctx.supabase
+          .from("sales")
+          .select("total_amount_usd")
+          .gte("sold_at", prevFrom)
+          .lt("sold_at", range.from),
+        ctx.supabase
+          .from("leads")
+          .select("id, sold_at, status")
+          .gte("created_at", range.from)
+          .lt("created_at", range.to),
       ]);
       const rows = sales ?? [];
       const productName = new Map((products ?? []).map((p) => [p.id, p.name]));
+      const userName = new Map((users ?? []).map((u) => [u.id, u.full_name]));
+
       const byProduct = groupBy(rows, (s) => s.product_id);
-      const productBreakdown = Array.from(byProduct.entries()).map(
-        ([pid, prows]) => ({
+      const productBreakdown = Array.from(byProduct.entries())
+        .map(([pid, prows]) => ({
           productId: pid,
           name: productName.get(pid) ?? "—",
           count: prows.length,
           amount: sum(prows, (r) => r.total_amount_usd),
-        }),
-      );
+        }))
+        .sort((a, b) => b.amount - a.amount);
+
+      const byPersonMap = groupBy(rows, (s) => s.sales_person_id);
+      const byPerson = Array.from(byPersonMap.entries())
+        .map(([uid, prows]) => ({
+          userId: uid,
+          name: uid ? userName.get(uid) ?? "—" : "—",
+          count: prows.length,
+          amount: sum(prows, (r) => r.total_amount_usd),
+        }))
+        .sort((a, b) => b.amount - a.amount);
+
+      const byProviderMap = groupBy(rows, (s) => s.payment_provider ?? "—");
+      const byProvider = Array.from(byProviderMap.entries())
+        .map(([provider, prows]) => ({
+          provider,
+          count: prows.length,
+          amount: sum(prows, (r) => r.total_amount_usd),
+        }))
+        .sort((a, b) => b.amount - a.amount);
+
+      // By traffic source: follow each sale's lead → utm_source / source name.
+      const leadIds = Array.from(
+        new Set(rows.map((r) => r.lead_id).filter(Boolean)),
+      ) as string[];
+      const sourceByLead = new Map<string, string>();
+      if (leadIds.length) {
+        const { data: leads } = await ctx.supabase
+          .from("leads")
+          .select("id, utm_source, traffic_source_id")
+          .in("id", leadIds);
+        const tsIds = Array.from(
+          new Set((leads ?? []).map((l) => l.traffic_source_id).filter(Boolean)),
+        ) as string[];
+        const tsName = new Map<string, string>();
+        if (tsIds.length) {
+          const { data: ts } = await ctx.supabase
+            .from("traffic_sources")
+            .select("id, name")
+            .in("id", tsIds);
+          for (const t of ts ?? []) tsName.set(t.id, t.name);
+        }
+        for (const l of leads ?? []) {
+          const name =
+            l.utm_source ||
+            (l.traffic_source_id ? tsName.get(l.traffic_source_id) : null) ||
+            "Noma'lum";
+          sourceByLead.set(l.id, name);
+        }
+      }
+      const bySourceMap = new Map<string, { count: number; amount: number }>();
+      for (const r of rows) {
+        const src = r.lead_id
+          ? sourceByLead.get(r.lead_id) ?? "Noma'lum"
+          : "To'g'ridan-to'g'ri";
+        const b = bySourceMap.get(src) ?? { count: 0, amount: 0 };
+        b.count += 1;
+        b.amount += Number(r.total_amount_usd ?? 0);
+        bySourceMap.set(src, b);
+      }
+      const bySource = Array.from(bySourceMap.entries())
+        .map(([source, v]) => ({ source, count: v.count, amount: round2(v.amount) }))
+        .sort((a, b) => b.amount - a.amount);
+
+      const totalAmount = sum(rows, (r) => r.total_amount_usd);
+      const totalCount = rows.length;
+      const prevAmount = sum(prevSales ?? [], (r) => r.total_amount_usd);
+      const deltaPct =
+        prevAmount > 0
+          ? Math.round(((totalAmount - prevAmount) / prevAmount) * 100)
+          : null;
+
+      const leadsCreated = (monthLeads ?? []).length;
+      const soldLeads = (monthLeads ?? []).filter(
+        (l) => l.sold_at || l.status === "won",
+      ).length;
+      const conversionPct =
+        leadsCreated > 0 ? Math.round((soldLeads / leadsCreated) * 100) : null;
 
       return {
-        totalAmount: sum(rows, (r) => r.total_amount_usd),
-        totalCount: rows.length,
+        totalAmount,
+        totalCount,
         refunds: sum(rows, (r) => (r.is_refunded ? r.refund_amount_usd : 0)),
+        avgDeal: totalCount > 0 ? round2(totalAmount / totalCount) : 0,
+        prevAmount,
+        deltaPct,
+        conversion: { leadsCreated, sold: soldLeads, pct: conversionPct },
         productBreakdown,
+        byPerson,
+        byProvider,
+        bySource,
       };
     }),
 

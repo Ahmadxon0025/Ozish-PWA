@@ -1,7 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Loader2, ShieldAlert, Users, Wallet, Link2, Copy } from "lucide-react";
+import {
+  Plus,
+  Loader2,
+  ShieldAlert,
+  Users,
+  Wallet,
+  Link2,
+  Copy,
+  Trash2,
+} from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/dashboard/empty-state";
@@ -165,9 +174,10 @@ export default function UsersPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
+                        <div className="flex items-center justify-end gap-2">
                           <LoginLinkButton user={u} />
                           <CompensationDialog user={u} />
+                          <DeleteUserButton user={u} />
                         </div>
                       </TableCell>
                     </TableRow>
@@ -218,6 +228,9 @@ export default function UsersPage() {
                     </div>
                     <LoginLinkButton user={u} fullWidth />
                     <CompensationDialog user={u} fullWidth />
+                    <div className="flex justify-end">
+                      <DeleteUserButton user={u} />
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -372,9 +385,44 @@ function StatusToggle({ user }: { user: UserItem }) {
         }
       >
         {update.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
-        {user.is_active ? "O'chirish" : "Faollashtirish"}
+        {user.is_active ? "Nofaol qilish" : "Faollashtirish"}
       </Button>
     </div>
+  );
+}
+
+/** Permanently remove a user. Blocked by the DB if they have real records
+ *  (sales/tasks/expenses) — deactivate those instead. */
+function DeleteUserButton({ user }: { user: UserItem }) {
+  const utils = api.useUtils();
+  const me = api.users.me.useQuery();
+  const del = api.users.delete.useMutation({
+    onSuccess: () => {
+      void utils.users.list.invalidate();
+      toast({ title: "Foydalanuvchi o'chirildi", variant: "success" });
+    },
+    onError: (e) =>
+      toast({ title: "Xatolik", description: e.message, variant: "destructive" }),
+  });
+  if (me.data?.id === user.id) return null; // can't delete yourself
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      className="h-9 w-9 text-destructive"
+      disabled={del.isPending}
+      title="Butunlay o'chirish"
+      onClick={() => {
+        if (window.confirm(`"${user.full_name}" butunlay o'chirilsinmi?`))
+          del.mutate({ id: user.id });
+      }}
+    >
+      {del.isPending ? (
+        <Loader2 className="h-4 w-4 animate-spin" />
+      ) : (
+        <Trash2 className="h-4 w-4" />
+      )}
+    </Button>
   );
 }
 

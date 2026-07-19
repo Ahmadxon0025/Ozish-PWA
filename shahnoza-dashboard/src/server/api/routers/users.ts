@@ -121,6 +121,49 @@ export const usersRouter = createTRPCRouter({
       return { link: gen.data.properties.action_link, email: user.email };
     }),
 
+  /**
+   * Permanently delete a user (row + linked auth account). The DB blocks this
+   * (RESTRICT FKs) if they have real records — sales, tasks, expenses,
+   * commissions — so only truly empty accounts (e.g. mistaken invites) can be
+   * removed; everyone with history must be deactivated instead. Can't delete
+   * yourself.
+   */
+  delete: superAdminProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      if (input.id === ctx.appUser.id) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "O'zingizni o'chira olmaysiz.",
+        });
+      }
+      const admin = requireAdminClient();
+      const { data: user } = await admin
+        .from("users")
+        .select("id, auth_id")
+        .eq("id", input.id)
+        .maybeSingle();
+      if (!user) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const { error } = await admin.from("users").delete().eq("id", input.id);
+      if (error) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Bu foydalanuvchida ma'lumotlar bor (sotuv, vazifa yoki xarajat). O'chirish o'rniga uni nofaol qiling.",
+        });
+      }
+      // Row gone → remove the linked auth account too (best-effort).
+      if (user.auth_id) {
+        try {
+          await admin.auth.admin.deleteUser(user.auth_id);
+        } catch {
+          /* non-fatal */
+        }
+      }
+      return { ok: true };
+    }),
+
   update: superAdminProcedure
     .input(
       z.object({

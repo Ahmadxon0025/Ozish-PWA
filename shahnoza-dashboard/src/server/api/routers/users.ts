@@ -63,6 +63,7 @@ export const usersRouter = createTRPCRouter({
         role: roleEnum,
         phone: z.string().optional(),
         telegramId: z.string().optional(),
+        spaceId: z.string().uuid().nullable().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -75,6 +76,7 @@ export const usersRouter = createTRPCRouter({
           role: input.role as never,
           phone: input.phone ?? null,
           telegram_id: input.telegramId ?? null,
+          space_id: input.spaceId ?? null,
           is_active: true,
         })
         .select()
@@ -205,6 +207,7 @@ export const usersRouter = createTRPCRouter({
         phone: z.string().optional(),
         telegramId: z.string().optional(),
         isActive: z.boolean().optional(),
+        spaceId: z.string().uuid().nullable().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -215,6 +218,7 @@ export const usersRouter = createTRPCRouter({
       if (input.phone !== undefined) patch.phone = input.phone;
       if (input.telegramId !== undefined) patch.telegram_id = input.telegramId;
       if (input.isActive !== undefined) patch.is_active = input.isActive;
+      if (input.spaceId !== undefined) patch.space_id = input.spaceId;
       const { error } = await db.from("users").update(patch).eq("id", input.id);
       if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
       return { ok: true };

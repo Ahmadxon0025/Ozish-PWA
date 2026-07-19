@@ -8,6 +8,7 @@ import {
   Percent,
   HandCoins,
   Plus,
+  AlertTriangle,
 } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { PageHeader } from "@/components/layout/page-header";
@@ -188,12 +189,38 @@ export default function OwnersPage() {
         )}
       </div>
 
-      {d && d.owners.length > 0 && d.owners.every((o) => o.shareRate === 0) && (
-        <p className="mt-3 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-warning-foreground">
-          Hali hech kimga ulush foizi belgilanmagan. «Ulush belgilash» tugmasi
-          orqali (masalan siz 30%, Shahnoza 60%) kiriting.
-        </p>
-      )}
+      {/* Guard: warn when the owner shares don't add up to 100%, so a mis-set
+          share (e.g. one owner left at 0%) is obvious instead of quietly
+          surfacing as "Biznesda qoldi". */}
+      {d &&
+        d.owners.length > 0 &&
+        (() => {
+          const totalPct = d.distributedRate * 100;
+          if (Math.abs(totalPct - 100) <= 0.5) return null; // ~100% → all good
+          const over = totalPct > 100;
+          const leftover = Math.max(0, 100 - totalPct);
+          return (
+            <div className="mt-3 flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-warning-foreground">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                {over ? (
+                  <>
+                    Egalar ulushi jami <b>{formatPct100(totalPct)}</b> — bu 100% dan
+                    oshib ketgan. «Ulush belgilash» orqali foizlarni tekshiring.
+                  </>
+                ) : (
+                  <>
+                    Egalar ulushi jami <b>{formatPct100(totalPct)}</b>. Qolgan{" "}
+                    <b>{formatPct100(leftover)}</b> hech kimga biriktirilmagan va
+                    yuqorida «Biznesda qoldi» sifatida ko&apos;rsatilyapti. Agar bu
+                    reinvestitsiya bo&apos;lmasa, «Ulush belgilash» orqali qolgan
+                    foizni biriktiring (masalan Ahmadxon 30%).
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
       {/* Payout history */}
       <Card className="mt-4">

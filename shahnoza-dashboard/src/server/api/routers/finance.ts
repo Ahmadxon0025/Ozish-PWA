@@ -372,8 +372,10 @@ export const financeRouter = createTRPCRouter({
       ctx.supabase
         .from("owner_shares")
         .select("*")
-        .order("effective_from", { ascending: false }),
+        .order("effective_from", { ascending: false })
+        .order("created_at", { ascending: false }),
     ]);
+    // First open row per owner wins (newest effective_from, then newest created).
     const currentByUser = new Map<string, { rate: number; bearsLoss: boolean }>();
     for (const s of shares ?? []) {
       if (s.user_id && !s.effective_to && !currentByUser.has(s.user_id)) {
@@ -413,18 +415,29 @@ export const financeRouter = createTRPCRouter({
           .lt("occurred_at", range.to),
       ]);
 
-    // Share active during the period (latest effective_from <= range end, and
-    // not ended before range start). Fallback 0 / no loss.
+    // Share in effect during the period: started on/before the period end and
+    // not ended before the period start. When several rows overlap (e.g. the
+    // share was edited more than once on the same day), pick deterministically:
+    // latest effective_from, then the still-open row, then most recently
+    // created. This stops a stale/closed row from shadowing the current share.
     const periodStart = range.from.slice(0, 10);
+    const periodEnd = range.to.slice(0, 10);
     const shareFor = (userId: string): { rate: number; bearsLoss: boolean } => {
       const applicable = (shares ?? [])
         .filter((s) => s.user_id === userId)
         .filter(
           (s) =>
-            s.effective_from <= range.to.slice(0, 10) &&
+            s.effective_from <= periodEnd &&
             (!s.effective_to || s.effective_to >= periodStart),
         )
-        .sort((a, b) => (a.effective_from < b.effective_from ? 1 : -1));
+        .sort((a, b) => {
+          if (a.effective_from !== b.effective_from)
+            return a.effective_from < b.effective_from ? 1 : -1; // latest first
+          const aOpen = a.effective_to ? 0 : 1;
+          const bOpen = b.effective_to ? 0 : 1;
+          if (aOpen !== bOpen) return bOpen - aOpen; // open (current) wins
+          return (a.created_at ?? "") < (b.created_at ?? "") ? 1 : -1; // newest
+        });
       return applicable.length
         ? { rate: Number(applicable[0].share_rate), bearsLoss: Boolean(applicable[0].bears_loss) }
         : { rate: 0, bearsLoss: false };
@@ -472,7 +485,16 @@ export const financeRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      // Close any open share for this owner.
+      // Drop this owner's rows dated on/after the new date, so re-saving on the
+      // same day REPLACES the share instead of stacking overlapping rows (which
+      // is what made a stale row shadow the current one). Genuine history
+      // (earlier effective_from) is preserved and closed below.
+      await ctx.supabase
+        .from("owner_shares")
+        .delete()
+        .eq("user_id", input.userId)
+        .gte("effective_from", input.effectiveFrom);
+      // Close any still-open historical share for this owner.
       await ctx.supabase
         .from("owner_shares")
         .update({ effective_to: input.effectiveFrom })

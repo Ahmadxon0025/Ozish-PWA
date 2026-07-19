@@ -468,6 +468,28 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["task_assignees"]["Insert"]>;
         Relationships: [];
       };
+      task_checklist_items: {
+        Row: {
+          id: string;
+          task_id: string;
+          content: string;
+          is_done: boolean;
+          position: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          task_id: string;
+          content: string;
+          is_done?: boolean;
+          position?: number;
+          created_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["task_checklist_items"]["Insert"]
+        >;
+        Relationships: [];
+      };
       task_comments: {
         Row: {
           id: string;

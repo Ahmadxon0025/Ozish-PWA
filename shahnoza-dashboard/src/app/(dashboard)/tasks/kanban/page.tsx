@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   CalendarDays,
   Plus,
@@ -162,19 +163,13 @@ function TaskCardBody({
                   ↳ {task.parentTitle}
                 </div>
               )}
-              <TaskFormDialog
-                mode="edit"
-                initial={task}
-                onSaved={onSaved}
-                trigger={
-                  <button
-                    onPointerDown={stop}
-                    className="text-left text-sm font-medium hover:underline"
-                  >
-                    {task.title}
-                  </button>
-                }
-              />
+              <Link
+                href={`/tasks/${task.id}`}
+                onPointerDown={stop}
+                className="block text-left text-sm font-medium hover:underline"
+              >
+                {task.title}
+              </Link>
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1">

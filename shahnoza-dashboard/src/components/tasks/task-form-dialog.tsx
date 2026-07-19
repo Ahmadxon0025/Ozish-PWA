@@ -483,7 +483,7 @@ export function TaskFormDialog({
 }
 
 /** Subtasks of a task — each is a real task with its own assignee + due date. */
-function SubtasksPanel({
+export function SubtasksPanel({
   taskId,
   users,
   onChanged,

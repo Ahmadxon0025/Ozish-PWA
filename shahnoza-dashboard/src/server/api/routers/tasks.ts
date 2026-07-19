@@ -201,25 +201,49 @@ export const tasksRouter = createTRPCRouter({
       }));
     }),
 
-  /** One task with its assignees and subtasks (for the detail / edit view). */
+  /** One task with its assignees, subtasks and checklist (for the detail view). */
   get: protectedProcedure
     .input(z.object({ id: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
-      const [{ data: task }, { data: subs }, { data: asg }, { data: users }] =
-        await Promise.all([
-          ctx.supabase.from("tasks").select("*").eq("id", input.id).maybeSingle(),
-          ctx.supabase
-            .from("tasks")
-            .select("*")
-            .eq("parent_task_id", input.id)
-            .order("created_at", { ascending: true }),
-          ctx.supabase.from("task_assignees").select("*").eq("task_id", input.id),
-          ctx.supabase.from("users").select("id, full_name"),
-        ]);
+      const [
+        { data: task },
+        { data: subs },
+        { data: asg },
+        { data: users },
+        { data: checklist },
+      ] = await Promise.all([
+        ctx.supabase.from("tasks").select("*").eq("id", input.id).maybeSingle(),
+        ctx.supabase
+          .from("tasks")
+          .select("*")
+          .eq("parent_task_id", input.id)
+          .order("created_at", { ascending: true }),
+        ctx.supabase.from("task_assignees").select("*").eq("task_id", input.id),
+        ctx.supabase.from("users").select("id, full_name"),
+        ctx.supabase
+          .from("task_checklist_items")
+          .select("*")
+          .eq("task_id", input.id)
+          .order("position", { ascending: true })
+          .order("created_at", { ascending: true }),
+      ]);
       if (!task) throw new TRPCError({ code: "NOT_FOUND" });
       const nameById = new Map((users ?? []).map((u) => [u.id, u.full_name]));
+
+      // Parent title for the breadcrumb (if this is a subtask).
+      let parentTitle: string | null = null;
+      if (task.parent_task_id) {
+        const { data: parent } = await ctx.supabase
+          .from("tasks")
+          .select("title")
+          .eq("id", task.parent_task_id)
+          .maybeSingle();
+        parentTitle = parent?.title ?? null;
+      }
+
       return {
         task,
+        parentTitle,
         assignees: (asg ?? [])
           .map((a) => ({
             userId: a.user_id,
@@ -231,7 +255,44 @@ export const tasksRouter = createTRPCRouter({
           ...s,
           assignedName: s.assigned_to ? nameById.get(s.assigned_to) ?? "—" : null,
         })),
+        checklist: checklist ?? [],
       };
+    }),
+
+  /** Add a checklist item to a task. */
+  addChecklistItem: protectedProcedure
+    .input(z.object({ taskId: z.string().uuid(), content: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const { error } = await ctx.supabase.from("task_checklist_items").insert({
+        task_id: input.taskId,
+        content: input.content.trim(),
+      });
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      return { ok: true };
+    }),
+
+  /** Toggle a checklist item done/undone. */
+  toggleChecklistItem: protectedProcedure
+    .input(z.object({ id: z.string().uuid(), isDone: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const { error } = await ctx.supabase
+        .from("task_checklist_items")
+        .update({ is_done: input.isDone })
+        .eq("id", input.id);
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      return { ok: true };
+    }),
+
+  /** Delete a checklist item. */
+  deleteChecklistItem: protectedProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const { error } = await ctx.supabase
+        .from("task_checklist_items")
+        .delete()
+        .eq("id", input.id);
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      return { ok: true };
     }),
 
   create: protectedProcedure
@@ -411,12 +472,20 @@ export const tasksRouter = createTRPCRouter({
   comments: protectedProcedure
     .input(z.object({ taskId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
-      const { data } = await ctx.supabase
-        .from("task_comments")
-        .select("*")
-        .eq("task_id", input.taskId)
-        .order("created_at", { ascending: true });
-      return data ?? [];
+      const [{ data }, { data: users }] = await Promise.all([
+        ctx.supabase
+          .from("task_comments")
+          .select("*")
+          .eq("task_id", input.taskId)
+          .order("created_at", { ascending: true }),
+        ctx.supabase.from("users").select("id, full_name"),
+      ]);
+      const nameById = new Map((users ?? []).map((u) => [u.id, u.full_name]));
+      return (data ?? []).map((c) => ({
+        ...c,
+        authorName: c.user_id ? nameById.get(c.user_id) ?? "—" : "—",
+        isMine: c.user_id === ctx.appUser.id,
+      }));
     }),
 
   addComment: protectedProcedure
@@ -425,8 +494,19 @@ export const tasksRouter = createTRPCRouter({
       const { error } = await ctx.supabase.from("task_comments").insert({
         task_id: input.taskId,
         user_id: ctx.appUser.id,
-        content: input.content,
+        content: input.content.trim(),
       });
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      return { ok: true };
+    }),
+
+  deleteComment: protectedProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const { error } = await ctx.supabase
+        .from("task_comments")
+        .delete()
+        .eq("id", input.id);
       if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
       return { ok: true };
     }),

@@ -48,6 +48,11 @@ export async function sendMessage(
   }
 }
 
+/** Group for task reminders + the weekly summary (falls back to finance). */
+export function tasksChatId(): string {
+  return env.TELEGRAM_TASKS_CHAT_ID || env.TELEGRAM_FINANCE_CHAT_ID;
+}
+
 /** The distinct chats that should receive the daily finance report. */
 export function reportChatIds(): string[] {
   return Array.from(

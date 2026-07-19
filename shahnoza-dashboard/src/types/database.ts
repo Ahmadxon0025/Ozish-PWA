@@ -382,6 +382,8 @@ export interface Database {
           labels: string[] | null;
           parent_task_id: string | null;
           recurrence: string | null;
+          telegram_chat_id: string | null;
+          telegram_confirm_message_id: number | null;
         };
         Insert: {
           id?: string;
@@ -404,6 +406,8 @@ export interface Database {
           labels?: string[] | null;
           parent_task_id?: string | null;
           recurrence?: string | null;
+          telegram_chat_id?: string | null;
+          telegram_confirm_message_id?: number | null;
         };
         Update: Partial<Database["public"]["Tables"]["tasks"]["Insert"]>;
         Relationships: [];

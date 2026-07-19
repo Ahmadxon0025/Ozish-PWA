@@ -10,6 +10,7 @@ import {
 } from "@/lib/business/account-posting";
 import { todayKey } from "@/lib/dates";
 import { formatUsd } from "@/lib/format";
+import { env, isAiConfigured } from "@/lib/env";
 import { sendMessage } from "./bot";
 import { parseExpense, isExpenseTrigger } from "./parse-expense";
 import {
@@ -134,6 +135,15 @@ const HELP = [
   "`instagram` — kategoriyani o'zgartiradi",
   "`o'chir` — xarajatni o'chiradi",
   "",
+  "📋 *Vazifalar:*",
+  "Guruhda odam belgilab yozsangiz, vazifa avtomatik qo'shiladi.",
+  "`/vazifa @Ism ertaga video montaj qil` — vazifa yaratish",
+  "Vazifa kartasiga *bajardim* deb reply qilsangiz — bajarildi bo'ladi.",
+  "`/kun` — bugungi hisobot: bajarilgan ✅ va qolgan ⬜",
+  "`/vazifalar` — hammaning bugungi/muddati o'tgan vazifalari",
+  "`/bajarilgan` — bugun bajarilgan vazifalar",
+  "`/vazifalarim` — o'zingizning ochiq vazifalaringiz",
+  "",
   "`/id` — shu guruh ID sini ko'rsatadi",
 ].join("\n");
 
@@ -154,12 +164,155 @@ async function findCategoryId(db: ReturnType<typeof requireAdminClient>, name: s
   return other ? { id: other.id, name: other.name ?? "Boshqa" } : null;
 }
 
+interface TgEntity {
+  type: string;
+  offset: number;
+  length: number;
+  user?: { id: number };
+}
+
 interface TgMessage {
   message_id: number;
   text?: string;
   chat: { id: number; type?: string };
-  from?: { id: number; first_name?: string; username?: string };
+  from?: { id: number; first_name?: string; username?: string; is_bot?: boolean };
   reply_to_message?: { message_id: number };
+  entities?: TgEntity[];
+}
+
+/**
+ * AI task capture: turn a free-form message into a task in the app. Used by the
+ * `/vazifa` command (force=true) and by natural-language capture in the tasks
+ * group (force=false — the AI's is_task flag decides). Returns true if a task
+ * was created. Best-effort; only replies with an error in forced mode.
+ */
+async function createTaskFromText(
+  db: AdminDb,
+  opts: {
+    text: string;
+    fromId: string | null;
+    chatId: number;
+    replyTo: number;
+    force: boolean;
+    mentionedTgId: string | null;
+  },
+): Promise<boolean> {
+  if (!isAiConfigured()) {
+    if (opts.force) {
+      await sendMessage(opts.chatId, "AI hozircha sozlanmagan.", {
+        replyToMessageId: opts.replyTo,
+      });
+    }
+    return false;
+  }
+
+  const { data: users } = await db
+    .from("users")
+    .select("id, full_name, telegram_id")
+    .eq("is_active", true);
+  const list = users ?? [];
+  const names = list
+    .map((u) => u.full_name)
+    .filter((n): n is string => Boolean(n));
+
+  const cap = await import("@/lib/ai/task-capture");
+
+  const createdBy = opts.fromId
+    ? list.find((u) => u.telegram_id === opts.fromId)?.id ?? null
+    : null;
+
+  // The AI call can throw (timeout / bad JSON) — in forced mode always tell the
+  // user, so /vazifa never fails silently.
+  let parsed: Awaited<ReturnType<typeof cap.parseTaskFromMessage>>;
+  try {
+    parsed = await cap.parseTaskFromMessage(names, opts.text, createdBy);
+  } catch (err) {
+    console.error("Task capture parse failed:", err);
+    if (opts.force) {
+      await sendMessage(
+        opts.chatId,
+        "⚠️ AI javob bermadi. Birozdan so'ng qaytadan urinib ko'ring.",
+        { replyToMessageId: opts.replyTo },
+      );
+    }
+    return false;
+  }
+  if (!opts.force && !parsed.isTask) return false;
+  if (!parsed.title) {
+    if (opts.force) {
+      await sendMessage(opts.chatId, "❓ Vazifa matnini tushunmadim.", {
+        replyToMessageId: opts.replyTo,
+      });
+    }
+    return false;
+  }
+
+  // Resolve the assignee: a tap-mention (telegram_id) is authoritative, else
+  // fall back to the name the AI pulled out of the text.
+  let assignedTo: string | null = null;
+  if (opts.mentionedTgId) {
+    assignedTo = list.find((u) => u.telegram_id === opts.mentionedTgId)?.id ?? null;
+  }
+  if (!assignedTo) assignedTo = cap.resolveAssignee(list, parsed.assigneeName);
+
+  const taskId = await cap.createCapturedTask(db, {
+    title: parsed.title,
+    description: parsed.description,
+    assignedTo,
+    createdBy,
+    priority: parsed.priority,
+    dueDate: parsed.dueDate,
+  });
+  if (!taskId) {
+    await sendMessage(opts.chatId, "⚠️ Vazifani saqlab bo'lmadi.", {
+      replyToMessageId: opts.replyTo,
+    });
+    return false;
+  }
+
+  const assignee = assignedTo ? list.find((u) => u.id === assignedTo) : null;
+  const assigneeName = assignee?.full_name ?? (assignedTo ? "—" : null);
+  const lines = [
+    "✅ *Vazifa qo'shildi*",
+    `📌 ${parsed.title}`,
+    `👤 ${assigneeName ?? "Belgilanmagan"}`,
+    `📅 ${parsed.dueDate ?? "muddat yo'q"}`,
+    `⚡️ ${cap.priorityLabel(parsed.priority)}`,
+  ];
+  if (parsed.description) lines.push(`📝 ${parsed.description}`);
+  if (parsed.assigneeName && !assignedTo) {
+    lines.push(`⚠️ "${parsed.assigneeName}" ro'yxatda topilmadi — egasiz qo'shildi.`);
+  }
+  lines.push("", "↩️ Bajarilgach shu xabarga *bajardim* deb javob bering.");
+  const confirmId = await sendMessage(opts.chatId, lines.join("\n"), {
+    replyToMessageId: opts.replyTo,
+  });
+
+  // Remember the confirmation card so a "bajardim" reply can close the task.
+  if (confirmId) {
+    await db
+      .from("tasks")
+      .update({
+        telegram_chat_id: String(opts.chatId),
+        telegram_confirm_message_id: confirmId,
+      })
+      .eq("id", taskId);
+  }
+
+  // Privately notify the assignee (best-effort: needs a linked Telegram id and
+  // they must have started the bot at least once).
+  if (assignee?.telegram_id && assignee.id !== createdBy) {
+    const dm = [
+      "📌 *Sizga yangi vazifa*",
+      parsed.title,
+      parsed.dueDate ? `📅 Muddat: ${parsed.dueDate}` : null,
+      `⚡️ ${cap.priorityLabel(parsed.priority)}`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+    await sendMessage(assignee.telegram_id, dm);
+  }
+  return true;
 }
 
 /** Process one Telegram update. Best-effort; never throws to the caller. */
@@ -171,6 +324,19 @@ export async function handleTelegramUpdate(update: unknown): Promise<void> {
   const chatId = msg.chat.id;
   const text = msg.text.trim();
   const fromId = msg.from?.id != null ? String(msg.from.id) : null;
+
+  // Telegram mentions: a tap-mention carries the user object (→ telegram_id),
+  // an @username mention only flags that someone was tagged.
+  let mentionedTgId: string | null = null;
+  let hasMention = false;
+  for (const e of msg.entities ?? []) {
+    if (e.type === "text_mention" && e.user?.id) {
+      mentionedTgId = String(e.user.id);
+      hasMention = true;
+    } else if (e.type === "mention") {
+      hasMention = true;
+    }
+  }
 
   // --- Commands ---
   if (/^\/(id|chatid)\b/i.test(text)) {
@@ -186,9 +352,130 @@ export async function handleTelegramUpdate(update: unknown): Promise<void> {
 
   const db = requireAdminClient();
 
+  // --- Task commands ---
+  // One person's open tasks (uses the sender's linked account). Checked before
+  // the group command: "/vazifalarim" must not be swallowed by "/vazifalar".
+  if (/^\/vazifalarim(@\w+)?\b/i.test(text)) {
+    const { data: me } = await db
+      .from("users")
+      .select("id, full_name")
+      .eq("telegram_id", fromId ?? "")
+      .eq("is_active", true)
+      .maybeSingle();
+    if (!me) {
+      await sendMessage(
+        chatId,
+        `❓ Hisobingiz ulanmagan. Sizning Telegram ID: \`${fromId ?? "—"}\` — buni administratorga bering.`,
+        { replyToMessageId: msg.message_id },
+      );
+      return;
+    }
+    const { personalTasksText } = await import("./task-reminders");
+    const txt = await personalTasksText(db, me.id, me.full_name ?? "");
+    await sendMessage(
+      chatId,
+      txt ?? `✅ ${me.full_name ?? "Siz"}, ochiq vazifangiz yo'q.`,
+      { replyToMessageId: msg.message_id },
+    );
+    return;
+  }
+  // Everyone's tasks due today / overdue (for the group).
+  if (/^\/(vazifalar|eslatma|bugun)(@\w+)?\b/i.test(text)) {
+    const { buildTaskReminders } = await import("./task-reminders");
+    const { groupText } = await buildTaskReminders();
+    await sendMessage(
+      chatId,
+      groupText ?? "✅ Hozircha muddati bugun yoki o'tib ketgan ochiq vazifa yo'q.",
+      { replyToMessageId: msg.message_id },
+    );
+    return;
+  }
+  // Everything the team finished today.
+  if (/^\/bajarilgan(@\w+)?\b/i.test(text)) {
+    const { buildDoneToday } = await import("./task-reminders");
+    const doneText = await buildDoneToday();
+    await sendMessage(
+      chatId,
+      doneText ?? "Bugun hali bajarilgan vazifa yo'q.",
+      { replyToMessageId: msg.message_id },
+    );
+    return;
+  }
+  // Today's scorecard for everyone — done (✅) + still-open (⬜). Same view the
+  // evening cron sends at 20:00.
+  if (/^\/kun(@\w+)?\b/i.test(text)) {
+    const { buildTodayRecap } = await import("./task-reminders");
+    const recapText = await buildTodayRecap();
+    await sendMessage(
+      chatId,
+      recapText ?? "Bugun uchun vazifa yo'q.",
+      { replyToMessageId: msg.message_id },
+    );
+    return;
+  }
+  // Explicit AI task creation: "/vazifa @Ism ertaga video montaj qil".
+  if (/^\/vazifa(@\w+)?\b/i.test(text)) {
+    const body = text.replace(/^\/vazifa(@\w+)?\s*/i, "").trim();
+    if (body.length < 2) {
+      await sendMessage(
+        chatId,
+        "Foydalanish: `/vazifa @Ism ertaga video montaj qil`",
+        { replyToMessageId: msg.message_id },
+      );
+      return;
+    }
+    await createTaskFromText(db, {
+      text: body,
+      fromId,
+      chatId,
+      replyTo: msg.message_id,
+      force: true,
+      mentionedTgId,
+    });
+    return;
+  }
+
   // --- Edit / delete: a reply to a tracked expense message ---
   if (msg.reply_to_message) {
     const rid = msg.reply_to_message.message_id;
+
+    // A reply to a task confirmation card → mark that task done.
+    const { data: repliedTask } = await db
+      .from("tasks")
+      .select("id, title, status")
+      .eq("telegram_chat_id", String(chatId))
+      .eq("telegram_confirm_message_id", rid)
+      .maybeSingle();
+    if (repliedTask) {
+      const isDone =
+        /(?:bajardim|bajarildi|bajarib|tayyor|done)/i.test(text) ||
+        text.includes("✅");
+      if (!isDone) {
+        await sendMessage(
+          chatId,
+          "Bajarilganini bildirish uchun shu xabarga *bajardim* deb javob bering.",
+          { replyToMessageId: msg.message_id },
+        );
+        return;
+      }
+      if (repliedTask.status === "done") {
+        await sendMessage(chatId, "✅ Bu vazifa allaqachon bajarilgan.", {
+          replyToMessageId: msg.message_id,
+        });
+        return;
+      }
+      await db
+        .from("tasks")
+        .update({ status: "done", completed_at: new Date().toISOString() })
+        .eq("id", repliedTask.id);
+      await sendMessage(
+        chatId,
+        `✅ "${repliedTask.title}" bajarildi deb belgilandi.`,
+        { replyToMessageId: msg.message_id },
+      );
+      return;
+    }
+
     const { data: expense } = await db
       .from("expenses")
       .select("*")
@@ -582,6 +869,64 @@ export async function handleTelegramUpdate(update: unknown): Promise<void> {
         .eq("id", inserted.id);
     }
     return;
+  }
+
+  // --- AI task capture ---
+  // A free-form message that tags a teammate becomes a task in the app. Allowed
+  // in the tasks group (or, if none is configured, any group that isn't a
+  // finance/admin/owner chat) and in private DMs — never in the finance group.
+  // Only fires when a teammate is referenced (keeps AI calls off chatter).
+  const chatType = msg.chat.type ?? "";
+  const financeSide = new Set(
+    [
+      env.TELEGRAM_FINANCE_CHAT_ID,
+      env.TELEGRAM_ADMIN_CHAT_ID,
+      env.TELEGRAM_OWNER_CHAT_ID,
+    ].filter(Boolean),
+  );
+  const captureChat =
+    (Boolean(env.TELEGRAM_TASKS_CHAT_ID) &&
+      String(chatId) === env.TELEGRAM_TASKS_CHAT_ID) ||
+    chatType === "private" ||
+    ((chatType === "group" || chatType === "supergroup") &&
+      !financeSide.has(String(chatId)));
+  if (
+    isAiConfigured() &&
+    captureChat &&
+    !msg.reply_to_message &&
+    !msg.from?.is_bot &&
+    !text.startsWith("/") &&
+    text.length >= 5
+  ) {
+    let referenced = hasMention;
+    if (!referenced) {
+      const { data: activeUsers } = await db
+        .from("users")
+        .select("full_name")
+        .eq("is_active", true);
+      const low = text.toLowerCase();
+      referenced = (activeUsers ?? []).some((u) => {
+        const fn = (u.full_name ?? "").toLowerCase().trim();
+        if (!fn) return false;
+        const first = fn.split(/\s+/)[0];
+        return low.includes(fn) || (first.length >= 3 && low.includes(first));
+      });
+    }
+    if (referenced) {
+      try {
+        await createTaskFromText(db, {
+          text,
+          fromId,
+          chatId,
+          replyTo: msg.message_id,
+          force: false,
+          mentionedTgId,
+        });
+      } catch {
+        // non-fatal — never disrupt the group on an AI hiccup
+      }
+      return;
+    }
   }
 
   // Anything else in the group is ignored (no spam).

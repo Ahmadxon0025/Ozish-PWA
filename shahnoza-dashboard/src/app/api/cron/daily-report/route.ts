@@ -4,6 +4,7 @@ import {
   isTelegramConfigured,
   isServiceRoleConfigured,
   isAiConfigured,
+  isAmocrmConfigured,
 } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +35,17 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // AmoCRM sync — folded into the daily cron so the second Hobby-plan cron slot
+  // is free for the evening task recap. No-ops if AmoCRM isn't configured.
+  if (isAmocrmConfigured()) {
+    try {
+      const { runAmocrmSync } = await import("@/lib/amocrm/sync");
+      await runAmocrmSync();
+    } catch {
+      // non-fatal
+    }
+  }
+
   if (!isTelegramConfigured() || !isServiceRoleConfigured()) {
     return NextResponse.json({
       ok: false,
@@ -44,6 +56,16 @@ export async function GET(request: NextRequest) {
   const { sendDailyReport } = await import("@/lib/telegram/report");
   const { sent } = await sendDailyReport();
 
+  // Daily task reminders — who has tasks due today or overdue. Team summary to
+  // the group + owner, plus a personal DM to anyone with a Telegram id.
+  let reminders = { group: 0, dms: 0 };
+  try {
+    const { sendTaskReminders } = await import("@/lib/telegram/task-reminders");
+    reminders = await sendTaskReminders();
+  } catch {
+    // non-fatal
+  }
+
   // Weekly AI summary on Mondays (04:00 UTC = 09:00 Tashkent) — folded into the
   // daily cron to stay within the Hobby-plan 2-cron limit. Aggregates only.
   let weekly = false;
@@ -52,8 +74,8 @@ export async function GET(request: NextRequest) {
       const { buildWeeklySummary } = await import("@/lib/ai/weekly-summary");
       const text = await buildWeeklySummary();
       if (text) {
-        const { broadcast } = await import("@/lib/telegram/bot");
-        await broadcast(`🗓️ *HAFTALIK XULOSA (AI)*\n\n${text}`);
+        const { sendMessage, tasksChatId } = await import("@/lib/telegram/bot");
+        await sendMessage(tasksChatId(), `🗓️ *HAFTALIK XULOSA (AI)*\n\n${text}`);
         weekly = true;
       }
     } catch {
@@ -61,5 +83,5 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, sent, weekly });
+  return NextResponse.json({ ok: true, sent, reminders, weekly });
 }

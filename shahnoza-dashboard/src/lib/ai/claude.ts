@@ -2,9 +2,10 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { env, isAiConfigured, isServiceRoleConfigured } from "@/lib/env";
 
-// Model for all AI features. Configurable — `claude-haiku-4-5` is ~5x cheaper
-// and fine for the small task-parsing prompts if cost matters.
-export const AI_MODEL = "claude-opus-4-8";
+// Model for all AI features. Haiku 4.5 is the cheapest tier and is plenty for
+// these short task-parsing / subtask / summary prompts. Swap to
+// `claude-opus-4-8` if you want the strongest model at ~5x the cost.
+export const AI_MODEL = "claude-haiku-4-5";
 
 function client(): Anthropic {
   return new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });

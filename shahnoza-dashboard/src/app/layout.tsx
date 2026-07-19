@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
+import { Pwa } from "@/components/pwa/pwa";
 import { APP_NAME } from "@/lib/constants";
 
 const inter = Inter({ subsets: ["latin", "cyrillic"] });
@@ -13,6 +14,20 @@ export const metadata: Metadata = {
   },
   description:
     "Bolalar massaji onlayn kursi biznesi uchun ichki boshqaruv paneli.",
+  manifest: "/manifest.webmanifest",
+  applicationName: APP_NAME,
+  appleWebApp: {
+    capable: true,
+    title: "Shahnoza",
+    statusBarStyle: "default",
+  },
+  icons: {
+    icon: [
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
 };
 
 export const viewport: Viewport = {
@@ -34,6 +49,7 @@ export default function RootLayout({
     <html lang="uz" suppressHydrationWarning>
       <body className={`${inter.className} antialiased`}>
         <Providers>{children}</Providers>
+        <Pwa />
       </body>
     </html>
   );

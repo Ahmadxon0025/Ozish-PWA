@@ -120,6 +120,33 @@ export const accountsRouter = createTRPCRouter({
       }));
     }),
 
+  /**
+   * Expenses posted to NO account — counted in P&L but absent from the ledger
+   * and cashflow (hence P&L/cashflow can disagree). Surfaced so the owner can
+   * fix or delete them. Delete via accounts.deleteSource (passes the id here).
+   */
+  orphanExpenses: financeProcedure.query(async ({ ctx }) => {
+    const [{ data: exp }, { data: cats }] = await Promise.all([
+      ctx.supabase
+        .from("expenses")
+        .select("id, amount, amount_usd, currency, description, expense_date, category_id")
+        .is("account_id", null)
+        .order("expense_date", { ascending: false })
+        .limit(100),
+      ctx.supabase.from("expense_categories").select("id, name"),
+    ]);
+    const catName = new Map((cats ?? []).map((c) => [c.id, c.name]));
+    return (exp ?? []).map((e) => ({
+      id: e.id,
+      amount: e.amount,
+      amountUsd: e.amount_usd,
+      currency: e.currency,
+      description: e.description,
+      date: e.expense_date,
+      category: e.category_id ? catName.get(e.category_id) ?? null : null,
+    }));
+  }),
+
   /** Deposit money into an account (e.g. incoming from abroad to the Visa card). */
   deposit: managerProcedure
     .input(
@@ -440,11 +467,26 @@ export const accountsRouter = createTRPCRouter({
         .select("id, related_type, related_id, transfer_group")
         .eq("id", input.id)
         .maybeSingle();
-      if (!txn) throw new TRPCError({ code: "NOT_FOUND" });
 
       // Elevated client: the role gate above is the authorization boundary; use
       // the service role so the delete isn't blocked by per-table RLS.
       const db = requireAdminClient();
+
+      // No ledger row for this id → it's an orphan expense (no account posted)
+      // surfaced in the ledger. Delete the expense directly.
+      if (!txn) {
+        const { data: exp } = await ctx.supabase
+          .from("expenses")
+          .select("id")
+          .eq("id", input.id)
+          .maybeSingle();
+        if (!exp) throw new TRPCError({ code: "NOT_FOUND" });
+        await deleteRelatedEntries(db, "expense", exp.id);
+        const { error } = await db.from("expenses").delete().eq("id", exp.id);
+        if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        return { ok: true, kind: "expense" as const };
+      }
+
       const rid = txn.related_id;
 
       if (txn.related_type === "expense" && rid) {

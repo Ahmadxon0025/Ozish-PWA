@@ -3,6 +3,7 @@ import { getSessionContext } from "@/lib/auth";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { BottomNav } from "@/components/layout/bottom-nav";
+import { QuickAdd } from "@/components/layout/quick-add";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { SessionUser } from "@/components/layout/user-menu";
 
@@ -53,6 +54,7 @@ export default async function DashboardLayout({
         <Topbar user={user} role={appUser.role} />
         <main className="flex-1 px-4 py-5 pb-28 lg:px-6 lg:pb-6">{children}</main>
         <BottomNav role={appUser.role} />
+        <QuickAdd />
       </div>
     </div>
   );

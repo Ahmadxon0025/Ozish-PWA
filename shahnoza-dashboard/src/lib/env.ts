@@ -49,6 +49,14 @@ export const env = {
   // Server-only. Enables the optional AI features (task capture, subtask
   // breakdown, weekly summary, smart hints). Features no-op without it.
   ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ?? "",
+  // Web Push (VAPID). Enables browser/PWA push notifications for tasks. The
+  // public key is safe to expose; the private key must stay server-only.
+  // Push features no-op without both. Generate with:
+  //   npx web-push generate-vapid-keys
+  VAPID_PUBLIC_KEY: process.env.VAPID_PUBLIC_KEY ?? "",
+  VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY ?? "",
+  // "mailto:you@example.com" — required by the push services as a contact.
+  VAPID_SUBJECT: process.env.VAPID_SUBJECT ?? "mailto:admin@shahnoza.app",
 } as const;
 
 export const isSupabaseConfigured = () =>
@@ -63,3 +71,6 @@ export const isAmocrmConfigured = () =>
   Boolean(env.AMOCRM_SUBDOMAIN && env.AMOCRM_CLIENT_ID && env.AMOCRM_CLIENT_SECRET);
 
 export const isAiConfigured = () => Boolean(env.ANTHROPIC_API_KEY);
+
+export const isPushConfigured = () =>
+  Boolean(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY);

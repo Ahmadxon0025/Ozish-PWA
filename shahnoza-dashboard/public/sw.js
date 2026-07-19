@@ -1,7 +1,7 @@
 // Minimal service worker — enough to make the app installable and fast, without
 // risking stale data. Pages are network-first (auth + tRPC data always fresh),
 // only static build assets are cached. API/auth requests are never cached.
-const CACHE = "shahnoza-static-v1";
+const CACHE = "shahnoza-static-v2";
 
 self.addEventListener("install", () => self.skipWaiting());
 
@@ -50,4 +50,43 @@ self.addEventListener("fetch", (event) => {
       })(),
     );
   }
+});
+
+// --- Web Push ---------------------------------------------------------------
+
+// Show a notification when a push arrives (payload is JSON from the server).
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { title: "Shahnoza", body: event.data ? event.data.text() : "" };
+  }
+  const title = data.title || "Shahnoza";
+  const options = {
+    body: data.body || "",
+    icon: "/icons/icon-192.png",
+    badge: "/icons/icon-192.png",
+    tag: data.tag || undefined,
+    data: { url: data.url || "/inbox" },
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// Focus an existing tab (or open one) at the notification's target URL.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = (event.notification.data && event.notification.data.url) || "/inbox";
+  event.waitUntil(
+    (async () => {
+      const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      for (const client of all) {
+        if ("focus" in client) {
+          client.navigate(target).catch(() => {});
+          return client.focus();
+        }
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(target);
+    })(),
+  );
 });

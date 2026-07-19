@@ -16,6 +16,7 @@ import {
 } from "@/lib/constants";
 import { groupBy } from "./_helpers";
 import { resolvePeriod } from "./_helpers";
+import { notifyTaskCreated } from "@/lib/notify/task-events";
 
 const statusEnum = z.enum(TASK_STATUSES);
 const priorityEnum = z.enum(TASK_PRIORITIES);
@@ -487,6 +488,18 @@ export const tasksRouter = createTRPCRouter({
         .single();
       if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
       await syncAssignees(ctx.supabase, data.id, primaryId, input.collaboratorIds ?? []);
+
+      // Notify the assignee (Telegram DM + web push) and announce top-level
+      // tasks in the group. Best-effort — never blocks or fails creation.
+      await notifyTaskCreated({
+        taskId: data.id,
+        title: data.title,
+        assignedTo: primaryId,
+        createdBy: ctx.appUser.id,
+        priority: input.priority,
+        dueDate: input.dueDate ?? null,
+        isSubtask: !!input.parentTaskId,
+      });
       return data;
     }),
 

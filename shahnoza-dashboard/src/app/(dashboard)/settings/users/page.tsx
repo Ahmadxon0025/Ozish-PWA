@@ -10,6 +10,7 @@ import {
   Link2,
   Copy,
   Trash2,
+  KeyRound,
 } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { PageHeader } from "@/components/layout/page-header";
@@ -175,6 +176,7 @@ export default function UsersPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
+                          <SetPasswordButton user={u} />
                           <LoginLinkButton user={u} />
                           <CompensationDialog user={u} />
                           <DeleteUserButton user={u} />
@@ -226,6 +228,7 @@ export default function UsersPage() {
                         )}
                       </span>
                     </div>
+                    <SetPasswordButton user={u} fullWidth />
                     <LoginLinkButton user={u} fullWidth />
                     <CompensationDialog user={u} fullWidth />
                     <div className="flex justify-end">
@@ -307,6 +310,65 @@ function LoginLinkButton({
             />
             <Button type="button" onClick={copy}>
               <Copy className="h-4 w-4" /> Nusxa
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+/** Set (or reset) a user's password so they log in with email + password. */
+function SetPasswordButton({
+  user,
+  fullWidth,
+}: {
+  user: UserItem;
+  fullWidth?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [pw, setPw] = useState("");
+  const setPass = api.users.setPassword.useMutation({
+    onSuccess: () => {
+      toast({ title: "Parol o'rnatildi", variant: "success" });
+      setOpen(false);
+      setPw("");
+    },
+    onError: (e) =>
+      toast({ title: "Xatolik", description: e.message, variant: "destructive" }),
+  });
+  return (
+    <>
+      <Button
+        variant="outline"
+        size="sm"
+        className={fullWidth ? "w-full" : ""}
+        onClick={() => setOpen(true)}
+      >
+        <KeyRound className="h-4 w-4" /> Parol
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Parol o&apos;rnatish — {user.full_name}</DialogTitle>
+            <DialogDescription>
+              Yangi parol kiriting va uni <b>{user.email}</b> egasiga bering. U
+              email + parol bilan kiradi (email kerak emas).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2">
+            <Input
+              type="text"
+              autoComplete="new-password"
+              value={pw}
+              onChange={(e) => setPw(e.target.value)}
+              placeholder="Kamida 6 belgi"
+            />
+            <Button
+              disabled={pw.trim().length < 6 || setPass.isPending}
+              onClick={() => setPass.mutate({ userId: user.id, password: pw.trim() })}
+            >
+              Saqlash
             </Button>
           </div>
         </DialogContent>
@@ -434,6 +496,7 @@ function AddUserDialog() {
   const [role, setRole] = useState<string>("");
   const [phone, setPhone] = useState("");
   const [telegramId, setTelegramId] = useState("");
+  const [password, setPassword] = useState("");
 
   function resetForm() {
     setEmail("");
@@ -441,10 +504,22 @@ function AddUserDialog() {
     setRole("");
     setPhone("");
     setTelegramId("");
+    setPassword("");
   }
 
+  const setPass = api.users.setPassword.useMutation();
   const create = api.users.create.useMutation({
-    onSuccess: () => {
+    onSuccess: async (data) => {
+      if (password.trim().length >= 6) {
+        try {
+          await setPass.mutateAsync({ userId: data.id, password: password.trim() });
+        } catch {
+          toast({
+            title: "Foydalanuvchi qo'shildi, lekin parol o'rnatilmadi",
+            variant: "destructive",
+          });
+        }
+      }
       void utils.users.list.invalidate();
       toast({
         title: "Foydalanuvchi qo'shildi",
@@ -563,6 +638,21 @@ function AddUserDialog() {
               value={telegramId}
               onChange={(e) => setTelegramId(e.target.value)}
             />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="new-password">Parol (ixtiyoriy)</Label>
+            <Input
+              id="new-password"
+              type="text"
+              autoComplete="new-password"
+              placeholder="Kamida 6 belgi — foydalanuvchiga bering"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Parol qo&apos;ysangiz, foydalanuvchi email + parol bilan kiradi.
+            </p>
           </div>
 
           <DialogFooter>

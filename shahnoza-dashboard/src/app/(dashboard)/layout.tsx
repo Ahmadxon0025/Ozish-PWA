@@ -51,7 +51,7 @@ export default async function DashboardLayout({
       <Sidebar role={appUser.role} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar user={user} role={appUser.role} />
-        <main className="flex-1 px-4 py-5 pb-24 lg:px-6 lg:pb-6">{children}</main>
+        <main className="flex-1 px-4 py-5 pb-28 lg:px-6 lg:pb-6">{children}</main>
         <BottomNav role={appUser.role} />
       </div>
     </div>

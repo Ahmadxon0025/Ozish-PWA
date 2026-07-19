@@ -51,18 +51,20 @@ export const TASK_STATUSES = [
   "in_progress",
   "review",
   "done",
+  "paused",
   "cancelled",
 ] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 
-// The ordered flow shown as Kanban columns and used for prev/next moves.
-// `cancelled` is intentionally excluded — it's a side action, not a column.
+// The ordered flow shown as Kanban columns. `paused` is a parking column at the
+// end (on-hold work); `cancelled` is a side action, not a column.
 export const TASK_FLOW_STATUSES = [
   "backlog",
   "todo",
   "in_progress",
   "review",
   "done",
+  "paused",
 ] as const;
 
 // Statuses that count as "open" (still active work) for performance metrics.
@@ -82,6 +84,7 @@ export const TASK_STATUS_LABELS: Record<string, string> = {
   in_progress: "Jarayonda",
   review: "Tekshiruvda",
   done: "Bajarildi",
+  paused: "Pauzada",
   cancelled: "Bekor qilingan",
 };
 

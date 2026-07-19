@@ -32,7 +32,7 @@ import {
   ROLE_LABELS,
 } from "@/lib/constants";
 import type { UserRole } from "@/types/database";
-import { statusVariant } from "@/lib/task-ui";
+import { statusVariant, combineDue, dueToInputs } from "@/lib/task-ui";
 import { toast } from "@/hooks/use-toast";
 
 const UNASSIGNED = "unassigned";
@@ -81,7 +81,9 @@ export function TaskFormDialog({
   const [collaborators, setCollaborators] = useState<string[]>([]);
   const [priority, setPriority] = useState(initial?.priority ?? "medium");
   const [status, setStatus] = useState<string>(defaultStatus);
-  const [dueDate, setDueDate] = useState(initial?.due_date?.slice(0, 10) ?? "");
+  const initialDue = dueToInputs(initial?.due_date ?? null);
+  const [dueDate, setDueDate] = useState(initialDue.date);
+  const [dueTime, setDueTime] = useState(initialDue.time);
   const [startDate, setStartDate] = useState(initial?.start_date?.slice(0, 10) ?? "");
   const [estimate, setEstimate] = useState(
     initial?.estimate_hours != null ? String(initial.estimate_hours) : "",
@@ -107,6 +109,7 @@ export function TaskFormDialog({
       setPriority("medium");
       setStatus(defaultStatus);
       setDueDate("");
+      setDueTime("");
       setStartDate("");
       setEstimate("");
       setLabels("");
@@ -159,10 +162,20 @@ export function TaskFormDialog({
     onError: (e) => toast({ title: "AI xato", description: e.message, variant: "destructive" }),
   });
 
+  const del = api.tasks.delete.useMutation({
+    onSuccess: () => {
+      toast({ title: "Vazifa o'chirildi", variant: "success" });
+      onSaved();
+      setOpen(false);
+    },
+    onError: (e) => toast({ title: "Xato", description: e.message, variant: "destructive" }),
+  });
+
   const pending = create.isPending || update.isPending;
   const labelList = labels.split(",").map((s) => s.trim()).filter(Boolean);
   const estimateNum = estimate ? Number(estimate) : undefined;
   const collabList = collaborators.filter((id) => id !== assignedTo);
+  const dueValue = combineDue(dueDate, dueTime);
 
   function toggleCollaborator(id: string) {
     setCollaborators((prev) =>
@@ -178,7 +191,6 @@ export function TaskFormDialog({
     const common = {
       title: title.trim(),
       priority: priority as (typeof TASK_PRIORITIES)[number],
-      dueDate: dueDate || undefined,
       startDate: startDate || undefined,
       estimateHours: estimateNum,
       labels: labelList,
@@ -188,6 +200,7 @@ export function TaskFormDialog({
       update.mutate({
         id: initial.id,
         ...common,
+        dueDate: dueValue,
         description: description || null,
         assignedTo: assignedTo === UNASSIGNED ? null : assignedTo,
         recurrence: recurrence === NO_RECUR ? null : (recurrence as "daily" | "weekly" | "monthly"),
@@ -195,6 +208,7 @@ export function TaskFormDialog({
     } else {
       create.mutate({
         ...common,
+        dueDate: dueValue ?? undefined,
         description: description || undefined,
         assignedTo: assignedTo === UNASSIGNED ? undefined : assignedTo,
         status: status as (typeof TASK_FLOW_STATUSES)[number],
@@ -364,9 +378,20 @@ export function TaskFormDialog({
               <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label>Muddat (deadline)</Label>
+              <Label>Muddat (sana)</Label>
               <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Muddat vaqti (ixtiyoriy)</Label>
+            <Input
+              type="time"
+              value={dueTime}
+              onChange={(e) => setDueTime(e.target.value)}
+              className="w-40"
+              disabled={!dueDate}
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -432,6 +457,19 @@ export function TaskFormDialog({
         </div>
 
         <DialogFooter>
+          {mode === "edit" && initial && (
+            <Button
+              variant="destructive"
+              className="mr-auto"
+              disabled={del.isPending}
+              onClick={() => {
+                if (window.confirm(`"${initial.title}" o'chirilsinmi?`))
+                  del.mutate({ id: initial.id });
+              }}
+            >
+              <Trash2 className="h-4 w-4" /> O&apos;chirish
+            </Button>
+          )}
           <DialogClose asChild>
             <Button variant="ghost">Bekor</Button>
           </DialogClose>

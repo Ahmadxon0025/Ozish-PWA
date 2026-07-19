@@ -50,6 +50,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "Sotuvlar ro'yxati", href: "/sales/list", icon: ListOrdered },
       { label: "Sotuv jamoasi", href: "/sales/team", icon: Users2 },
       { label: "Leadlar", href: "/leads", icon: UserSquare2 },
+      { label: "Lead doskasi", href: "/leads/board", icon: KanbanSquare },
     ],
   },
   {

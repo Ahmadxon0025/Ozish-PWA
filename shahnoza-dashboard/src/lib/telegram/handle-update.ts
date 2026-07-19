@@ -138,6 +138,7 @@ const HELP = [
   "📋 *Vazifalar:*",
   "Guruhda odam belgilab yozsangiz, vazifa avtomatik qo'shiladi.",
   "`/vazifa @Ism ertaga video montaj qil` — vazifa yaratish",
+  "Vazifa kartasiga *bajardim* deb reply qilsangiz — bajarildi bo'ladi.",
   "`/kun` — bugungi hisobot: bajarilgan ✅ va qolgan ⬜",
   "`/vazifalar` — hammaning bugungi/muddati o'tgan vazifalari",
   "`/bajarilgan` — bugun bajarilgan vazifalar",
@@ -269,9 +270,8 @@ async function createTaskFromText(
     return false;
   }
 
-  const assigneeName = assignedTo
-    ? list.find((u) => u.id === assignedTo)?.full_name ?? "—"
-    : null;
+  const assignee = assignedTo ? list.find((u) => u.id === assignedTo) : null;
+  const assigneeName = assignee?.full_name ?? (assignedTo ? "—" : null);
   const lines = [
     "✅ *Vazifa qo'shildi*",
     `📌 ${parsed.title}`,
@@ -283,7 +283,35 @@ async function createTaskFromText(
   if (parsed.assigneeName && !assignedTo) {
     lines.push(`⚠️ "${parsed.assigneeName}" ro'yxatda topilmadi — egasiz qo'shildi.`);
   }
-  await sendMessage(opts.chatId, lines.join("\n"), { replyToMessageId: opts.replyTo });
+  lines.push("", "↩️ Bajarilgach shu xabarga *bajardim* deb javob bering.");
+  const confirmId = await sendMessage(opts.chatId, lines.join("\n"), {
+    replyToMessageId: opts.replyTo,
+  });
+
+  // Remember the confirmation card so a "bajardim" reply can close the task.
+  if (confirmId) {
+    await db
+      .from("tasks")
+      .update({
+        telegram_chat_id: String(opts.chatId),
+        telegram_confirm_message_id: confirmId,
+      })
+      .eq("id", taskId);
+  }
+
+  // Privately notify the assignee (best-effort: needs a linked Telegram id and
+  // they must have started the bot at least once).
+  if (assignee?.telegram_id && assignee.id !== createdBy) {
+    const dm = [
+      "📌 *Sizga yangi vazifa*",
+      parsed.title,
+      parsed.dueDate ? `📅 Muddat: ${parsed.dueDate}` : null,
+      `⚡️ ${cap.priorityLabel(parsed.priority)}`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+    await sendMessage(assignee.telegram_id, dm);
+  }
   return true;
 }
 
@@ -410,6 +438,44 @@ export async function handleTelegramUpdate(update: unknown): Promise<void> {
   // --- Edit / delete: a reply to a tracked expense message ---
   if (msg.reply_to_message) {
     const rid = msg.reply_to_message.message_id;
+
+    // A reply to a task confirmation card → mark that task done.
+    const { data: repliedTask } = await db
+      .from("tasks")
+      .select("id, title, status")
+      .eq("telegram_chat_id", String(chatId))
+      .eq("telegram_confirm_message_id", rid)
+      .maybeSingle();
+    if (repliedTask) {
+      const isDone =
+        /(?:bajardim|bajarildi|bajarib|tayyor|done)/i.test(text) ||
+        text.includes("✅");
+      if (!isDone) {
+        await sendMessage(
+          chatId,
+          "Bajarilganini bildirish uchun shu xabarga *bajardim* deb javob bering.",
+          { replyToMessageId: msg.message_id },
+        );
+        return;
+      }
+      if (repliedTask.status === "done") {
+        await sendMessage(chatId, "✅ Bu vazifa allaqachon bajarilgan.", {
+          replyToMessageId: msg.message_id,
+        });
+        return;
+      }
+      await db
+        .from("tasks")
+        .update({ status: "done", completed_at: new Date().toISOString() })
+        .eq("id", repliedTask.id);
+      await sendMessage(
+        chatId,
+        `✅ "${repliedTask.title}" bajarildi deb belgilandi.`,
+        { replyToMessageId: msg.message_id },
+      );
+      return;
+    }
+
     const { data: expense } = await db
       .from("expenses")
       .select("*")

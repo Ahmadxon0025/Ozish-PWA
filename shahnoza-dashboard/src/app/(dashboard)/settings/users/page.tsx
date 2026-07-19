@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Loader2, ShieldAlert, Users, Wallet } from "lucide-react";
+import { Plus, Loader2, ShieldAlert, Users, Wallet, Link2, Copy } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/dashboard/empty-state";
@@ -165,7 +165,10 @@ export default function UsersPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <CompensationDialog user={u} />
+                        <div className="flex justify-end gap-2">
+                          <LoginLinkButton user={u} />
+                          <CompensationDialog user={u} />
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -213,6 +216,7 @@ export default function UsersPage() {
                         )}
                       </span>
                     </div>
+                    <LoginLinkButton user={u} fullWidth />
                     <CompensationDialog user={u} fullWidth />
                   </div>
                 </CardContent>
@@ -222,6 +226,79 @@ export default function UsersPage() {
         </>
       )}
     </div>
+  );
+}
+
+/** Generate a no-email login link the owner shares (e.g. via Telegram). */
+function LoginLinkButton({
+  user,
+  fullWidth,
+}: {
+  user: UserItem;
+  fullWidth?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [link, setLink] = useState("");
+  const gen = api.users.loginLink.useMutation({
+    onSuccess: (r) => {
+      setLink(r.link);
+      setOpen(true);
+    },
+    onError: (e) =>
+      toast({ title: "Xatolik", description: e.message, variant: "destructive" }),
+  });
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(link);
+      toast({ title: "Nusxalandi", variant: "success" });
+    } catch {
+      /* clipboard may be blocked; the field is selectable as a fallback */
+    }
+  };
+  return (
+    <>
+      <Button
+        variant="outline"
+        size="sm"
+        className={fullWidth ? "w-full" : ""}
+        disabled={gen.isPending}
+        onClick={() =>
+          gen.mutate({
+            userId: user.id,
+            redirectTo: `${window.location.origin}/auth/callback`,
+          })
+        }
+      >
+        {gen.isPending ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Link2 className="h-4 w-4" />
+        )}
+        Kirish havolasi
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Kirish havolasi — {user.full_name}</DialogTitle>
+            <DialogDescription>
+              Bu havolani <b>{user.email}</b> egasiga (masalan Telegram orqali)
+              yuboring. U bosgach, tizimga kiradi. Havola bir martalik va
+              vaqtinchalik — email kerak emas.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2">
+            <Input
+              readOnly
+              value={link}
+              onFocus={(e) => e.currentTarget.select()}
+            />
+            <Button type="button" onClick={copy}>
+              <Copy className="h-4 w-4" /> Nusxa
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

@@ -6,6 +6,7 @@ import {
   superAdminProcedure,
 } from "@/server/api/trpc";
 import { ROLES } from "@/lib/constants";
+import { requireAdminClient } from "@/lib/supabase/admin";
 import type { Database, UserRole } from "@/types/database";
 
 const roleEnum = z.enum(ROLES as [string, ...string[]]);
@@ -80,6 +81,44 @@ export const usersRouter = createTRPCRouter({
         .single();
       if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
       return data;
+    }),
+
+  /**
+   * Generate a one-tap login link for a user WITHOUT sending email (bypasses
+   * the Supabase email rate limit). The owner shares it via Telegram/etc.
+   * Already-linked users get a magiclink; not-yet-logged-in invitees get an
+   * invite link (creates their auth user, linked to their row by the 0008
+   * trigger). Redirect must match the login flow's `${origin}/auth/callback`.
+   */
+  loginLink: superAdminProcedure
+    .input(z.object({ userId: z.string().uuid(), redirectTo: z.string().url() }))
+    .mutation(async ({ input }) => {
+      const admin = requireAdminClient();
+      const { data: user } = await admin
+        .from("users")
+        .select("email, auth_id")
+        .eq("id", input.userId)
+        .maybeSingle();
+      if (!user?.email) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const gen = user.auth_id
+        ? await admin.auth.admin.generateLink({
+            type: "magiclink",
+            email: user.email,
+            options: { redirectTo: input.redirectTo },
+          })
+        : await admin.auth.admin.generateLink({
+            type: "invite",
+            email: user.email,
+            options: { redirectTo: input.redirectTo },
+          });
+      if (gen.error || !gen.data?.properties?.action_link) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: gen.error?.message ?? "Havola yaratib bo'lmadi.",
+        });
+      }
+      return { link: gen.data.properties.action_link, email: user.email };
     }),
 
   update: superAdminProcedure

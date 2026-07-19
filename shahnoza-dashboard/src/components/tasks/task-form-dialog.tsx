@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { Plus, Trash2, Users2 } from "lucide-react";
+import { Plus, Trash2, Users2, Sparkles, Wand2 } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -111,6 +111,7 @@ export function TaskFormDialog({
       setEstimate("");
       setLabels("");
       setRecurrence(NO_RECUR);
+      setAiText("");
     }
   }
 
@@ -130,6 +131,32 @@ export function TaskFormDialog({
       setOpen(false);
     },
     onError: (e) => toast({ title: "Xato", description: e.message, variant: "destructive" }),
+  });
+
+  // --- AI helpers (no-op when ANTHROPIC_API_KEY is absent) ---
+  const aiStatus = api.ai.status.useQuery(undefined, { enabled: open });
+  const aiOn = aiStatus.data?.configured ?? false;
+  const [aiText, setAiText] = useState("");
+  const parseTask = api.ai.parseTask.useMutation({
+    onSuccess: (r) => {
+      setTitle(r.title);
+      if (r.assignedTo) setAssignedTo(r.assignedTo);
+      setPriority(r.priority);
+      if (r.dueDate) setDueDate(r.dueDate);
+      if (r.labels.length) setLabels(r.labels.join(", "));
+      if (r.assigneeName && !r.assignedTo)
+        toast({ title: `"${r.assigneeName}" topilmadi — mas'ulni tanlang`, variant: "destructive" });
+      else toast({ title: "AI to'ldirdi — tekshiring va saqlang", variant: "success" });
+    },
+    onError: (e) => toast({ title: "AI xato", description: e.message, variant: "destructive" }),
+  });
+  const suggestMeta = api.ai.suggestMeta.useMutation({
+    onSuccess: (r) => {
+      setPriority(r.priority);
+      if (r.dueDate) setDueDate(r.dueDate);
+      toast({ title: "AI muhimlik/muddat taklif qildi", variant: "success" });
+    },
+    onError: (e) => toast({ title: "AI xato", description: e.message, variant: "destructive" }),
   });
 
   const pending = create.isPending || update.isPending;
@@ -194,6 +221,39 @@ export function TaskFormDialog({
         </DialogHeader>
 
         <div className="space-y-3">
+          {mode === "create" && aiOn && (
+            <div className="space-y-1.5 rounded-md border border-primary/30 bg-primary/5 p-2.5">
+              <Label className="flex items-center gap-1.5 text-primary">
+                <Sparkles className="h-3.5 w-3.5" /> AI bilan yozish
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  value={aiText}
+                  onChange={(e) => setAiText(e.target.value)}
+                  placeholder="masalan: Abbosga ertaga yangi lidlarga qo'ng'iroq, shoshilinch"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && aiText.trim() && !parseTask.isPending) {
+                      e.preventDefault();
+                      parseTask.mutate({ text: aiText.trim() });
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={!aiText.trim() || parseTask.isPending}
+                  onClick={() => parseTask.mutate({ text: aiText.trim() })}
+                >
+                  {parseTask.isPending ? "..." : "To'ldirish"}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Bir jumlada yozing — AI quyidagi maydonlarni to&apos;ldiradi. Saqlashdan
+                oldin tekshiring.
+              </p>
+            </div>
+          )}
+
           <div className="space-y-1.5">
             <Label>Sarlavha</Label>
             <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Vazifa nomi" />
@@ -229,7 +289,25 @@ export function TaskFormDialog({
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Muhimlik</Label>
+              <div className="flex items-center justify-between">
+                <Label>Muhimlik</Label>
+                {aiOn && (
+                  <button
+                    type="button"
+                    className="flex items-center gap-1 text-xs text-primary hover:underline disabled:opacity-50"
+                    disabled={!title.trim() || suggestMeta.isPending}
+                    onClick={() =>
+                      suggestMeta.mutate({
+                        title: title.trim(),
+                        description: description || undefined,
+                      })
+                    }
+                    title="AI muhimlik va muddat taklif qiladi"
+                  >
+                    <Wand2 className="h-3 w-3" /> AI taklif
+                  </button>
+                )}
+              </div>
               <Select value={priority} onValueChange={setPriority}>
                 <SelectTrigger>
                   <SelectValue />
@@ -379,10 +457,18 @@ function SubtasksPanel({
   const utils = api.useUtils();
   const detail = api.tasks.get.useQuery({ id: taskId });
   const subs = detail.data?.subtasks ?? [];
+  const parentTask = detail.data?.task;
 
   const [title, setTitle] = useState("");
   const [assignedTo, setAssignedTo] = useState(UNASSIGNED);
   const [due, setDue] = useState("");
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+
+  const aiOn = api.ai.status.useQuery().data?.configured ?? false;
+  const breakdown = api.ai.breakdownSubtasks.useMutation({
+    onSuccess: (r) => setSuggestions(r.subtasks),
+    onError: (e) => toast({ title: "AI xato", description: e.message, variant: "destructive" }),
+  });
 
   const refresh = () => {
     utils.tasks.get.invalidate({ id: taskId });
@@ -413,12 +499,62 @@ function SubtasksPanel({
     <div className="space-y-2 rounded-md border p-3">
       <div className="flex items-center justify-between">
         <Label className="text-sm font-medium">Ichki vazifalar (subtasklar)</Label>
-        {subs.length > 0 && (
-          <Badge variant="secondary">
-            {done}/{subs.length}
-          </Badge>
-        )}
+        <div className="flex items-center gap-2">
+          {subs.length > 0 && (
+            <Badge variant="secondary">
+              {done}/{subs.length}
+            </Badge>
+          )}
+          {aiOn && parentTask && (
+            <button
+              type="button"
+              className="flex items-center gap-1 text-xs text-primary hover:underline disabled:opacity-50"
+              disabled={breakdown.isPending}
+              onClick={() =>
+                breakdown.mutate({
+                  title: parentTask.title,
+                  description: parentTask.description || undefined,
+                })
+              }
+              title="AI ichki vazifalarni taklif qiladi"
+            >
+              <Sparkles className="h-3 w-3" />
+              {breakdown.isPending ? "..." : "AI bo'lish"}
+            </button>
+          )}
+        </div>
       </div>
+
+      {suggestions.length > 0 && (
+        <div className="space-y-1 rounded-md border border-primary/30 bg-primary/5 p-2">
+          <p className="text-xs font-medium text-primary">AI takliflari — qo&apos;shishni tanlang:</p>
+          {suggestions.map((s, i) => (
+            <div key={i} className="flex items-center gap-2 text-sm">
+              <span className="min-w-0 flex-1 truncate">{s}</span>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-7"
+                disabled={create.isPending}
+                onClick={() => {
+                  create.mutate({ title: s, parentTaskId: taskId });
+                  setSuggestions((prev) => prev.filter((_, j) => j !== i));
+                }}
+              >
+                <Plus className="h-3.5 w-3.5" /> Qo&apos;shish
+              </Button>
+            </div>
+          ))}
+          <button
+            type="button"
+            className="text-xs text-muted-foreground hover:underline"
+            onClick={() => setSuggestions([])}
+          >
+            Yopish
+          </button>
+        </div>
+      )}
 
       {subs.length > 0 && (
         <div className="space-y-1">

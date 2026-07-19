@@ -1,5 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { env, isTelegramConfigured, isServiceRoleConfigured } from "@/lib/env";
+import {
+  env,
+  isTelegramConfigured,
+  isServiceRoleConfigured,
+  isAiConfigured,
+} from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -38,5 +43,23 @@ export async function GET(request: NextRequest) {
 
   const { sendDailyReport } = await import("@/lib/telegram/report");
   const { sent } = await sendDailyReport();
-  return NextResponse.json({ ok: true, sent });
+
+  // Weekly AI summary on Mondays (04:00 UTC = 09:00 Tashkent) — folded into the
+  // daily cron to stay within the Hobby-plan 2-cron limit. Aggregates only.
+  let weekly = false;
+  if (new Date().getUTCDay() === 1 && isAiConfigured()) {
+    try {
+      const { buildWeeklySummary } = await import("@/lib/ai/weekly-summary");
+      const text = await buildWeeklySummary();
+      if (text) {
+        const { broadcast } = await import("@/lib/telegram/bot");
+        await broadcast(`🗓️ *HAFTALIK XULOSA (AI)*\n\n${text}`);
+        weekly = true;
+      }
+    } catch {
+      // non-fatal
+    }
+  }
+
+  return NextResponse.json({ ok: true, sent, weekly });
 }

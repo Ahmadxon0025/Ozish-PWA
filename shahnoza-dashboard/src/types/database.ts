@@ -408,6 +408,30 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["tasks"]["Insert"]>;
         Relationships: [];
       };
+      ai_usage_log: {
+        Row: {
+          id: string;
+          user_id: string | null;
+          feature: string;
+          model: string | null;
+          input_tokens: number | null;
+          output_tokens: number | null;
+          success: boolean | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id?: string | null;
+          feature: string;
+          model?: string | null;
+          input_tokens?: number | null;
+          output_tokens?: number | null;
+          success?: boolean | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["ai_usage_log"]["Insert"]>;
+        Relationships: [];
+      };
       app_settings: {
         Row: {
           key: string;

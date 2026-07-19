@@ -43,6 +43,9 @@ export const env = {
   AMOCRM_CLIENT_SECRET: process.env.AMOCRM_CLIENT_SECRET ?? "",
   CRON_SECRET: process.env.CRON_SECRET ?? "",
   TOKEN_ENCRYPTION_KEY: process.env.TOKEN_ENCRYPTION_KEY ?? "",
+  // Server-only. Enables the optional AI features (task capture, subtask
+  // breakdown, weekly summary, smart hints). Features no-op without it.
+  ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ?? "",
 } as const;
 
 export const isSupabaseConfigured = () =>
@@ -55,3 +58,5 @@ export const isTelegramConfigured = () => Boolean(env.TELEGRAM_BOT_TOKEN);
 
 export const isAmocrmConfigured = () =>
   Boolean(env.AMOCRM_SUBDOMAIN && env.AMOCRM_CLIENT_ID && env.AMOCRM_CLIENT_SECRET);
+
+export const isAiConfigured = () => Boolean(env.ANTHROPIC_API_KEY);

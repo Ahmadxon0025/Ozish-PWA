@@ -66,8 +66,11 @@ type UserItem = {
   avatar_url: string | null;
   is_active: boolean;
   amocrm_user_id: number | string | null;
+  space_id: string | null;
   created_at: string;
 };
+
+const NO_SPACE = "none";
 
 function todayInput(): string {
   return new Date().toISOString().slice(0, 10);
@@ -136,6 +139,7 @@ export default function UsersPage() {
                     <TableHead>Ism</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Rol</TableHead>
+                    <TableHead>Bo&apos;lim</TableHead>
                     <TableHead>Holat</TableHead>
                     <TableHead>amoCRM</TableHead>
                     <TableHead className="text-right">Amallar</TableHead>
@@ -163,6 +167,9 @@ export default function UsersPage() {
                       </TableCell>
                       <TableCell>
                         <RoleSelect user={u} />
+                      </TableCell>
+                      <TableCell>
+                        <SpaceSelect user={u} />
                       </TableCell>
                       <TableCell>
                         <StatusToggle user={u} />
@@ -216,6 +223,12 @@ export default function UsersPage() {
                         Rol
                       </Label>
                       <RoleSelect user={u} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">
+                        Bo&apos;lim
+                      </Label>
+                      <SpaceSelect user={u} />
                     </div>
                     <div className="flex items-center justify-between">
                       <StatusToggle user={u} />
@@ -415,6 +428,43 @@ function RoleSelect({ user }: { user: UserItem }) {
   );
 }
 
+/** Assign a person to a bo'lim (department). Non-managers only see their own
+ *  bo'lim's tasks; managers/owner still see everything. */
+function SpaceSelect({ user }: { user: UserItem }) {
+  const utils = api.useUtils();
+  const spaces = api.tasks.spaces.useQuery();
+  const update = api.users.update.useMutation({
+    onSuccess: () => {
+      void utils.users.list.invalidate();
+      toast({ title: "Bo'lim yangilandi", variant: "success" });
+    },
+    onError: (err) =>
+      toast({ title: "Xatolik", description: err.message, variant: "destructive" }),
+  });
+
+  return (
+    <Select
+      value={user.space_id ?? NO_SPACE}
+      disabled={update.isPending}
+      onValueChange={(v) =>
+        update.mutate({ id: user.id, spaceId: v === NO_SPACE ? null : v })
+      }
+    >
+      <SelectTrigger className="h-9 w-[160px]">
+        <SelectValue placeholder="Bo'lim" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={NO_SPACE}>Bo&apos;limsiz</SelectItem>
+        {(spaces.data ?? []).map((s) => (
+          <SelectItem key={s.id} value={s.id}>
+            {s.name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 function StatusToggle({ user }: { user: UserItem }) {
   const utils = api.useUtils();
   const update = api.users.update.useMutation({
@@ -497,6 +547,8 @@ function AddUserDialog() {
   const [phone, setPhone] = useState("");
   const [telegramId, setTelegramId] = useState("");
   const [password, setPassword] = useState("");
+  const [spaceId, setSpaceId] = useState<string>(NO_SPACE);
+  const spaces = api.tasks.spaces.useQuery(undefined, { enabled: open });
 
   function resetForm() {
     setEmail("");
@@ -505,6 +557,7 @@ function AddUserDialog() {
     setPhone("");
     setTelegramId("");
     setPassword("");
+    setSpaceId(NO_SPACE);
   }
 
   const setPass = api.users.setPassword.useMutation();
@@ -554,6 +607,7 @@ function AddUserDialog() {
       role: role as UserRole,
       phone: phone || undefined,
       telegramId: telegramId || undefined,
+      spaceId: spaceId === NO_SPACE ? null : spaceId,
     });
   }
 
@@ -617,6 +671,27 @@ function AddUserDialog() {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="new-space">Bo&apos;lim</Label>
+            <Select value={spaceId} onValueChange={setSpaceId}>
+              <SelectTrigger id="new-space">
+                <SelectValue placeholder="Bo'lim (ixtiyoriy)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_SPACE}>Bo&apos;limsiz</SelectItem>
+                {(spaces.data ?? []).map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Bo&apos;lim tanlansa, foydalanuvchi faqat o&apos;sha bo&apos;lim
+              vazifalarini ko&apos;radi (menejer/egadan tashqari).
+            </p>
           </div>
 
           <div className="space-y-1.5">

@@ -500,11 +500,14 @@ export default function KanbanPage() {
   const [activeTask, setActiveTask] = useState<BoardTask | null>(null);
   const [activeStatus, setActiveStatus] = useState<string | null>(null);
   const assignees = api.tasks.assignees.useQuery();
+  const me = api.users.me.useQuery();
   const boardInput = {
     assignedTo: assignee === ALL ? undefined : assignee,
     spaceId: space === ALL_SPACES ? undefined : space,
   };
   const board = api.tasks.board.useQuery(boardInput);
+  // New tasks default to the selected bo'lim, or (for a walled member) their own.
+  const defaultSpaceForNew = space === ALL_SPACES ? me.data?.space_id ?? null : space;
 
   const users: UserLite[] = assignees.data ?? [];
   const nameById = new Map(users.map((u) => [u.id, u.full_name]));
@@ -630,7 +633,7 @@ export default function KanbanPage() {
                 </Button>
               }
               onSaved={invalidate}
-              defaultSpaceId={space === ALL_SPACES ? null : space}
+              defaultSpaceId={defaultSpaceForNew}
             />
           </div>
         }

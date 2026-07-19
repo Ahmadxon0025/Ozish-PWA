@@ -34,6 +34,7 @@ export interface Database {
           amocrm_user_id: number | null;
           avatar_url: string | null;
           is_active: boolean;
+          space_id: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -48,6 +49,7 @@ export interface Database {
           amocrm_user_id?: number | null;
           avatar_url?: string | null;
           is_active?: boolean;
+          space_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -745,6 +747,7 @@ export interface Database {
     Functions: {
       app_uid: { Args: Record<string, never>; Returns: string };
       app_role: { Args: Record<string, never>; Returns: string };
+      app_space: { Args: Record<string, never>; Returns: string };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

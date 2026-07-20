@@ -22,7 +22,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SalesTrendChart } from "@/components/charts/sales-trend-chart";
 import { EmptyState } from "@/components/dashboard/empty-state";
-import { formatUsd, formatPct100 } from "@/lib/format";
+import { formatUzs, formatPct100 } from "@/lib/format";
 
 export default function DashboardPage() {
   const summary = api.dashboard.summary.useQuery();
@@ -49,37 +49,47 @@ export default function DashboardPage() {
           <>
             <KpiCard
               label="Bugun sotuv"
-              value={formatUsd(s.sales.todayAmount)}
+              value={formatUzs(s.sales.todayUzs)}
               sub={`${s.sales.todayCount} ta bitim`}
               icon={ShoppingCart}
               tone="success"
             />
             <KpiCard
               label="Kecha sotuv"
-              value={formatUsd(s.sales.yesterdayAmount)}
+              value={formatUzs(s.sales.yesterdayUzs)}
               sub={`${s.sales.yesterdayCount} ta bitim`}
               icon={ShoppingCart}
             />
             <KpiCard
               label="Bu oy sotuv"
-              value={formatUsd(s.sales.monthAmount)}
+              value={formatUzs(s.sales.monthUzs)}
               sub={`${s.sales.monthCount} ta bitim`}
               icon={DollarSign}
               tone="success"
             />
             <KpiCard
               label="Oylik reja"
-              value={`${s.sales.planPercent}%`}
-              sub={formatUsd(s.sales.planUsd)}
+              value={s.sales.planUzs ? `${s.sales.planPercent}%` : "—"}
+              sub={
+                s.sales.planUzs
+                  ? formatUzs(s.sales.planUzs)
+                  : "Maqsadlar'da belgilang"
+              }
               icon={Target}
-              tone={s.sales.planPercent >= 100 ? "success" : "warning"}
+              tone={
+                !s.sales.planUzs
+                  ? "default"
+                  : s.sales.planPercent >= 100
+                    ? "success"
+                    : "warning"
+              }
             />
             <KpiCard
               label="Sof foyda (oy)"
-              value={formatUsd(s.pnl.netProfitUsd)}
+              value={formatUzs(s.pnl.netProfitUzs)}
               sub={`Margin ${formatPct100(s.pnl.marginPct)}`}
               icon={TrendingUp}
-              tone={s.pnl.netProfitUsd >= 0 ? "success" : "destructive"}
+              tone={s.pnl.netProfitUzs >= 0 ? "success" : "destructive"}
             />
           </>
         )}
@@ -95,7 +105,7 @@ export default function DashboardPage() {
           <>
             <KpiCard
               label="Reklama (oy)"
-              value={formatUsd(m.adSpend)}
+              value={formatUzs(m.adSpendUzs)}
               icon={Megaphone}
               tone="warning"
             />
@@ -108,13 +118,13 @@ export default function DashboardPage() {
             />
             <KpiCard
               label="CAC"
-              value={m.cac != null ? formatUsd(m.cac) : "—"}
+              value={m.cacUzs != null ? formatUzs(m.cacUzs) : "—"}
               sub="Reklama ÷ sotuv"
               icon={UserPlus}
             />
             <KpiCard
               label="AOV"
-              value={m.aov != null ? formatUsd(m.aov) : "—"}
+              value={m.aovUzs != null ? formatUzs(m.aovUzs) : "—"}
               sub="O'rtacha chek"
               icon={Tag}
             />
@@ -127,7 +137,7 @@ export default function DashboardPage() {
             />
             <KpiCard
               label="Kassa"
-              value={formatUsd(m.kassaUsd)}
+              value={formatUzs(m.kassaUzs)}
               sub="Barcha hisoblar"
               icon={Landmark}
             />
@@ -198,15 +208,15 @@ export default function DashboardPage() {
               <>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Kecha</span>
-                  <span className="font-medium">{formatUsd(s.expenses.yesterday)}</span>
+                  <span className="font-medium">{formatUzs(s.expenses.yesterdayUzs)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Bu oy</span>
-                  <span className="font-medium">{formatUsd(s.expenses.month)}</span>
+                  <span className="font-medium">{formatUzs(s.expenses.monthUzs)}</span>
                 </div>
                 <div className="flex items-center justify-between border-t pt-3">
                   <span className="text-sm text-muted-foreground">Komissiya (oy)</span>
-                  <span className="font-medium">{formatUsd(s.pnl.commissionsUsd)}</span>
+                  <span className="font-medium">{formatUzs(s.expenses.commissionsUzs)}</span>
                 </div>
               </>
             )}
@@ -232,7 +242,7 @@ export default function DashboardPage() {
                       {t.name}
                     </span>
                     <span className="text-sm text-muted-foreground">
-                      {t.count} ta · {formatUsd(t.amount)}
+                      {t.count} ta · {formatUzs(t.amount)}
                     </span>
                   </li>
                 ))}

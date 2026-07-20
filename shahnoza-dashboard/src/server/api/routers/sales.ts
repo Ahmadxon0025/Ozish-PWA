@@ -232,28 +232,39 @@ export const salesRouter = createTRPCRouter({
       };
     }),
 
-  /** Sales-team leaderboard with commissions for a month. */
+  /** Sales-team leaderboard with commissions + monthly targets (so'm). */
   team: protectedProcedure
     .input(z.object({ month: z.string().optional() }).optional())
     .query(async ({ ctx, input }) => {
       const range = resolveMonth(input?.month);
-      const [{ data: sales }, { data: users }] = await Promise.all([
+      const monthKey = range.from.slice(0, 10); // first-of-month DATE
+      const [{ data: sales }, { data: users }, { data: targets }] = await Promise.all([
         ctx.supabase
           .from("sales")
-          .select("total_amount_usd, sales_person_id, is_refunded, refund_amount_usd")
+          .select(
+            "total_amount_usd, total_amount_uzs, sales_person_id, is_refunded, refund_amount_usd",
+          )
           .gte("sold_at", range.from)
           .lt("sold_at", range.to),
         ctx.supabase
           .from("users")
           .select("id, full_name, avatar_url, role")
           .in("role", ["sales", "sales_manager"]),
+        ctx.supabase
+          .from("sales_targets")
+          .select("user_id, target_uzs, target_deals")
+          .eq("month", monthKey),
       ]);
 
       const byPerson = groupBy(sales ?? [], (s) => s.sales_person_id);
+      const targetByUser = new Map(
+        (targets ?? []).map((t) => [t.user_id, t]),
+      );
       return (users ?? [])
         .map((u) => {
           const rows = byPerson.get(u.id) ?? [];
           const revenue = sum(rows, (r) => r.total_amount_usd);
+          const revenueUzs = sum(rows, (r) => r.total_amount_uzs);
           const commission = sum(rows, (r) =>
             commissionForSale({
               totalAmountUsd: r.total_amount_usd,
@@ -261,6 +272,7 @@ export const salesRouter = createTRPCRouter({
               refundAmountUsd: r.refund_amount_usd,
             }),
           );
+          const t = targetByUser.get(u.id);
           return {
             userId: u.id,
             name: u.full_name,
@@ -268,10 +280,38 @@ export const salesRouter = createTRPCRouter({
             role: u.role,
             count: rows.length,
             revenue,
+            revenueUzs,
             commission,
+            targetUzs: Number(t?.target_uzs ?? 0),
+            targetDeals: Number(t?.target_deals ?? 0),
           };
         })
-        .sort((a, b) => b.revenue - a.revenue);
+        .sort((a, b) => b.revenueUzs - a.revenueUzs);
+    }),
+
+  /** Set a rep's monthly target (so'm + deals). Managers only. */
+  setTarget: managerProcedure
+    .input(
+      z.object({
+        userId: z.string().uuid(),
+        month: z.string(), // YYYY-MM or YYYY-MM-DD
+        targetUzs: z.number().nonnegative(),
+        targetDeals: z.number().int().nonnegative().default(0),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const monthKey = `${input.month.slice(0, 7)}-01`;
+      const { error } = await ctx.supabase.from("sales_targets").upsert(
+        {
+          user_id: input.userId,
+          month: monthKey,
+          target_uzs: input.targetUzs,
+          target_deals: input.targetDeals,
+        },
+        { onConflict: "user_id,month" },
+      );
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      return { ok: true };
     }),
 
   /** Individual sales-person detail. */

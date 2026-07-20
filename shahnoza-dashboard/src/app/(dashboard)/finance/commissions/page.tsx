@@ -27,11 +27,13 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { SimpleBarChart } from "@/components/charts/simple-bar-chart";
-import { formatUsd, formatDate, formatPct100 } from "@/lib/format";
+import { formatDate, formatPct100 } from "@/lib/format";
 import { DEFAULT_COMMISSION_RATE } from "@/lib/constants";
+import { useUzs } from "@/hooks/use-uzs";
 
 export default function CommissionsPage() {
   const [month, setMonth] = useState<string>(currentMonthValue());
+  const { fmt } = useUzs();
   const commissions = api.finance.commissions.useQuery({ month });
   const c = commissions.data;
 
@@ -54,7 +56,7 @@ export default function CommissionsPage() {
         ) : (
           <KpiCard
             label="Jami komissiya"
-            value={formatUsd(c.total)}
+            value={fmt(c.total)}
             icon={Percent}
             tone="success"
           />
@@ -89,7 +91,7 @@ export default function CommissionsPage() {
                       label: u.userName,
                       value: u.total,
                     }))}
-                    valueFormatter={(v) => formatUsd(v)}
+                    valueFormatter={(v) => fmt(v)}
                   />
                   <Table>
                     <TableHeader>
@@ -107,7 +109,7 @@ export default function CommissionsPage() {
                           </TableCell>
                           <TableCell className="text-right">{u.count}</TableCell>
                           <TableCell className="text-right">
-                            {formatUsd(u.total)}
+                            {fmt(u.total)}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -157,13 +159,13 @@ export default function CommissionsPage() {
                               {l.userName}
                             </TableCell>
                             <TableCell className="text-right">
-                              {formatUsd(l.saleAmount)}
+                              {fmt(l.saleAmount)}
                             </TableCell>
                             <TableCell className="text-right">
                               {formatPct100(l.rate * 100)}
                             </TableCell>
                             <TableCell className="text-right font-medium">
-                              {formatUsd(l.commission)}
+                              {fmt(l.commission)}
                             </TableCell>
                           </TableRow>
                         ))}
@@ -183,11 +185,11 @@ export default function CommissionsPage() {
                             </p>
                           </div>
                           <span className="font-semibold text-success">
-                            {formatUsd(l.commission)}
+                            {fmt(l.commission)}
                           </span>
                         </div>
                         <div className="mt-2 flex items-center justify-between text-sm text-muted-foreground">
-                          <span>Sotuv: {formatUsd(l.saleAmount)}</span>
+                          <span>Sotuv: {fmt(l.saleAmount)}</span>
                           <span>Stavka: {formatPct100(l.rate * 100)}</span>
                         </div>
                       </div>

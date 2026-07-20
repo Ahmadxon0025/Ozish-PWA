@@ -586,6 +586,7 @@ export interface Database {
         Row: {
           id: string;
           rep_user_id: string | null;
+          rep_name: string | null;
           lead_id: string | null;
           title: string | null;
           transcript: string | null;
@@ -602,6 +603,7 @@ export interface Database {
         Insert: {
           id?: string;
           rep_user_id?: string | null;
+          rep_name?: string | null;
           lead_id?: string | null;
           title?: string | null;
           transcript?: string | null;

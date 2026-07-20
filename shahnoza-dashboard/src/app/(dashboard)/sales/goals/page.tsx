@@ -117,7 +117,7 @@ export default function GoalsPage() {
       <PageHeader
         title="Maqsadlar"
         description="Bo'lim maqsadlari — Marketing va Sotuv jamoasi. Fakt avtomatik hisoblanadi."
-        actions={<MonthSelect value={month} onChange={setMonth} />}
+        actions={<MonthSelect value={month} onChange={setMonth} future={24} />}
       />
 
       {!canEdit && (

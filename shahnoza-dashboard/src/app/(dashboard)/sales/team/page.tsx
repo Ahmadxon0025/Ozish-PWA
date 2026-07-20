@@ -86,7 +86,7 @@ export default function SalesTeamPage() {
       <PageHeader
         title="Sotuv jamoasi"
         description="Sotuvchilar reytingi, maqsadlari va sur'ati."
-        actions={<MonthSelect value={month} onChange={setMonth} />}
+        actions={<MonthSelect value={month} onChange={setMonth} future={24} />}
       />
 
       {/* Team totals */}

@@ -183,6 +183,59 @@ export const leadsRouter = createTRPCRouter({
     };
   }),
 
+  /** Coordinator work-queue: new/unworked leads sorted oldest-first, with age
+   *  and a simple response SLA. Powers the "Navbat" tab. RLS-scoped. */
+  queue: protectedProcedure.query(async ({ ctx }) => {
+    const [{ data: leads }, { data: users }] = await Promise.all([
+      ctx.supabase
+        .from("leads")
+        .select(
+          "id, full_name, phone, source_name, utm_source, stage_name, status, assigned_to, manager_name, created_at",
+        )
+        .eq("status", "new")
+        .order("created_at", { ascending: true })
+        .limit(500),
+      ctx.supabase.from("users").select("id, full_name"),
+    ]);
+    const nameById = new Map((users ?? []).map((u) => [u.id, u.full_name]));
+    const now = Date.now();
+    const today = new Date(now + 5 * 3600 * 1000).toISOString().slice(0, 10);
+    const tashDay = (iso: string) =>
+      new Date(Date.parse(iso) + 5 * 3600 * 1000).toISOString().slice(0, 10);
+
+    const items = (leads ?? []).map((l) => {
+      const ageHours = l.created_at
+        ? Math.max(0, (now - Date.parse(l.created_at)) / 3_600_000)
+        : 0;
+      return {
+        id: l.id,
+        name: l.full_name,
+        phone: l.phone,
+        source: l.source_name || l.utm_source || null,
+        stage: l.stage_name,
+        assignedName: l.assigned_to ? nameById.get(l.assigned_to) ?? null : l.manager_name,
+        createdAt: l.created_at,
+        ageHours: Math.round(ageHours * 10) / 10,
+      };
+    });
+
+    const newToday = (leads ?? []).filter(
+      (l) => l.created_at && tashDay(l.created_at) === today,
+    ).length;
+    const overdue = items.filter((i) => i.ageHours > 24).length;
+    const avgAgeHours = items.length
+      ? Math.round((items.reduce((s, i) => s + i.ageHours, 0) / items.length) * 10) / 10
+      : 0;
+
+    return {
+      items,
+      awaiting: items.length,
+      newToday,
+      overdue,
+      avgAgeHours,
+    };
+  }),
+
   /** Funnel counts by status (all leads). */
   funnel: protectedProcedure.query(async ({ ctx }) => {
     const { data } = await ctx.supabase.from("leads").select("status");

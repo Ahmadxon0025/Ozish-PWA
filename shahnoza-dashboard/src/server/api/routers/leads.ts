@@ -175,7 +175,7 @@ export const leadsRouter = createTRPCRouter({
       byPaymentMethod: group((l) => l.payment_method),
       bySegment: group((l) => l.segment),
       byManager: group((l) =>
-        l.assigned_to ? nameById.get(l.assigned_to) ?? l.manager_name : l.manager_name,
+        l.manager_name || (l.assigned_to ? nameById.get(l.assigned_to) ?? null : null),
       ),
       cancelReasons: group((l) => (l.cancel_reason ? l.cancel_reason : null)).filter(
         (r) => r.key !== "Noma'lum",

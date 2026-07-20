@@ -123,6 +123,66 @@ export const leadsRouter = createTRPCRouter({
       };
     }),
 
+  /** Rich lead analytics on the AmoCRM fields (stages, source, tarif, cancel
+   *  reasons, debtors) — powers the Lead tahlili dashboard. RLS scopes it. */
+  analytics: protectedProcedure.query(async ({ ctx }) => {
+    const [{ data: leads }, { data: users }] = await Promise.all([
+      ctx.supabase
+        .from("leads")
+        .select(
+          "status, stage_name, source_name, utm_source, tarif, cancel_reason, payment_method, segment, manager_name, assigned_to, amount_uzs, outstanding_uzs",
+        ),
+      ctx.supabase.from("users").select("id, full_name"),
+    ]);
+    const rows = leads ?? [];
+    const nameById = new Map((users ?? []).map((u) => [u.id, u.full_name]));
+    const won = rows.filter((l) => l.status === "won");
+    const lost = rows.filter((l) => l.status === "lost");
+
+    // Grouped counts with won-rate, sorted by count desc.
+    const group = (pick: (l: (typeof rows)[number]) => string | null) => {
+      const m = new Map<string, { count: number; won: number }>();
+      for (const l of rows) {
+        const k = pick(l) || "Noma'lum";
+        const b = m.get(k) ?? { count: 0, won: 0 };
+        b.count += 1;
+        if (l.status === "won") b.won += 1;
+        m.set(k, b);
+      }
+      return Array.from(m.entries())
+        .map(([key, v]) => ({
+          key,
+          count: v.count,
+          won: v.won,
+          conversionPct: v.count ? Math.round((v.won / v.count) * 100) : 0,
+        }))
+        .sort((a, b) => b.count - a.count);
+    };
+
+    const debtors = rows.filter((l) => Number(l.outstanding_uzs ?? 0) > 0);
+    return {
+      total: rows.length,
+      wonCount: won.length,
+      lostCount: lost.length,
+      openCount: rows.length - won.length - lost.length,
+      conversionPct: rows.length ? Math.round((won.length / rows.length) * 100) : 0,
+      revenueUzs: won.reduce((s, l) => s + Number(l.amount_uzs ?? 0), 0),
+      outstandingUzs: debtors.reduce((s, l) => s + Number(l.outstanding_uzs ?? 0), 0),
+      debtorCount: debtors.length,
+      byStage: group((l) => l.stage_name),
+      bySource: group((l) => l.source_name || l.utm_source),
+      byTarif: group((l) => l.tarif),
+      byPaymentMethod: group((l) => l.payment_method),
+      bySegment: group((l) => l.segment),
+      byManager: group((l) =>
+        l.assigned_to ? nameById.get(l.assigned_to) ?? l.manager_name : l.manager_name,
+      ),
+      cancelReasons: group((l) => (l.cancel_reason ? l.cancel_reason : null)).filter(
+        (r) => r.key !== "Noma'lum",
+      ),
+    };
+  }),
+
   /** Funnel counts by status (all leads). */
   funnel: protectedProcedure.query(async ({ ctx }) => {
     const { data } = await ctx.supabase.from("leads").select("status");

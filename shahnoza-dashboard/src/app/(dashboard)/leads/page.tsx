@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Users2,
   KanbanSquare,
+  PieChart,
 } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { PageHeader } from "@/components/layout/page-header";
@@ -95,11 +96,18 @@ export default function LeadsPage() {
         title="Leadlar"
         description="Barcha potentsial mijozlar va ularning holati."
         actions={
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/leads/board">
-              <KanbanSquare className="h-4 w-4" /> Doska
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/leads/board">
+                <KanbanSquare className="h-4 w-4" /> Doska
+              </Link>
+            </Button>
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/leads/analytics">
+                <PieChart className="h-4 w-4" /> Tahlil
+              </Link>
+            </Button>
+          </div>
         }
       />
 

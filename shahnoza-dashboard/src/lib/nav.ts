@@ -53,6 +53,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "Sotuv jamoasi", href: "/sales/team", icon: Users2 },
       { label: "Leadlar", href: "/leads", icon: UserSquare2 },
       { label: "Lead doskasi", href: "/leads/board", icon: KanbanSquare },
+      { label: "Lead tahlili", href: "/leads/analytics", icon: PieChart },
     ],
   },
   {

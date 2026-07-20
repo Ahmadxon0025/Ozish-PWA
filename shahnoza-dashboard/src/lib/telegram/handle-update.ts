@@ -872,6 +872,10 @@ export async function handleTelegramUpdate(update: unknown): Promise<void> {
     const cat = await findCategoryId(db, parsed.categoryName);
     const rate = await getCurrentRate(db);
     const amountUsd = toUsd(parsed.amount, parsed.currency, rate.rate);
+    const amountUzs =
+      parsed.currency === "UZS"
+        ? Math.round(parsed.amount)
+        : Math.round(parsed.amount * rate.rate);
     const accountId = await resolveAccountForMessage(db, text, parsed.currency);
 
     let createdBy: string | null = null;
@@ -891,6 +895,8 @@ export async function handleTelegramUpdate(update: unknown): Promise<void> {
         amount: parsed.amount,
         currency: parsed.currency,
         amount_usd: amountUsd,
+        amount_uzs: amountUzs,
+        rate: rate.rate,
         description: parsed.description || cat?.name || null,
         expense_date: todayKey(),
         created_by: createdBy,

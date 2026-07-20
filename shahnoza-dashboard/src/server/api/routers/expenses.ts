@@ -96,6 +96,11 @@ export const expensesRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const rate = await getCurrentRate(ctx.supabase);
       const amountUsd = toUsd(input.amount, input.currency, rate.rate);
+      // Book the so'm value + the rate used, so the accounting view is stable.
+      const amountUzs =
+        input.currency === "UZS"
+          ? Math.round(input.amount)
+          : Math.round(input.amount * rate.rate);
       // Pick the account the money leaves from (default: first of that currency).
       const accountId =
         input.accountId === null
@@ -110,6 +115,8 @@ export const expensesRouter = createTRPCRouter({
           amount: input.amount,
           currency: input.currency,
           amount_usd: amountUsd,
+          amount_uzs: amountUzs,
+          rate: rate.rate,
           description: input.description ?? null,
           expense_date: input.expenseDate,
           paid_to: input.paidTo ?? null,

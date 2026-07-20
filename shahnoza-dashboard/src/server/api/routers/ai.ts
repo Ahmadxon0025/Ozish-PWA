@@ -1,8 +1,15 @@
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
+import { TRPCError } from "@trpc/server";
+import {
+  createTRPCRouter,
+  protectedProcedure,
+  roleProcedure,
+} from "@/server/api/trpc";
 import { isAiConfigured } from "@/lib/env";
 import { callStructured } from "@/lib/ai/claude";
 import { TASK_PRIORITIES } from "@/lib/constants";
+
+const brainProcedure = roleProcedure("super_admin", "owner", "sales_manager");
 
 /** Tashkent (UTC+5, no DST) calendar date — anchors relative dates like "ertaga". */
 function tashkentToday(): string {
@@ -136,5 +143,26 @@ export const aiRouter = createTRPCRouter({
           : "medium",
         dueDate: dueOk ? parsed.due_date : null,
       };
+    }),
+
+  /** The ERP "brain": ask any business question in natural language; the AI
+   *  reads live sales/leads/tasks/finance (and can create tasks) to answer.
+   *  Manager-gated — it sees the whole book of business. */
+  ask: brainProcedure
+    .input(z.object({ question: z.string().min(2).max(1000) }))
+    .mutation(async ({ ctx, input }) => {
+      if (!isAiConfigured()) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "AI sozlanmagan (ANTHROPIC_API_KEY yo'q).",
+        });
+      }
+      const { runBrain } = await import("@/lib/ai/brain");
+      const res = await runBrain(input.question, {
+        userId: ctx.appUser.id,
+        canWrite: true,
+        feature: "brain_app",
+      });
+      return res;
     }),
 });

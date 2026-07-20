@@ -299,6 +299,8 @@ export interface Database {
           amount: number | null;
           currency: string;
           amount_usd: number | null;
+          amount_uzs: number | null;
+          rate: number | null;
           description: string | null;
           expense_date: string;
           paid_to: string | null;
@@ -318,6 +320,8 @@ export interface Database {
           amount?: number | null;
           currency?: string;
           amount_usd?: number | null;
+          amount_uzs?: number | null;
+          rate?: number | null;
           description?: string | null;
           expense_date: string;
           paid_to?: string | null;

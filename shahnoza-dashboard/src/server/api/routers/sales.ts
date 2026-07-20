@@ -232,6 +232,89 @@ export const salesRouter = createTRPCRouter({
       };
     }),
 
+  /** Channel ROI: per traffic source (Manba) — leads, ad spend, cost-per-lead,
+   *  CAC and ROAS. Ad spend comes from the Reklama expense categories. so'm. */
+  channelRoi: protectedProcedure
+    .input(z.object({ month: z.string().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      const range = resolveMonth(input?.month);
+      const [{ data: leads }, { data: expenses }, { data: cats }, rate] =
+        await Promise.all([
+          ctx.supabase
+            .from("leads")
+            .select("source_name, utm_source, status, amount_uzs")
+            .gte("created_at", range.from)
+            .lt("created_at", range.to),
+          ctx.supabase
+            .from("expenses")
+            .select("amount_usd, category_id")
+            .gte("expense_date", range.from.slice(0, 10))
+            .lt("expense_date", range.to.slice(0, 10)),
+          ctx.supabase.from("expense_categories").select("id, name"),
+          getCurrentRate(ctx.supabase),
+        ]);
+
+      const catName = new Map((cats ?? []).map((c) => [c.id, c.name ?? ""]));
+      const adChannel = (name: string): string | null => {
+        const n = name.toLowerCase();
+        if (!/reklama|target|ads?\b/.test(n)) return null;
+        if (n.includes("facebook") || n.includes("fb")) return "Facebook";
+        if (n.includes("instagram") || n.includes("insta")) return "Instagram";
+        if (n.includes("telegram")) return "Telegram";
+        if (n.includes("target")) return "Target";
+        return "Boshqa reklama";
+      };
+      const toUzs = (usd: number) => Math.round(usd * rate.rate);
+
+      const spend = new Map<string, number>();
+      for (const e of expenses ?? []) {
+        const ch = adChannel(e.category_id ? catName.get(e.category_id) ?? "" : "");
+        if (!ch) continue;
+        spend.set(ch, (spend.get(ch) ?? 0) + toUzs(Number(e.amount_usd ?? 0)));
+      }
+
+      const chLeads = new Map<string, { leads: number; won: number; revenue: number }>();
+      for (const l of leads ?? []) {
+        const ch =
+          (l.source_name || "").trim() || (l.utm_source || "").trim() || "Noma'lum";
+        const b = chLeads.get(ch) ?? { leads: 0, won: 0, revenue: 0 };
+        b.leads += 1;
+        if (l.status === "won") {
+          b.won += 1;
+          b.revenue += Number(l.amount_uzs ?? 0);
+        }
+        chLeads.set(ch, b);
+      }
+
+      const channels = new Set<string>([...chLeads.keys(), ...spend.keys()]);
+      const rows = Array.from(channels)
+        .map((channel) => {
+          const l = chLeads.get(channel) ?? { leads: 0, won: 0, revenue: 0 };
+          const sp = spend.get(channel) ?? 0;
+          return {
+            channel,
+            leads: l.leads,
+            won: l.won,
+            revenueUzs: l.revenue,
+            spendUzs: sp,
+            costPerLeadUzs: l.leads > 0 && sp > 0 ? Math.round(sp / l.leads) : null,
+            cacUzs: l.won > 0 && sp > 0 ? Math.round(sp / l.won) : null,
+            roas: sp > 0 ? Math.round((l.revenue / sp) * 100) / 100 : null,
+          };
+        })
+        .sort((a, b) => b.leads - a.leads || b.spendUzs - a.spendUzs);
+
+      const totalSpend = Array.from(spend.values()).reduce((a, b) => a + b, 0);
+      const totalLeads = (leads ?? []).length;
+      return {
+        rows,
+        totalSpendUzs: totalSpend,
+        totalLeads,
+        costPerLeadUzs:
+          totalLeads > 0 && totalSpend > 0 ? Math.round(totalSpend / totalLeads) : null,
+      };
+    }),
+
   /** Sales-team leaderboard with commissions + monthly targets (so'm). */
   team: protectedProcedure
     .input(z.object({ month: z.string().optional() }).optional())

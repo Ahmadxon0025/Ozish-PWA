@@ -20,12 +20,11 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { PnlWaterfallChart } from "@/components/charts/pnl-waterfall-chart";
 import { formatUzs, formatUzsShort, formatPct100, formatDate } from "@/lib/format";
-import { useUzs } from "@/hooks/use-uzs";
 
 export default function PnlPage() {
   const [period, setPeriod] = useState<Period>(defaultPeriod());
   const pnl = api.finance.pnl.useQuery({ from: period.from, to: period.to });
-  const { fmt, toUzs } = useUzs();
+  // The router returns booked so'm (stable at the rate each row was booked at).
   const d = pnl.data;
 
   return (
@@ -46,23 +45,23 @@ export default function PnlPage() {
           <>
             <KpiCard
               label="Yalpi tushum"
-              value={fmt(d.grossRevenueUsd)}
+              value={formatUzs(d.grossRevenueUsd)}
               icon={DollarSign}
             />
             <KpiCard
               label="Sof tushum"
-              value={fmt(d.netRevenueUsd)}
+              value={formatUzs(d.netRevenueUsd)}
               icon={Wallet}
             />
             <KpiCard
               label="Jami xarajat"
-              value={fmt(d.totalCostsUsd)}
+              value={formatUzs(d.totalCostsUsd)}
               icon={Receipt}
               tone="warning"
             />
             <KpiCard
               label="Sof foyda"
-              value={fmt(d.netProfitUsd)}
+              value={formatUzs(d.netProfitUsd)}
               sub={`Margin ${formatPct100(d.marginPct)}`}
               icon={TrendingUp}
               tone={d.netProfitUsd >= 0 ? "success" : "destructive"}
@@ -88,11 +87,7 @@ export default function PnlPage() {
                 {/* Chart on desktop/tablet */}
                 <div className="hidden md:block">
                   <PnlWaterfallChart
-                    steps={d.waterfall.map((s) => ({
-                      ...s,
-                      value: toUzs(s.value),
-                      cumulative: toUzs(s.cumulative),
-                    }))}
+                    steps={d.waterfall}
                     format={formatUzs}
                     axisFormat={formatUzsShort}
                   />
@@ -115,7 +110,7 @@ export default function PnlPage() {
                       >
                         {s.label}
                       </span>
-                      <span className="font-medium">{fmt(s.value)}</span>
+                      <span className="font-medium">{formatUzs(s.value)}</span>
                     </li>
                   ))}
                 </ul>
@@ -135,24 +130,24 @@ export default function PnlPage() {
               <Skeleton className="h-40 w-full" />
             ) : (
               <div className="divide-y">
-                <BreakdownRow label="Sotuv" value={d.grossRevenueUsd} sign="+" fmt={fmt} />
+                <BreakdownRow label="Sotuv" value={d.grossRevenueUsd} sign="+" fmt={formatUzs} />
                 <BreakdownRow
                   label="Qaytarishlar"
                   value={d.refundsUsd}
                   sign="−"
-                  fmt={fmt}
+                  fmt={formatUzs}
                 />
                 <BreakdownRow
                   label="Operatsion xarajatlar"
                   value={d.operatingExpensesUsd}
                   sign="−"
-                  fmt={fmt}
+                  fmt={formatUzs}
                 />
                 <BreakdownRow
                   label="Komissiya"
                   value={d.commissionsUsd}
                   sign="−"
-                  fmt={fmt}
+                  fmt={formatUzs}
                 />
                 <div className="flex items-center justify-between py-3">
                   <span className="text-base font-bold">Sof foyda</span>
@@ -161,7 +156,7 @@ export default function PnlPage() {
                       d.netProfitUsd >= 0 ? "text-success" : "text-destructive"
                     }`}
                   >
-                    {fmt(d.netProfitUsd)}
+                    {formatUzs(d.netProfitUsd)}
                   </span>
                 </div>
               </div>

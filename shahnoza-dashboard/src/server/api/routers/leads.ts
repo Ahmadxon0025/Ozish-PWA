@@ -236,6 +236,40 @@ export const leadsRouter = createTRPCRouter({
     };
   }),
 
+  /** Debtors: customers who still owe (Qoldiq summasi > 0), biggest first.
+   *  Powers the "Qarzdor" worklist. RLS-scoped. */
+  debtors: protectedProcedure.query(async ({ ctx }) => {
+    const [{ data: leads }, { data: users }] = await Promise.all([
+      ctx.supabase
+        .from("leads")
+        .select(
+          "id, full_name, phone, outstanding_uzs, amount_uzs, stage_name, tarif, assigned_to, manager_name, last_activity_at",
+        )
+        .gt("outstanding_uzs", 0)
+        .order("outstanding_uzs", { ascending: false })
+        .limit(500),
+      ctx.supabase.from("users").select("id, full_name"),
+    ]);
+    const nameById = new Map((users ?? []).map((u) => [u.id, u.full_name]));
+    const items = (leads ?? []).map((l) => ({
+      id: l.id,
+      name: l.full_name,
+      phone: l.phone,
+      outstandingUzs: Number(l.outstanding_uzs ?? 0),
+      totalUzs: Number(l.amount_uzs ?? 0),
+      stage: l.stage_name,
+      tarif: l.tarif,
+      assignedTo: l.assigned_to,
+      ownerName: l.assigned_to ? nameById.get(l.assigned_to) ?? null : l.manager_name,
+      lastActivityAt: l.last_activity_at,
+    }));
+    return {
+      items,
+      count: items.length,
+      totalOutstandingUzs: items.reduce((s, i) => s + i.outstandingUzs, 0),
+    };
+  }),
+
   /** Funnel counts by status (all leads). */
   funnel: protectedProcedure.query(async ({ ctx }) => {
     const { data } = await ctx.supabase.from("leads").select("status");

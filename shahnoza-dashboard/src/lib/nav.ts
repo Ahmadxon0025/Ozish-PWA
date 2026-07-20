@@ -19,6 +19,7 @@ import {
   Settings,
   UserCog,
   Plug,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 
@@ -41,6 +42,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Umumiy",
     items: [
       { label: "Boshqaruv paneli", href: "/dashboard", icon: LayoutDashboard },
+      { label: "AI Miya", href: "/brain", icon: Sparkles, roles: FINANCE_ROLES },
     ],
   },
   {

@@ -144,6 +144,10 @@ const HELP = [
   "`/bajarilgan` — bugun bajarilgan vazifalar",
   "`/vazifalarim` — o'zingizning ochiq vazifalaringiz",
   "",
+  "🧠 *AI Miya:*",
+  "`/ai <savol>` — biznes haqida so'rang (sotuv, lead, vazifa, moliya).",
+  "Masalan: `/ai bu oy qancha sotuv bo'ldi?`",
+  "",
   "`/id` — shu guruh ID sini ko'rsatadi",
 ].join("\n");
 
@@ -351,6 +355,45 @@ export async function handleTelegramUpdate(update: unknown): Promise<void> {
   }
 
   const db = requireAdminClient();
+
+  // --- AI brain: "/ai bu oy qancha sotuv bo'ldi?" -----------------------------
+  if (/^\/(ai|sora|brain)(@\w+)?\b/i.test(text)) {
+    const question = text.replace(/^\/(ai|sora|brain)(@\w+)?\s*/i, "").trim();
+    if (!question) {
+      await sendMessage(
+        chatId,
+        "Savol yozing. Masalan: `/ai bu oy qancha sotuv bo'ldi?`",
+        { replyToMessageId: msg.message_id },
+      );
+      return;
+    }
+    if (!isAiConfigured()) {
+      await sendMessage(chatId, "AI hozircha sozlanmagan.", {
+        replyToMessageId: msg.message_id,
+      });
+      return;
+    }
+    try {
+      const { data: sender } = await db
+        .from("users")
+        .select("id")
+        .eq("telegram_id", fromId ?? "")
+        .maybeSingle();
+      const { runBrain } = await import("@/lib/ai/brain");
+      const res = await runBrain(question, {
+        userId: sender?.id ?? null,
+        canWrite: true,
+        feature: "brain_telegram",
+      });
+      await sendMessage(chatId, res.text, { replyToMessageId: msg.message_id });
+    } catch (err) {
+      console.error("brain telegram error:", err);
+      await sendMessage(chatId, "⚠️ Javob berishda xatolik yuz berdi.", {
+        replyToMessageId: msg.message_id,
+      });
+    }
+    return;
+  }
 
   // --- Task commands ---
   // One person's open tasks (uses the sender's linked account). Checked before

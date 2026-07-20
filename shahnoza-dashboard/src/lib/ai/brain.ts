@@ -61,20 +61,28 @@ async function getSalesSummary(db: Db, period: string) {
 }
 
 async function getLeadFunnel(db: Db) {
-  const { data: leads } = await db.from("leads").select("status, utm_source");
+  const { data: leads } = await db
+    .from("leads")
+    .select("status, stage_name, source_name, utm_source, tarif, cancel_reason");
   const rows = leads ?? [];
-  const byStatus: Record<string, number> = {};
-  const bySource: Record<string, number> = {};
-  for (const l of rows) {
-    byStatus[l.status] = (byStatus[l.status] ?? 0) + 1;
-    const src = l.utm_source || "Noma'lum";
-    bySource[src] = (bySource[src] ?? 0) + 1;
-  }
+  const tally = (pick: (l: (typeof rows)[number]) => string | null) => {
+    const m: Record<string, number> = {};
+    for (const l of rows) {
+      const k = pick(l) || "Noma'lum";
+      m[k] = (m[k] ?? 0) + 1;
+    }
+    return m;
+  };
+  const byStatus = tally((l) => l.status);
   const won = byStatus["won"] ?? 0;
+  const lost = rows.filter((l) => l.cancel_reason).length ? tally((l) => l.cancel_reason) : {};
   return {
     total: rows.length,
+    byStage: tally((l) => l.stage_name),
     byStatus,
-    bySource,
+    bySource: tally((l) => l.source_name || l.utm_source),
+    byTarif: tally((l) => l.tarif),
+    cancelReasons: lost,
     conversionPct: rows.length ? Math.round((won / rows.length) * 100) : 0,
   };
 }
@@ -245,7 +253,8 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "get_lead_funnel",
-    description: "Leadlar voronkasi: umumiy son, holatlar kesimida, manba kesimida, konversiya %.",
+    description:
+      "Leadlar voronkasi: umumiy son, bosqich (stage) kesimida, manba (Instagram/Telegram…) kesimida, tarif (Standart/Expert/VIP) kesimida, rad etish sabablari va konversiya %.",
     input_schema: { type: "object", properties: {} },
   },
   {

@@ -8,13 +8,23 @@ import {
 } from "@/lib/business/account-posting";
 import { amoGet } from "./client";
 import {
-  AMO_STATUS_WON,
-  normalizeStatus,
   pickCustomField,
+  pickByName,
+  pickNumberByName,
+  pickBoolByName,
+  statusFromStage,
   unixToIso,
   type AmoLead,
   type AmoUser,
 } from "./mapping";
+
+const MAX_PAGES = 40; // up to 10k leads/page (250 each)
+
+interface AmoPipeline {
+  id: number;
+  name?: string;
+  _embedded?: { statuses?: { id: number; name?: string }[] };
+}
 
 export interface SyncResult {
   ok: boolean;
@@ -23,8 +33,6 @@ export interface SyncResult {
   users: number;
   error?: string;
 }
-
-const MAX_PAGES = 10; // safety cap for Phase 1 (250 leads/page)
 
 /**
  * Pull leads + users from AmoCRM and upsert into our tables. Won leads become
@@ -104,6 +112,17 @@ export async function runAmocrmSync(): Promise<SyncResult> {
       return best && best.diff <= 0.1 ? best.id : null; // within 10%
     };
 
+    // Pipelines + statuses → real stage/pipeline names keyed by status_id.
+    const pipeRes = await amoGet<{ _embedded?: { pipelines?: AmoPipeline[] } }>(
+      "/api/v4/leads/pipelines",
+    );
+    const stageMeta = new Map<number, { pipeline: string; stage: string }>();
+    for (const p of pipeRes?._embedded?.pipelines ?? []) {
+      for (const s of p._embedded?.statuses ?? []) {
+        stageMeta.set(s.id, { pipeline: p.name ?? "—", stage: s.name ?? "—" });
+      }
+    }
+
     // --- Leads (paged) -----------------------------------------------------
     for (let page = 1; page <= MAX_PAGES; page++) {
       const res = await amoGet<{ _embedded?: { leads?: AmoLead[] } }>(
@@ -117,8 +136,12 @@ export async function runAmocrmSync(): Promise<SyncResult> {
         const assignedTo = lead.responsible_user_id
           ? userIdByAmo.get(lead.responsible_user_id) ?? null
           : null;
-        const status = normalizeStatus(lead.status_id);
+        const meta = lead.status_id ? stageMeta.get(lead.status_id) : undefined;
+        const stageName = meta?.stage ?? null;
+        const status = statusFromStage(stageName);
         const createdIso = unixToIso(lead.created_at);
+        const cancelReason = pickByName(lead, "Rad etish sababi");
+        const courseStartSec = pickNumberByName(lead, "Dars boshlangan sana");
 
         const { data: upserted } = await db
           .from("leads")
@@ -134,8 +157,27 @@ export async function runAmocrmSync(): Promise<SyncResult> {
               utm_medium: pickCustomField(lead, "utm_medium"),
               utm_campaign: pickCustomField(lead, "utm_campaign"),
               utm_content: pickCustomField(lead, "utm_content"),
+              pipeline_name: meta?.pipeline ?? null,
+              stage_name: stageName,
+              source_name: pickByName(lead, "Manba"),
+              tarif: pickByName(lead, "Ta'rif", "Tarif", "Ta’rif"),
+              payment_method: pickByName(lead, "To'lov usuli", "To’lov usuli"),
+              cancel_reason: cancelReason,
+              segment: pickByName(lead, "Segment"),
+              region: pickByName(lead, "Manzili"),
+              goal: pickByName(lead, "Maqsad"),
+              course_format: pickByName(lead, "Kurs formati"),
+              manager_name: pickByName(lead, "Menejer"),
+              amount_uzs: Number(lead.price ?? 0) || null,
+              outstanding_uzs: pickNumberByName(lead, "Qoldiq summasi"),
+              finished_course: pickBoolByName(lead, "Kursni tugatdi"),
+              course_started_at: courseStartSec
+                ? new Date(courseStartSec * 1000).toISOString().slice(0, 10)
+                : null,
+              lost_reason: cancelReason,
               created_at: createdIso ?? undefined,
               sold_at: status === "won" ? unixToIso(lead.updated_at) : null,
+              lost_at: status === "lost" ? unixToIso(lead.updated_at) : null,
               last_activity_at: unixToIso(lead.updated_at) ?? undefined,
             },
             { onConflict: "amocrm_lead_id" },
@@ -144,8 +186,8 @@ export async function runAmocrmSync(): Promise<SyncResult> {
           .single();
         leadCount++;
 
-        // Won lead -> ensure a sale row exists.
-        if (lead.status_id === AMO_STATUS_WON && upserted) {
+        // Won lead -> ensure a sale row exists (amount from the native price).
+        if (status === "won" && upserted) {
           const { data: existingSale } = await db
             .from("sales")
             .select("id")

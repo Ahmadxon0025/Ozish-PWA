@@ -148,7 +148,7 @@ function Bucket({
 export default function CallAnalyzerPage() {
   const aiOn = api.ai.status.useQuery();
   const sttOn = api.calls.sttStatus.useQuery();
-  const users = api.tasks.assignees.useQuery();
+  const reps = api.calls.reps.useQuery();
   const list = api.calls.list.useQuery({ limit: 20 });
   const stats = api.calls.repStats.useQuery(undefined, { retry: false });
   const utils = api.useUtils();
@@ -247,12 +247,12 @@ export default function CallAnalyzerPage() {
                     <Label>Sotuvchi</Label>
                     <Select value={rep} onValueChange={setRep}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Tanlang" />
+                        <SelectValue placeholder={reps.data && reps.data.length ? "Tanlang" : "Menejer topilmadi"} />
                       </SelectTrigger>
                       <SelectContent>
-                        {(users.data ?? []).map((u) => (
-                          <SelectItem key={u.id} value={u.id}>
-                            {u.full_name}
+                        {(reps.data ?? []).map((name) => (
+                          <SelectItem key={name} value={name}>
+                            {name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -309,7 +309,7 @@ export default function CallAnalyzerPage() {
                   disabled={!rep || transcript.trim().length < 20 || analyze.isPending}
                   onClick={() =>
                     analyze.mutate({
-                      repUserId: rep,
+                      repName: rep,
                       title: title || undefined,
                       transcript: transcript.trim(),
                     })
@@ -380,7 +380,7 @@ export default function CallAnalyzerPage() {
               ) : (
                 <ul className="space-y-2">
                   {(stats.data ?? []).map((s, i) => (
-                    <li key={s.repUserId} className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2">
+                    <li key={s.name} className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2">
                       <span className="flex items-center gap-2 text-sm font-medium">
                         <span>{["🥇", "🥈", "🥉"][i] ?? "•"}</span>
                         {s.name}

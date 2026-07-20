@@ -15,12 +15,34 @@ export const callsRouter = createTRPCRouter({
     configured: isTranscribeConfigured(),
   })),
 
-  /** Analyze a call transcript and store the scored review for a rep. */
+  /**
+   * Real sellers to pick from — the distinct "Menejer" names on our leads
+   * (the actual sellers in AmoCRM), plus any active app users. Names only, so
+   * the analyzer works without hand-provisioning user accounts.
+   */
+  reps: protectedProcedure.query(async ({ ctx }) => {
+    const [{ data: leads }, { data: users }] = await Promise.all([
+      ctx.supabase.from("leads").select("manager_name").not("manager_name", "is", null),
+      ctx.supabase.from("users").select("full_name").eq("is_active", true),
+    ]);
+    const names = new Set<string>();
+    for (const l of leads ?? []) {
+      const n = (l.manager_name ?? "").trim();
+      if (n) names.add(n);
+    }
+    for (const u of users ?? []) {
+      const n = (u.full_name ?? "").trim();
+      if (n) names.add(n);
+    }
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }),
+
+  /** Analyze a call transcript and store the scored review for a rep (by name). */
   analyze: protectedProcedure
     .input(
       z.object({
         transcript: z.string().min(20),
-        repUserId: z.string().uuid(),
+        repName: z.string().min(1).max(200),
         leadId: z.string().uuid().optional(),
         title: z.string().max(200).optional(),
       }),
@@ -32,12 +54,22 @@ export const callsRouter = createTRPCRouter({
           message: "AI sozlanmagan (ANTHROPIC_API_KEY yo'q).",
         });
       }
+      const repName = input.repName.trim();
+      // Link to an app user if one matches the name (keeps per-user access working).
+      const { data: matchUser } = await ctx.supabase
+        .from("users")
+        .select("id")
+        .eq("full_name", repName)
+        .eq("is_active", true)
+        .maybeSingle();
+
       const { analyzeCall } = await import("@/lib/ai/call-review");
       const a = await analyzeCall(input.transcript, ctx.appUser.id);
       const { data, error } = await ctx.supabase
         .from("call_reviews")
         .insert({
-          rep_user_id: input.repUserId,
+          rep_user_id: matchUser?.id ?? null,
+          rep_name: repName,
           lead_id: input.leadId ?? null,
           title: input.title ?? null,
           transcript: input.transcript.slice(0, 20000),
@@ -64,7 +96,7 @@ export const callsRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       let q = ctx.supabase
         .from("call_reviews")
-        .select("id, rep_user_id, title, score, outcome, summary, created_at")
+        .select("id, rep_user_id, rep_name, title, score, outcome, summary, created_at")
         .order("created_at", { ascending: false })
         .limit(input?.limit ?? 30);
       if (input?.repUserId) q = q.eq("rep_user_id", input.repUserId);
@@ -75,7 +107,9 @@ export const callsRouter = createTRPCRouter({
       const nameById = new Map((users ?? []).map((u) => [u.id, u.full_name]));
       return (data ?? []).map((r) => ({
         ...r,
-        repName: r.rep_user_id ? nameById.get(r.rep_user_id) ?? "—" : "—",
+        repName:
+          r.rep_name ??
+          (r.rep_user_id ? nameById.get(r.rep_user_id) ?? "—" : "—"),
       }));
     }),
 
@@ -92,26 +126,29 @@ export const callsRouter = createTRPCRouter({
       return data;
     }),
 
-  /** Per-rep coaching scoreboard: average score, call count, last review. */
+  /** Per-rep coaching scoreboard by seller name: avg score, count, last review. */
   repStats: managerProcedure.query(async ({ ctx }) => {
     const [{ data: reviews }, { data: users }] = await Promise.all([
-      ctx.supabase.from("call_reviews").select("rep_user_id, score, created_at"),
+      ctx.supabase.from("call_reviews").select("rep_user_id, rep_name, score, created_at"),
       ctx.supabase.from("users").select("id, full_name"),
     ]);
     const nameById = new Map((users ?? []).map((u) => [u.id, u.full_name]));
     const byRep = new Map<string, { total: number; count: number; last: string }>();
     for (const r of reviews ?? []) {
-      if (!r.rep_user_id) continue;
-      const b = byRep.get(r.rep_user_id) ?? { total: 0, count: 0, last: r.created_at };
+      // Group by seller name (falls back to the linked user for legacy rows).
+      const name =
+        (r.rep_name ?? "").trim() ||
+        (r.rep_user_id ? nameById.get(r.rep_user_id) ?? "" : "");
+      if (!name) continue;
+      const b = byRep.get(name) ?? { total: 0, count: 0, last: r.created_at };
       b.total += Number(r.score ?? 0);
       b.count += 1;
       if (r.created_at > b.last) b.last = r.created_at;
-      byRep.set(r.rep_user_id, b);
+      byRep.set(name, b);
     }
     return Array.from(byRep.entries())
-      .map(([id, b]) => ({
-        repUserId: id,
-        name: nameById.get(id) ?? "—",
+      .map(([name, b]) => ({
+        name,
         avgScore: b.count ? Math.round(b.total / b.count) : 0,
         calls: b.count,
         lastAt: b.last,

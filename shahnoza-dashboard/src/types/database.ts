@@ -562,6 +562,26 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["sales_targets"]["Insert"]>;
         Relationships: [];
       };
+      company_targets: {
+        Row: {
+          id: string;
+          scope: string;
+          metric: string;
+          month: string;
+          target_value: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          scope: string;
+          metric: string;
+          month: string;
+          target_value?: number;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["company_targets"]["Insert"]>;
+        Relationships: [];
+      };
       call_reviews: {
         Row: {
           id: string;

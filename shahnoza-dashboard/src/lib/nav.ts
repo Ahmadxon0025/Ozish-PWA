@@ -21,6 +21,7 @@ import {
   Plug,
   Sparkles,
   Headphones,
+  Target,
   type LucideIcon,
 } from "lucide-react";
 
@@ -50,6 +51,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Sotuv",
     items: [
       { label: "Sotuv sharhi", href: "/sales", icon: TrendingUp },
+      { label: "Maqsadlar", href: "/sales/goals", icon: Target, roles: FINANCE_ROLES },
       { label: "Sotuvlar ro'yxati", href: "/sales/list", icon: ListOrdered },
       { label: "Sotuv jamoasi", href: "/sales/team", icon: Users2 },
       { label: "Leadlar", href: "/leads", icon: UserSquare2 },

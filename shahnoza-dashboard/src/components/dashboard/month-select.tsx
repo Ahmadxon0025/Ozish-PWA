@@ -13,13 +13,16 @@ const MONTH_NAMES_UZ = [
   "Iyul", "Avgust", "Sentabr", "Oktabr", "Noyabr", "Dekabr",
 ];
 
-/** Build the last 12 month keys as `YYYY-MM-01` with Uzbek labels. */
-export function monthOptions(count = 12): { value: string; label: string }[] {
-  // Anchor on a fixed "now" is not needed; pages pass the current month key.
+/**
+ * Build month keys as `YYYY-MM-01` with Uzbek labels, newest first.
+ * `past` months back + the current month + `future` months ahead. Future is 0
+ * by default (actuals pages don't plan ahead); goal-setting pages pass a window.
+ */
+export function monthOptions(past = 12, future = 0): { value: string; label: string }[] {
   const now = new Date();
   const out: { value: string; label: string }[] = [];
-  for (let i = 0; i < count; i++) {
-    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+  for (let i = future; i >= -(past - 1); i--) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + i, 1));
     const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
     out.push({
       value: `${d.getUTCFullYear()}-${mm}-01`,
@@ -32,11 +35,17 @@ export function monthOptions(count = 12): { value: string; label: string }[] {
 export function MonthSelect({
   value,
   onChange,
+  past = 12,
+  future = 0,
 }: {
   value: string;
   onChange: (v: string) => void;
+  /** Months back to offer (default 12). */
+  past?: number;
+  /** Months ahead to offer — for goal-setting pages (default 0). */
+  future?: number;
 }) {
-  const options = monthOptions(12);
+  const options = monthOptions(past, future);
   return (
     <Select value={value} onValueChange={onChange}>
       <SelectTrigger className="w-[180px]">

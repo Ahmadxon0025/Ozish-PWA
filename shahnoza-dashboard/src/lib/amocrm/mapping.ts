@@ -74,11 +74,13 @@ export function pickBoolByName(lead: AmoLead, ...names: string[]): boolean {
   return v === true || v === 1 || v === "1" || v === "true";
 }
 
-/** Collapse a real AmoCRM stage name into our coarse status vocabulary. */
+/** Collapse a real AmoCRM stage name into our coarse status vocabulary.
+ *  Lost is checked BEFORE won so "не реализовано" (NOT realized) and
+ *  "Закрыто и не реализовано" are not mistaken for "успешно реализовано". */
 export function statusFromStage(stage: string | null): string {
   const s = (stage ?? "").toLowerCase();
+  if (/bekor|закры|не\s*реализ|rad etil|yakunlangan/.test(s)) return "lost";
   if (/muvaffaqiyat|успешно|реализован|100\s*%/.test(s)) return "won";
-  if (/bekor|закры|не реализ|rad etil/.test(s)) return "lost";
   if (/qisman|to['’ʻ]?lov|rozi/.test(s)) return "negotiation";
   if (/kvalifikatsiya|qualif/.test(s)) return "qualified";
   return "new";

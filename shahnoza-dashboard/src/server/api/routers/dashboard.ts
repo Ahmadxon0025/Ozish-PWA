@@ -1,11 +1,10 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
-import { monthRange, yesterdayRange, todayRange } from "@/lib/dates";
+import { monthRange, yesterdayRange, todayRange, currentMonthKey } from "@/lib/dates";
 import { computePnl } from "@/lib/business/pnl";
 import { computeCommissions } from "@/lib/business/commission";
 import { getCurrentRate } from "@/lib/business/exchange-rate";
 import { round2 } from "@/lib/business/currency";
-import { MONTHLY_SALES_PLAN_USD } from "@/lib/constants";
 import { sum, groupBy } from "./_helpers";
 
 const AD_CATEGORIES = [
@@ -30,20 +29,22 @@ export const dashboardRouter = createTRPCRouter({
       expMonthRes,
       expYdayRes,
       refundedMonthRes,
+      planRes,
+      rate,
     ] = await Promise.all([
         ctx.supabase
           .from("sales")
-          .select("total_amount_usd, sold_at, is_refunded, refund_amount_usd, sales_person_id")
+          .select("total_amount_usd, total_amount_uzs, sold_at, is_refunded, refund_amount_usd, sales_person_id")
           .gte("sold_at", month.from)
           .lt("sold_at", month.to),
         ctx.supabase
           .from("sales")
-          .select("total_amount_usd")
+          .select("total_amount_uzs")
           .gte("sold_at", yesterday.from)
           .lt("sold_at", yesterday.to),
         ctx.supabase
           .from("sales")
-          .select("total_amount_usd")
+          .select("total_amount_uzs")
           .gte("sold_at", today.from)
           .lt("sold_at", today.to),
         ctx.supabase
@@ -67,20 +68,34 @@ export const dashboardRouter = createTRPCRouter({
           .eq("is_refunded", true)
           .gte("refunded_at", month.from)
           .lt("refunded_at", month.to),
+        // Current-month sales-team revenue goal (so'm) — set by the CEO in Maqsadlar.
+        ctx.supabase
+          .from("company_targets")
+          .select("target_value")
+          .eq("scope", "sales")
+          .eq("metric", "revenue_uzs")
+          .eq("month", currentMonthKey())
+          .maybeSingle(),
+        getCurrentRate(ctx.supabase),
       ]);
 
     const salesMonth = salesMonthRes.data ?? [];
     const salesYday = salesYdayRes.data ?? [];
     const salesToday = salesTodayRes.data ?? [];
     const leadsMonth = leadsMonthRes.data ?? [];
+    const uzsRate = rate.rate;
+    const usdToUzs = (usd: number) => Math.round(usd * uzsRate);
 
+    // Sales in native so'm (the business is UZS-native); USD is kept only for P&L math.
     const monthAmount = sum(salesMonth, (s) => s.total_amount_usd);
-    const ydayAmount = sum(salesYday, (s) => s.total_amount_usd);
-    const todayAmount = sum(salesToday, (s) => s.total_amount_usd);
+    const monthUzs = sum(salesMonth, (s) => s.total_amount_uzs);
+    const ydayUzs = sum(salesYday, (s) => s.total_amount_uzs);
+    const todayUzs = sum(salesToday, (s) => s.total_amount_uzs);
     // Refunds recognized by refunded_at (may differ from the sale month).
     const refundsMonth = sum(refundedMonthRes.data ?? [], (r) => r.refund_amount_usd);
     const expMonth = sum(expMonthRes.data ?? [], (e) => e.amount_usd);
     const expYday = sum(expYdayRes.data ?? [], (e) => e.amount_usd);
+    const planUzs = planRes.data ? Number(planRes.data.target_value) : null;
 
     const commissions = computeCommissions(
       salesMonth.map((s, i) => ({
@@ -108,16 +123,14 @@ export const dashboardRouter = createTRPCRouter({
     return {
       sales: {
         todayCount: salesToday.length,
-        todayAmount,
+        todayUzs,
         yesterdayCount: salesYday.length,
-        yesterdayAmount: ydayAmount,
+        yesterdayUzs: ydayUzs,
         monthCount: salesMonth.length,
-        monthAmount,
-        planUsd: MONTHLY_SALES_PLAN_USD,
+        monthUzs,
+        planUzs, // null when the CEO hasn't set a goal for this month
         planPercent:
-          MONTHLY_SALES_PLAN_USD > 0
-            ? Math.round((monthAmount / MONTHLY_SALES_PLAN_USD) * 100)
-            : 0,
+          planUzs && planUzs > 0 ? Math.round((monthUzs / planUzs) * 100) : 0,
       },
       funnel: {
         newLeads,
@@ -127,8 +140,15 @@ export const dashboardRouter = createTRPCRouter({
         soldPercent: newLeads ? Math.round((sold / newLeads) * 100) : 0,
         lost,
       },
-      expenses: { yesterday: expYday, month: expMonth },
-      pnl,
+      expenses: {
+        yesterdayUzs: usdToUzs(expYday),
+        monthUzs: usdToUzs(expMonth),
+        commissionsUzs: usdToUzs(pnl.commissionsUsd),
+      },
+      pnl: {
+        netProfitUzs: usdToUzs(pnl.netProfitUsd),
+        marginPct: pnl.marginPct,
+      },
     };
   }),
 
@@ -209,17 +229,18 @@ export const dashboardRouter = createTRPCRouter({
       kassaUsd += a.currency === "USD" ? bal : rate.rate > 0 ? bal / rate.rate : 0;
     }
 
+    const usdToUzs = (usd: number) => Math.round(usd * rate.rate);
     return {
-      revenue,
       salesCount,
-      adSpend,
-      totalExpenses,
-      netProfit: pnl.netProfitUsd,
+      revenueUzs: usdToUzs(revenue),
+      adSpendUzs: usdToUzs(adSpend),
+      netProfitUzs: usdToUzs(pnl.netProfitUsd),
+      // Ratios/percentages are currency-agnostic.
       roas: adSpend > 0 ? round2(revenue / adSpend) : null,
-      cac: salesCount > 0 ? round2(adSpend / salesCount) : null,
-      aov: salesCount > 0 ? round2(revenue / salesCount) : null,
+      cacUzs: salesCount > 0 ? usdToUzs(adSpend / salesCount) : null,
+      aovUzs: salesCount > 0 ? usdToUzs(revenue / salesCount) : null,
       roi: totalExpenses > 0 ? round2((pnl.netProfitUsd / totalExpenses) * 100) : null, // %
-      kassaUsd: round2(kassaUsd),
+      kassaUzs: usdToUzs(kassaUsd),
     };
   }),
 
@@ -232,7 +253,7 @@ export const dashboardRouter = createTRPCRouter({
       const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
       const { data } = await ctx.supabase
         .from("sales")
-        .select("total_amount_usd, sold_at")
+        .select("total_amount_uzs, sold_at")
         .gte("sold_at", from.toISOString())
         .order("sold_at", { ascending: true });
 
@@ -245,7 +266,7 @@ export const dashboardRouter = createTRPCRouter({
         const rows = byDay.get(d) ?? [];
         out.push({
           date: d,
-          amount: sum(rows, (r) => r.total_amount_usd),
+          amount: sum(rows, (r) => r.total_amount_uzs), // so'm
           count: rows.length,
         });
       }
@@ -258,7 +279,7 @@ export const dashboardRouter = createTRPCRouter({
     const [{ data: sales }, { data: users }] = await Promise.all([
       ctx.supabase
         .from("sales")
-        .select("total_amount_usd, sales_person_id")
+        .select("total_amount_uzs, sales_person_id")
         .gte("sold_at", today.from)
         .lt("sold_at", today.to),
       ctx.supabase.from("users").select("id, full_name"),
@@ -271,7 +292,7 @@ export const dashboardRouter = createTRPCRouter({
         userId,
         name: nameById.get(userId) ?? "—",
         count: rows.length,
-        amount: sum(rows, (r) => r.total_amount_usd),
+        amount: sum(rows, (r) => r.total_amount_uzs), // so'm
       }))
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 5);

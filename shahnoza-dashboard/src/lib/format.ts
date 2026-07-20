@@ -19,6 +19,16 @@ export function formatNumber(value: number | null | undefined): string {
   return new Intl.NumberFormat("en-US").format(Number(value ?? 0));
 }
 
+/** Compact so'm for chart axes/labels: 12 500 000 → "12.5 mln", 3 200 → "3.2K". */
+export function formatUzsShort(value: number | null | undefined): string {
+  const n = Number(value ?? 0);
+  const abs = Math.abs(n);
+  if (abs >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)} mlrd`;
+  if (abs >= 1_000_000) return `${(n / 1_000_000).toFixed(1)} mln`;
+  if (abs >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(n);
+}
+
 export function formatPercent(
   value: number | null | undefined,
   digits = 0,

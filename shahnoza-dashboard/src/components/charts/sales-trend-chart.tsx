@@ -8,7 +8,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { formatUsd } from "@/lib/format";
+import { formatUzs, formatUzsShort } from "@/lib/format";
 
 export function SalesTrendChart({
   data,
@@ -36,11 +36,11 @@ export function SalesTrendChart({
           tick={{ fontSize: 11 }}
           tickLine={false}
           axisLine={false}
-          width={48}
-          tickFormatter={(v: number) => `$${v}`}
+          width={56}
+          tickFormatter={(v: number) => formatUzsShort(v)}
         />
         <Tooltip
-          formatter={(v: number) => [formatUsd(v), "Sotuv"]}
+          formatter={(v: number) => [formatUzs(v), "Sotuv"]}
           labelFormatter={(l) => `Sana: ${l}`}
           contentStyle={{
             borderRadius: 8,

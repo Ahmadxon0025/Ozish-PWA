@@ -19,11 +19,13 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PnlWaterfallChart } from "@/components/charts/pnl-waterfall-chart";
-import { formatUsd, formatPct100, formatDate } from "@/lib/format";
+import { formatUzs, formatUzsShort, formatPct100, formatDate } from "@/lib/format";
+import { useUzs } from "@/hooks/use-uzs";
 
 export default function PnlPage() {
   const [period, setPeriod] = useState<Period>(defaultPeriod());
   const pnl = api.finance.pnl.useQuery({ from: period.from, to: period.to });
+  const { fmt, toUzs } = useUzs();
   const d = pnl.data;
 
   return (
@@ -44,23 +46,23 @@ export default function PnlPage() {
           <>
             <KpiCard
               label="Yalpi tushum"
-              value={formatUsd(d.grossRevenueUsd)}
+              value={fmt(d.grossRevenueUsd)}
               icon={DollarSign}
             />
             <KpiCard
               label="Sof tushum"
-              value={formatUsd(d.netRevenueUsd)}
+              value={fmt(d.netRevenueUsd)}
               icon={Wallet}
             />
             <KpiCard
               label="Jami xarajat"
-              value={formatUsd(d.totalCostsUsd)}
+              value={fmt(d.totalCostsUsd)}
               icon={Receipt}
               tone="warning"
             />
             <KpiCard
               label="Sof foyda"
-              value={formatUsd(d.netProfitUsd)}
+              value={fmt(d.netProfitUsd)}
               sub={`Margin ${formatPct100(d.marginPct)}`}
               icon={TrendingUp}
               tone={d.netProfitUsd >= 0 ? "success" : "destructive"}
@@ -85,7 +87,15 @@ export default function PnlPage() {
               <>
                 {/* Chart on desktop/tablet */}
                 <div className="hidden md:block">
-                  <PnlWaterfallChart steps={d.waterfall} />
+                  <PnlWaterfallChart
+                    steps={d.waterfall.map((s) => ({
+                      ...s,
+                      value: toUzs(s.value),
+                      cumulative: toUzs(s.cumulative),
+                    }))}
+                    format={formatUzs}
+                    axisFormat={formatUzsShort}
+                  />
                 </div>
                 {/* Simplified vertical list on mobile */}
                 <ul className="space-y-2 md:hidden">
@@ -105,7 +115,7 @@ export default function PnlPage() {
                       >
                         {s.label}
                       </span>
-                      <span className="font-medium">{formatUsd(s.value)}</span>
+                      <span className="font-medium">{fmt(s.value)}</span>
                     </li>
                   ))}
                 </ul>
@@ -125,21 +135,24 @@ export default function PnlPage() {
               <Skeleton className="h-40 w-full" />
             ) : (
               <div className="divide-y">
-                <BreakdownRow label="Sotuv" value={d.grossRevenueUsd} sign="+" />
+                <BreakdownRow label="Sotuv" value={d.grossRevenueUsd} sign="+" fmt={fmt} />
                 <BreakdownRow
                   label="Qaytarishlar"
                   value={d.refundsUsd}
                   sign="−"
+                  fmt={fmt}
                 />
                 <BreakdownRow
                   label="Operatsion xarajatlar"
                   value={d.operatingExpensesUsd}
                   sign="−"
+                  fmt={fmt}
                 />
                 <BreakdownRow
                   label="Komissiya"
                   value={d.commissionsUsd}
                   sign="−"
+                  fmt={fmt}
                 />
                 <div className="flex items-center justify-between py-3">
                   <span className="text-base font-bold">Sof foyda</span>
@@ -148,7 +161,7 @@ export default function PnlPage() {
                       d.netProfitUsd >= 0 ? "text-success" : "text-destructive"
                     }`}
                   >
-                    {formatUsd(d.netProfitUsd)}
+                    {fmt(d.netProfitUsd)}
                   </span>
                 </div>
               </div>
@@ -164,10 +177,12 @@ function BreakdownRow({
   label,
   value,
   sign,
+  fmt,
 }: {
   label: string;
   value: number;
   sign: "+" | "−";
+  fmt: (usd: number | null | undefined) => string;
 }) {
   return (
     <div className="flex items-center justify-between py-3">
@@ -178,7 +193,7 @@ function BreakdownRow({
         }`}
       >
         {sign}
-        {formatUsd(value)}
+        {fmt(value)}
       </span>
     </div>
   );

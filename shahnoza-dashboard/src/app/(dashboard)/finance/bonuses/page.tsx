@@ -29,7 +29,8 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/table";
-import { formatUsd, formatPct100, formatDate } from "@/lib/format";
+import { formatPct100, formatDate } from "@/lib/format";
+import { useUzs } from "@/hooks/use-uzs";
 import { toast } from "@/hooks/use-toast";
 
 function statusVariant(
@@ -48,6 +49,7 @@ export default function BonusesPage() {
 
   const bonus = api.finance.bonus.useQuery({ month });
   const history = api.finance.bonusHistory.useQuery();
+  const { fmt } = useUzs();
   const b = bonus.data;
 
   const save = api.finance.saveBonus.useMutation({
@@ -95,21 +97,24 @@ export default function BonusesPage() {
               <Skeleton className="h-56 w-full" />
             ) : (
               <div className="divide-y">
-                <BonusRow label="Yig'ilgan pul" value={b.cashCollectedUsd} />
+                <BonusRow label="Yig'ilgan pul" value={b.cashCollectedUsd} fmt={fmt} />
                 <BonusRow
                   label="Operatsion xarajatlar"
                   value={b.operatingExpensesUsd}
                   sign="−"
+                  fmt={fmt}
                 />
                 <BonusRow
                   label="Komissiyalar"
                   value={b.commissionsUsd}
                   sign="−"
+                  fmt={fmt}
                 />
                 <BonusRow
                   label="Rahbar maoshi"
                   value={b.superAdminSalaryUsd}
                   sign="−"
+                  fmt={fmt}
                 />
                 <div className="flex items-center justify-between py-3">
                   <span className="text-base font-bold">Sof foyda</span>
@@ -118,7 +123,7 @@ export default function BonusesPage() {
                       b.netProfitUsd >= 0 ? "text-success" : "text-destructive"
                     }`}
                   >
-                    {formatUsd(b.netProfitUsd)}
+                    {fmt(b.netProfitUsd)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between py-3">
@@ -151,7 +156,7 @@ export default function BonusesPage() {
           ) : (
             <KpiCard
               label="Bonus summasi"
-              value={formatUsd(b.bonusAmountUsd)}
+              value={fmt(b.bonusAmountUsd)}
               sub={`${formatPct100(b.bonusRate * 100)} ulush`}
               icon={Trophy}
               tone="success"
@@ -191,10 +196,10 @@ export default function BonusesPage() {
                       {formatDate(h.month, "MMM yyyy")}
                     </TableCell>
                     <TableCell className="text-right">
-                      {formatUsd(h.net_profit)}
+                      {fmt(h.net_profit)}
                     </TableCell>
                     <TableCell className="text-right font-medium">
-                      {formatUsd(h.bonus_amount)}
+                      {fmt(h.bonus_amount)}
                     </TableCell>
                     <TableCell>
                       <Badge variant={statusVariant(h.status)}>{h.status}</Badge>
@@ -214,10 +219,12 @@ function BonusRow({
   label,
   value,
   sign = "+",
+  fmt,
 }: {
   label: string;
   value: number;
   sign?: "+" | "−";
+  fmt: (usd: number | null | undefined) => string;
 }) {
   return (
     <div className="flex items-center justify-between py-3">
@@ -228,7 +235,7 @@ function BonusRow({
         }`}
       >
         {sign === "−" ? "−" : ""}
-        {formatUsd(value)}
+        {fmt(value)}
       </span>
     </div>
   );

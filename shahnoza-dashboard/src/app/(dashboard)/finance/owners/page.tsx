@@ -57,7 +57,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { formatUsd, formatPct100, formatDate, formatDateTime } from "@/lib/format";
+import { formatPct100, formatDate, formatDateTime } from "@/lib/format";
+import { useUzs } from "@/hooks/use-uzs";
 
 function today() {
   const d = new Date();
@@ -71,6 +72,7 @@ export default function OwnersPage() {
   const shares = api.finance.ownerShares.useQuery();
   const payouts = api.finance.ownerPayouts.useQuery({ limit: 30 });
   const reserve = api.finance.reserveRate.useQuery();
+  const { fmt } = useUzs();
   const d = dist.data;
 
   const invalidate = () => {
@@ -106,24 +108,24 @@ export default function OwnersPage() {
           <>
             <KpiCard
               label="Sof foyda (davr)"
-              value={formatUsd(d.netProfitUsd)}
+              value={fmt(d.netProfitUsd)}
               icon={TrendingUp}
               tone={d.netProfitUsd >= 0 ? "success" : "destructive"}
             />
             <KpiCard
               label="Taqsimlanadi"
-              value={formatUsd(d.totalEntitledUsd)}
+              value={fmt(d.totalEntitledUsd)}
               sub={`Egalar ulushi ${formatPct100(d.distributedRate * 100)}`}
               icon={PieChart}
             />
             <KpiCard
               label="Olindi (jami)"
-              value={formatUsd(d.totalTakenUsd)}
+              value={fmt(d.totalTakenUsd)}
               icon={HandCoins}
             />
             <KpiCard
               label="Biznesda qoldi (rezerv)"
-              value={formatUsd(d.retainedUsd)}
+              value={fmt(d.retainedUsd)}
               sub={`${formatPct100(d.retainedRate * 100)} reinvestitsiya rezervi`}
               icon={Landmark}
               tone="warning"
@@ -161,13 +163,13 @@ export default function OwnersPage() {
                     {isLossShare ? (
                       <Row
                         label="Zarar ulushi (ko'tardi)"
-                        value={`− ${formatUsd(Math.abs(o.entitlementUsd))}`}
+                        value={`− ${fmt(Math.abs(o.entitlementUsd))}`}
                         strong
                       />
                     ) : (
-                      <Row label="Olishi kerak (ulush)" value={formatUsd(o.entitlementUsd)} strong />
+                      <Row label="Olishi kerak (ulush)" value={fmt(o.entitlementUsd)} strong />
                     )}
-                    <Row label="Oldi (to'langan)" value={formatUsd(o.takenUsd)} />
+                    <Row label="Oldi (to'langan)" value={fmt(o.takenUsd)} />
                     <div className="mt-2 flex items-center justify-between border-t pt-2">
                       <span className="font-medium">
                         {owed >= 0 ? "Qoldiq (olishi kerak)" : "Qaytarishi kerak"}
@@ -175,7 +177,7 @@ export default function OwnersPage() {
                       <span
                         className={`text-lg font-bold ${owed >= 0 ? "text-success" : "text-destructive"}`}
                       >
-                        {formatUsd(Math.abs(owed))}
+                        {fmt(Math.abs(owed))}
                       </span>
                     </div>
                   </CardContent>
@@ -256,7 +258,7 @@ export default function OwnersPage() {
                       {p.description ?? "—"}
                     </TableCell>
                     <TableCell className="text-right font-medium">
-                      {formatUsd(Number(p.amount_usd ?? 0))}
+                      {fmt(Number(p.amount_usd ?? 0))}
                     </TableCell>
                   </TableRow>
                 ))}

@@ -57,6 +57,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 import { formatUsd, formatNumber, formatDateTime, formatDate } from "@/lib/format";
+import { useUzs } from "@/hooks/use-uzs";
 
 function fmtNative(amount: number, currency: string) {
   return currency === "USD"
@@ -102,6 +103,7 @@ export default function AccountsPage() {
 
   const rate = accounts.data?.rate;
   const items = accounts.data?.items ?? [];
+  const { fmt } = useUzs();
 
   const invalidate = () => {
     utils.accounts.list.invalidate();
@@ -136,8 +138,8 @@ export default function AccountsPage() {
           <>
             <KpiCard
               label="Jami balans"
-              value={formatUsd(accounts.data?.totalUsd ?? 0)}
-              sub="Barcha hisoblar (USD)"
+              value={fmt(accounts.data?.totalUsd ?? 0)}
+              sub="Barcha hisoblar (so'm)"
               icon={Wallet}
               tone="success"
             />
@@ -146,7 +148,7 @@ export default function AccountsPage() {
                 key={a.id}
                 label={a.name}
                 value={fmtNative(a.balance, a.currency)}
-                sub={a.currency === "USD" ? undefined : `≈ ${formatUsd(a.balanceUsd)}`}
+                sub={a.currency === "UZS" ? undefined : `≈ ${fmt(a.balanceUsd)}`}
                 icon={KIND_ICON[a.kind ?? "other"] ?? Wallet}
               />
             ))}
@@ -173,9 +175,9 @@ export default function AccountsPage() {
                     <div className="text-lg font-bold">
                       {fmtNative(a.balance, a.currency)}
                     </div>
-                    {a.currency !== "USD" && (
+                    {a.currency !== "UZS" && (
                       <div className="text-xs text-muted-foreground">
-                        ≈ {formatUsd(a.balanceUsd)}
+                        ≈ {fmt(a.balanceUsd)}
                       </div>
                     )}
                   </div>
@@ -795,6 +797,7 @@ const LOCKED_KINDS = ["expense", "sale", "sale_refund"];
  *  Shown only when some exist, so the owner can reconcile by deleting them. */
 function OrphanExpenses() {
   const utils = api.useUtils();
+  const { fmt } = useUzs();
   const q = api.accounts.orphanExpenses.useQuery();
   const del = api.accounts.deleteSource.useMutation({
     onSuccess: () => {
@@ -832,7 +835,7 @@ function OrphanExpenses() {
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <span className="font-medium text-destructive">
-                -{formatUsd(e.amountUsd ?? 0)}
+                -{fmt(e.amountUsd ?? 0)}
               </span>
               <Button
                 variant="ghost"

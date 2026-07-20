@@ -15,8 +15,20 @@ import type { WaterfallStep } from "@/lib/business/pnl";
 /**
  * Waterfall rendered with a floating-bar trick: each bar is [base, base+delta]
  * so positive/negative contributions stack from the running total.
+ *
+ * `steps` values are in whatever unit the caller passes (USD by default; the
+ * P&L page passes so'm-converted numbers). `format`/`axisFormat` control how the
+ * tooltip and Y-axis render them.
  */
-export function PnlWaterfallChart({ steps }: { steps: WaterfallStep[] }) {
+export function PnlWaterfallChart({
+  steps,
+  format = formatUsd,
+  axisFormat = (v: number) => `$${v}`,
+}: {
+  steps: WaterfallStep[];
+  format?: (v: number) => string;
+  axisFormat?: (v: number) => string;
+}) {
   const data = steps.map((s) => {
     if (s.kind === "start" || s.kind === "total") {
       return { label: s.label, range: [0, s.cumulative] as [number, number], kind: s.kind, value: s.value };
@@ -44,12 +56,12 @@ export function PnlWaterfallChart({ steps }: { steps: WaterfallStep[] }) {
           tick={{ fontSize: 11 }}
           tickLine={false}
           axisLine={false}
-          width={52}
-          tickFormatter={(v: number) => `$${v}`}
+          width={56}
+          tickFormatter={(v: number) => axisFormat(v)}
         />
         <Tooltip
           cursor={{ fill: "hsl(var(--muted))", opacity: 0.4 }}
-          formatter={(_v, _n, item) => [formatUsd((item?.payload as { value: number })?.value), "O'zgarish"]}
+          formatter={(_v, _n, item) => [format((item?.payload as { value: number })?.value), "O'zgarish"]}
           contentStyle={{
             borderRadius: 8,
             border: "1px solid hsl(var(--border))",

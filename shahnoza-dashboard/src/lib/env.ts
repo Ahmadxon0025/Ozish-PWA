@@ -49,6 +49,9 @@ export const env = {
   // Server-only. Enables the optional AI features (task capture, subtask
   // breakdown, weekly summary, smart hints). Features no-op without it.
   ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ?? "",
+  // Server-only. Enables speech-to-text for the call analyzer (OpenAI Whisper).
+  // The audio-upload step no-ops (paste-transcript still works) without it.
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY ?? "",
   // Web Push (VAPID). Enables browser/PWA push notifications for tasks. The
   // public key is safe to expose; the private key must stay server-only.
   // Push features no-op without both. Generate with:
@@ -71,6 +74,9 @@ export const isAmocrmConfigured = () =>
   Boolean(env.AMOCRM_SUBDOMAIN && env.AMOCRM_CLIENT_ID && env.AMOCRM_CLIENT_SECRET);
 
 export const isAiConfigured = () => Boolean(env.ANTHROPIC_API_KEY);
+
+/** Speech-to-text (call-recording → transcript) via OpenAI Whisper. */
+export const isTranscribeConfigured = () => Boolean(env.OPENAI_API_KEY);
 
 export const isPushConfigured = () =>
   Boolean(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY);

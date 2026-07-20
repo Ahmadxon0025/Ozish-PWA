@@ -5,11 +5,16 @@ import {
   protectedProcedure,
   roleProcedure,
 } from "@/server/api/trpc";
-import { isAiConfigured } from "@/lib/env";
+import { isAiConfigured, isTranscribeConfigured } from "@/lib/env";
 
 const managerProcedure = roleProcedure("super_admin", "owner", "sales_manager");
 
 export const callsRouter = createTRPCRouter({
+  /** Whether audio→text (Whisper) is available, so the UI can offer upload. */
+  sttStatus: protectedProcedure.query(() => ({
+    configured: isTranscribeConfigured(),
+  })),
+
   /** Analyze a call transcript and store the scored review for a rep. */
   analyze: protectedProcedure
     .input(

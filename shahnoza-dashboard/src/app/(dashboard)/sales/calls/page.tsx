@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Sparkles,
   Loader2,
@@ -9,8 +9,11 @@ import {
   AlertTriangle,
   Phone,
   Trophy,
+  Mic,
 } from "lucide-react";
 import { api } from "@/lib/trpc/react";
+import { createClient } from "@/lib/supabase/client";
+import { FILES_BUCKET } from "@/lib/files";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -49,6 +52,13 @@ function scoreTone(v: number): string {
   if (v >= 75) return "bg-success";
   if (v >= 50) return "bg-warning";
   return "bg-destructive";
+}
+
+/** Whisper's hard limit is 25 MB per file. */
+const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
+
+function safeName(name: string): string {
+  return name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-80) || "call.audio";
 }
 
 type Analysis = {
@@ -137,6 +147,7 @@ function Bucket({
 
 export default function CallAnalyzerPage() {
   const aiOn = api.ai.status.useQuery();
+  const sttOn = api.calls.sttStatus.useQuery();
   const users = api.tasks.assignees.useQuery();
   const list = api.calls.list.useQuery({ limit: 20 });
   const stats = api.calls.repStats.useQuery(undefined, { retry: false });
@@ -146,6 +157,60 @@ export default function CallAnalyzerPage() {
   const [title, setTitle] = useState("");
   const [transcript, setTranscript] = useState("");
   const [result, setResult] = useState<Analysis | null>(null);
+  const [transcribing, setTranscribing] = useState(false);
+  const audioInput = useRef<HTMLInputElement>(null);
+
+  async function onPickAudio(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (audioInput.current) audioInput.current.value = "";
+    if (!file) return;
+    if (file.size > MAX_AUDIO_BYTES) {
+      toast({ title: "Audio juda katta (maks. 25 MB)", variant: "destructive" });
+      return;
+    }
+    setTranscribing(true);
+    // Upload straight to Supabase Storage (bypasses the serverless body limit),
+    // then ask the server to transcribe it and hand back the text.
+    const path = `calls/${crypto.randomUUID()}-${safeName(file.name)}`;
+    try {
+      const supabase = createClient();
+      const up = await supabase.storage
+        .from(FILES_BUCKET)
+        .upload(path, file, { upsert: false, contentType: file.type || undefined });
+      if (up.error) {
+        toast({ title: "Yuklashda xato", description: up.error.message, variant: "destructive" });
+        return;
+      }
+      const res = await fetch("/api/calls/transcribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ storagePath: path }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        transcript?: string;
+        error?: string;
+      };
+      if (!res.ok || !data.transcript) {
+        toast({
+          title: "Transkripsiya xatosi",
+          description: data.error ?? "Qayta urinib ko'ring.",
+          variant: "destructive",
+        });
+        return;
+      }
+      setTranscript((prev) => (prev ? `${prev}\n${data.transcript}` : data.transcript!));
+      if (!title) setTitle(file.name.replace(/\.[^.]+$/, ""));
+      toast({ title: "Matn tayyor", description: "Tekshiring va tahlil qiling.", variant: "success" });
+    } catch (err) {
+      toast({
+        title: "Xato",
+        description: err instanceof Error ? err.message : "Noma'lum xato",
+        variant: "destructive",
+      });
+    } finally {
+      setTranscribing(false);
+    }
+  }
 
   const analyze = api.calls.analyze.useMutation({
     onSuccess: (r) => {
@@ -199,7 +264,34 @@ export default function CallAnalyzerPage() {
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Qo&apos;ng&apos;iroq matni (transcript)</Label>
+                  <div className="flex items-center justify-between gap-2">
+                    <Label>Qo&apos;ng&apos;iroq matni (transcript)</Label>
+                    {sttOn.data?.configured && (
+                      <>
+                        <input
+                          ref={audioInput}
+                          type="file"
+                          accept="audio/*,video/mp4,video/webm,.m4a,.mp3,.ogg,.opus,.wav"
+                          className="hidden"
+                          onChange={onPickAudio}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={transcribing}
+                          onClick={() => audioInput.current?.click()}
+                        >
+                          {transcribing ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Mic className="h-4 w-4" />
+                          )}
+                          {transcribing ? "Aylantirilmoqda…" : "Audio yuklash"}
+                        </Button>
+                      </>
+                    )}
+                  </div>
                   <textarea
                     value={transcript}
                     onChange={(e) => setTranscript(e.target.value)}
@@ -208,8 +300,9 @@ export default function CallAnalyzerPage() {
                     className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Audio yozuvni matnga aylantirib (transcript) joylang. Audio&apos;dan avtomatik
-                    matn keyingi bosqichda qo&apos;shiladi.
+                    {sttOn.data?.configured
+                      ? "Audio yozuvni yuklang — avtomatik matnga aylanadi (maks. 25 MB). Matnni tekshirib, tahlil qiling."
+                      : "Qo'ng'iroq matnini joylang. Audio'dan avtomatik matn uchun OPENAI_API_KEY sozlang."}
                   </p>
                 </div>
                 <Button

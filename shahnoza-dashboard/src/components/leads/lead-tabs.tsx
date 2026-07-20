@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ListOrdered, KanbanSquare, PieChart, Inbox } from "lucide-react";
+import {
+  ListOrdered,
+  KanbanSquare,
+  PieChart,
+  Inbox,
+  AlertTriangle,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TABS = [
@@ -10,6 +16,7 @@ const TABS = [
   { href: "/leads/queue", label: "Navbat", icon: Inbox },
   { href: "/leads/board", label: "Doska", icon: KanbanSquare },
   { href: "/leads/analytics", label: "Tahlil", icon: PieChart },
+  { href: "/leads/debtors", label: "Qarzdor", icon: AlertTriangle },
 ];
 
 /** Sub-navigation shared by the three lead views (list / board / analytics). */

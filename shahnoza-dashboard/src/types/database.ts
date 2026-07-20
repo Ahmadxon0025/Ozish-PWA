@@ -542,6 +542,26 @@ export interface Database {
         >;
         Relationships: [];
       };
+      sales_targets: {
+        Row: {
+          id: string;
+          user_id: string;
+          month: string;
+          target_uzs: number;
+          target_deals: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          month: string;
+          target_uzs?: number;
+          target_deals?: number;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["sales_targets"]["Insert"]>;
+        Relationships: [];
+      };
       call_reviews: {
         Row: {
           id: string;

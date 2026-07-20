@@ -542,6 +542,42 @@ export interface Database {
         >;
         Relationships: [];
       };
+      call_reviews: {
+        Row: {
+          id: string;
+          rep_user_id: string | null;
+          lead_id: string | null;
+          title: string | null;
+          transcript: string | null;
+          score: number | null;
+          scores: Json | null;
+          outcome: string | null;
+          summary: string | null;
+          strengths: Json | null;
+          improvements: Json | null;
+          red_flags: Json | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          rep_user_id?: string | null;
+          lead_id?: string | null;
+          title?: string | null;
+          transcript?: string | null;
+          score?: number | null;
+          scores?: Json | null;
+          outcome?: string | null;
+          summary?: string | null;
+          strengths?: Json | null;
+          improvements?: Json | null;
+          red_flags?: Json | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["call_reviews"]["Insert"]>;
+        Relationships: [];
+      };
       brain_chats: {
         Row: {
           chat_key: string;

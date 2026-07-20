@@ -2,14 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import {
-  Plus,
-  Phone,
-  GripVertical,
-  ListOrdered,
-  Radio,
-  Loader2,
-} from "lucide-react";
+import { Plus, Phone, GripVertical, Radio, Loader2 } from "lucide-react";
+import { LeadTabs } from "@/components/leads/lead-tabs";
 import {
   DndContext,
   DragOverlay,
@@ -299,15 +293,12 @@ export default function LeadsBoardPage() {
                 ))}
               </SelectContent>
             </Select>
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/leads">
-                <ListOrdered className="h-4 w-4" /> Ro&apos;yxat
-              </Link>
-            </Button>
             <NewLeadDialog users={users} onSaved={invalidate} />
           </div>
         }
       />
+
+      <LeadTabs />
 
       {board.isLoading ? (
         <div className="flex gap-4 overflow-x-auto pb-2">

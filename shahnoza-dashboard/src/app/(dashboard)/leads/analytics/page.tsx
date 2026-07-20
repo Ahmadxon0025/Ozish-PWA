@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import {
   Users2,
   Target,
@@ -17,8 +16,8 @@ import { api } from "@/lib/trpc/react";
 import { PageHeader } from "@/components/layout/page-header";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { EmptyState } from "@/components/dashboard/empty-state";
+import { LeadTabs } from "@/components/leads/lead-tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -103,14 +102,9 @@ export default function LeadAnalyticsPage() {
       <PageHeader
         title="Lead tahlili"
         description="Leadlar voronkasi — bosqich, manba, tarif va rad etish sabablari bo'yicha."
-        actions={
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/leads">
-              <ListOrdered className="h-4 w-4" /> Ro&apos;yxat
-            </Link>
-          </Button>
-        }
       />
+
+      <LeadTabs />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {a.isLoading || !d ? (

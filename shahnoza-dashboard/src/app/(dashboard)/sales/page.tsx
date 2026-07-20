@@ -12,6 +12,7 @@ import {
   Users2,
   Radio,
   CreditCard,
+  Gauge,
 } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { PageHeader } from "@/components/layout/page-header";
@@ -39,7 +40,7 @@ import {
 } from "@/components/ui/table";
 import { SimpleBarChart } from "@/components/charts/simple-bar-chart";
 import { SalesTrendChart } from "@/components/charts/sales-trend-chart";
-import { formatUsd, formatNumber } from "@/lib/format";
+import { formatUsd, formatUzs, formatNumber } from "@/lib/format";
 
 const PROVIDER_LABELS: Record<string, string> = {
   click: "Click",
@@ -52,6 +53,7 @@ export default function SalesOverviewPage() {
   const [month, setMonth] = useState<string>(currentMonthValue());
 
   const overview = api.sales.overview.useQuery({ month });
+  const roi = api.sales.channelRoi.useQuery({ month });
   const trend = api.dashboard.salesTrend.useQuery({ days: 30 });
 
   const o = overview.data;
@@ -111,6 +113,60 @@ export default function SalesOverviewPage() {
           </>
         )}
       </div>
+
+      {/* Channel ROI — cost per lead / CAC / ROAS by Manba (uses ad spend) */}
+      {roi.data && (roi.data.rows.length > 0 || roi.data.totalSpendUzs > 0) && (
+        <Card className="mt-4">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Gauge className="h-4 w-4" /> Kanal ROI (reklama samaradorligi)
+            </CardTitle>
+            <CardDescription>
+              Har bir kanal: lead soni, reklama xarajati, bitta lead narxi, CAC va ROAS.
+              {roi.data.costPerLeadUzs != null &&
+                ` Umumiy lead narxi: ${formatUzs(roi.data.costPerLeadUzs)}.`}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Kanal</TableHead>
+                  <TableHead className="text-right">Lead</TableHead>
+                  <TableHead className="text-right">Reklama</TableHead>
+                  <TableHead className="text-right">Lead narxi</TableHead>
+                  <TableHead className="text-right">CAC</TableHead>
+                  <TableHead className="text-right">ROAS</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {roi.data.rows.map((r) => (
+                  <TableRow key={r.channel}>
+                    <TableCell className="font-medium">{r.channel}</TableCell>
+                    <TableCell className="text-right">{formatNumber(r.leads)}</TableCell>
+                    <TableCell className="text-right">
+                      {r.spendUzs > 0 ? formatUzs(r.spendUzs) : "—"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {r.costPerLeadUzs != null ? formatUzs(r.costPerLeadUzs) : "—"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {r.cacUzs != null ? formatUzs(r.cacUzs) : "—"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {r.roas != null ? `${r.roas}×` : "—"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <p className="mt-2 text-xs text-muted-foreground">
+              CAC va ROAS sotuvlar (so&apos;m) kirgach to&apos;ladi. Hozircha lead narxi eng
+              muhim ko&apos;rsatkich.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {!overview.isLoading && !hasSales ? (
         <div className="mt-4">

@@ -320,13 +320,26 @@ export interface BrainResult {
   rounds: number;
 }
 
+export interface BrainTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
+const HISTORY_TTL_MS = 30 * 60 * 1000; // conversation resets after 30 min idle
+const HISTORY_MAX = 16; // keep the last N turns as context
+
 /**
  * The ERP "brain": answers a natural-language business question by calling
  * read/write tools over the live data. Used by the app and the Telegram bot.
  */
 export async function runBrain(
   question: string,
-  opts: { userId?: string | null; canWrite?: boolean; feature?: string } = {},
+  opts: {
+    userId?: string | null;
+    canWrite?: boolean;
+    feature?: string;
+    history?: BrainTurn[];
+  } = {},
 ): Promise<BrainResult> {
   if (!isAiConfigured()) throw new Error("AI sozlanmagan (ANTHROPIC_API_KEY yo'q).");
   const db = createAdminClient();
@@ -335,7 +348,10 @@ export async function runBrain(
   const tools = canWrite ? TOOLS : TOOLS.filter((t) => t.name !== "create_task");
 
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
-  const messages: Anthropic.MessageParam[] = [{ role: "user", content: question }];
+  const messages: Anthropic.MessageParam[] = [
+    ...(opts.history ?? []).map((h) => ({ role: h.role, content: h.content })),
+    { role: "user", content: question },
+  ];
 
   const MAX_ROUNDS = 6;
   let rounds = 0;
@@ -372,4 +388,48 @@ export async function runBrain(
     return { text: text || "Javob topilmadi.", rounds };
   }
   return { text: "Savol juda murakkab — aniqroq so'rang.", rounds };
+}
+
+/**
+ * Conversational brain with server-side memory keyed by `chatKey` (e.g. a
+ * Telegram chat id). Loads recent turns, answers, then persists the updated
+ * history. The conversation resets after 30 minutes of silence.
+ */
+export async function runBrainChat(
+  chatKey: string,
+  question: string,
+  opts: { userId?: string | null; canWrite?: boolean; feature?: string } = {},
+): Promise<BrainResult> {
+  const db = createAdminClient();
+  let history: BrainTurn[] = [];
+  if (db) {
+    const { data } = await db
+      .from("brain_chats")
+      .select("messages, updated_at")
+      .eq("chat_key", chatKey)
+      .maybeSingle();
+    if (data && Date.now() - Date.parse(data.updated_at) < HISTORY_TTL_MS) {
+      const raw = data.messages;
+      if (Array.isArray(raw)) history = raw as unknown as BrainTurn[];
+    }
+  }
+
+  const res = await runBrain(question, { ...opts, history });
+
+  if (db) {
+    const next = [
+      ...history,
+      { role: "user" as const, content: question },
+      { role: "assistant" as const, content: res.text },
+    ].slice(-HISTORY_MAX);
+    await db.from("brain_chats").upsert(
+      {
+        chat_key: chatKey,
+        messages: next as unknown as Database["public"]["Tables"]["brain_chats"]["Insert"]["messages"],
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "chat_key" },
+    );
+  }
+  return res;
 }

@@ -512,6 +512,20 @@ export interface Database {
         >;
         Relationships: [];
       };
+      brain_chats: {
+        Row: {
+          chat_key: string;
+          messages: Json;
+          updated_at: string;
+        };
+        Insert: {
+          chat_key: string;
+          messages?: Json;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["brain_chats"]["Insert"]>;
+        Relationships: [];
+      };
       files: {
         Row: {
           id: string;

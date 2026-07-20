@@ -149,7 +149,20 @@ export const aiRouter = createTRPCRouter({
    *  reads live sales/leads/tasks/finance (and can create tasks) to answer.
    *  Manager-gated — it sees the whole book of business. */
   ask: brainProcedure
-    .input(z.object({ question: z.string().min(2).max(1000) }))
+    .input(
+      z.object({
+        question: z.string().min(2).max(1000),
+        history: z
+          .array(
+            z.object({
+              role: z.enum(["user", "assistant"]),
+              content: z.string(),
+            }),
+          )
+          .max(20)
+          .optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       if (!isAiConfigured()) {
         throw new TRPCError({
@@ -162,6 +175,7 @@ export const aiRouter = createTRPCRouter({
         userId: ctx.appUser.id,
         canWrite: true,
         feature: "brain_app",
+        history: input.history,
       });
       return res;
     }),

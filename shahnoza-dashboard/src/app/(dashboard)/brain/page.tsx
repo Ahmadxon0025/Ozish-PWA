@@ -41,9 +41,14 @@ export default function BrainPage() {
   function send(q: string) {
     const text = q.trim();
     if (!text || ask.isPending) return;
+    // Send recent turns as context so the AI can follow up.
+    const history = messages.slice(-8).map((m) => ({
+      role: (m.role === "ai" ? "assistant" : "user") as "assistant" | "user",
+      content: m.text,
+    }));
     setMessages((m) => [...m, { role: "user", text }]);
     setInput("");
-    ask.mutate({ question: text });
+    ask.mutate({ question: text, history });
   }
 
   return (

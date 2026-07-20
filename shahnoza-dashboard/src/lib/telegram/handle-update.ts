@@ -180,8 +180,50 @@ interface TgMessage {
   text?: string;
   chat: { id: number; type?: string };
   from?: { id: number; first_name?: string; username?: string; is_bot?: boolean };
-  reply_to_message?: { message_id: number };
+  reply_to_message?: {
+    message_id: number;
+    text?: string;
+    from?: { is_bot?: boolean };
+  };
   entities?: TgEntity[];
+}
+
+/** Answer a question via the AI brain (per-chat memory) and post the reply. */
+async function answerWithBrain(
+  db: AdminDb,
+  chatId: string | number,
+  question: string,
+  fromId: string | null,
+  replyToMessageId: number,
+  priorAnswer?: string,
+): Promise<void> {
+  if (!isAiConfigured()) {
+    await sendMessage(chatId, "AI hozircha sozlanmagan.", { replyToMessageId });
+    return;
+  }
+  try {
+    const { data: sender } = await db
+      .from("users")
+      .select("id")
+      .eq("telegram_id", fromId ?? "")
+      .maybeSingle();
+    const { runBrainChat } = await import("@/lib/ai/brain");
+    // If replying to a bot message not yet in memory, seed it as context.
+    const seedQ = priorAnswer
+      ? `(Oldingi javobing: ${priorAnswer.slice(0, 600)})\n\n${question}`
+      : question;
+    const res = await runBrainChat(String(chatId), seedQ, {
+      userId: sender?.id ?? null,
+      canWrite: true,
+      feature: "brain_telegram",
+    });
+    await sendMessage(chatId, res.text, { replyToMessageId });
+  } catch (err) {
+    console.error("brain telegram error:", err);
+    await sendMessage(chatId, "⚠️ Javob berishda xatolik yuz berdi.", {
+      replyToMessageId,
+    });
+  }
 }
 
 /**
@@ -373,25 +415,7 @@ export async function handleTelegramUpdate(update: unknown): Promise<void> {
       });
       return;
     }
-    try {
-      const { data: sender } = await db
-        .from("users")
-        .select("id")
-        .eq("telegram_id", fromId ?? "")
-        .maybeSingle();
-      const { runBrain } = await import("@/lib/ai/brain");
-      const res = await runBrain(question, {
-        userId: sender?.id ?? null,
-        canWrite: true,
-        feature: "brain_telegram",
-      });
-      await sendMessage(chatId, res.text, { replyToMessageId: msg.message_id });
-    } catch (err) {
-      console.error("brain telegram error:", err);
-      await sendMessage(chatId, "⚠️ Javob berishda xatolik yuz berdi.", {
-        replyToMessageId: msg.message_id,
-      });
-    }
+    await answerWithBrain(db, chatId, question, fromId, msg.message_id);
     return;
   }
 
@@ -592,6 +616,19 @@ export async function handleTelegramUpdate(update: unknown): Promise<void> {
         chatId,
         `✏️ *Tahrirlandi:* ${formatUsd(newUsd)}${categoryName ? ` — ${categoryName}` : ""}`,
         { replyToMessageId: msg.message_id },
+      );
+      return;
+    }
+    // A reply to one of the bot's own messages (e.g. an AI answer) → keep the
+    // AI conversation going, with memory. No "/ai" prefix needed.
+    if (msg.reply_to_message.from?.is_bot && text && !text.startsWith("/")) {
+      await answerWithBrain(
+        db,
+        chatId,
+        text,
+        fromId,
+        msg.message_id,
+        msg.reply_to_message.text,
       );
       return;
     }

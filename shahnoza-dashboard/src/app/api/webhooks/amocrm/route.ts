@@ -20,14 +20,19 @@ export async function POST(request: NextRequest) {
     const contentType = request.headers.get("content-type") ?? "";
     if (contentType.includes("application/json")) {
       const body = await request.json();
-      summary = `json:${Object.keys(body ?? {}).join(",")}`.slice(0, 200);
+      summary = `json:${JSON.stringify(body ?? {})}`.slice(0, 400);
     } else {
       const form = await request.formData();
-      summary = Array.from(form.keys()).join(",").slice(0, 200);
+      summary = Array.from(form.keys()).join(",").slice(0, 400);
     }
   } catch {
     // ignore body parse errors — still acknowledge
   }
+
+  // A "lead added" event (keys like leads[add][0][id]) → resync now so the new
+  // lead lands and the coordinator alert fires. Idempotent: the sync only
+  // alerts on leads it hasn't seen, so a webhook retry won't double-ping.
+  const isNewLead = /leads?\[add\]|\badd\b/i.test(summary);
 
   try {
     const db = requireAdminClient();
@@ -35,13 +40,22 @@ export async function POST(request: NextRequest) {
       service: "amocrm_webhook",
       status: "received",
       records_synced: 0,
-      error_message: summary,
+      error_message: summary.slice(0, 200),
       completed_at: new Date().toISOString(),
     });
   } catch {
     // best-effort logging
   }
 
-  // Always 200 quickly so AmoCRM doesn't retry aggressively.
+  if (isNewLead) {
+    try {
+      const { runAmocrmSync } = await import("@/lib/amocrm/sync");
+      await runAmocrmSync();
+    } catch (err) {
+      console.error("webhook sync failed:", err);
+    }
+  }
+
+  // Always 200 so AmoCRM doesn't retry aggressively.
   return NextResponse.json({ ok: true });
 }

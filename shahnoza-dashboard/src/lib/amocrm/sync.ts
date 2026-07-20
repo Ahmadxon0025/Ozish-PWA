@@ -123,6 +123,18 @@ export async function runAmocrmSync(): Promise<SyncResult> {
       }
     }
 
+    // Which amoCRM leads we already have → detect brand-new ones for the
+    // coordinator alert. Skip alerts on the first-ever sync (backfill).
+    const { data: existingLeads } = await db
+      .from("leads")
+      .select("amocrm_lead_id")
+      .not("amocrm_lead_id", "is", null);
+    const existingLeadIds = new Set(
+      (existingLeads ?? []).map((l) => Number(l.amocrm_lead_id)),
+    );
+    const hadLeadsBefore = existingLeadIds.size > 0;
+    const freshLeads: { name: string; source: string | null }[] = [];
+
     // --- Leads (paged) -----------------------------------------------------
     for (let page = 1; page <= MAX_PAGES; page++) {
       const res = await amoGet<{ _embedded?: { leads?: AmoLead[] } }>(
@@ -142,6 +154,12 @@ export async function runAmocrmSync(): Promise<SyncResult> {
         const createdIso = unixToIso(lead.created_at);
         const cancelReason = pickByName(lead, "Rad etish sababi");
         const courseStartSec = pickNumberByName(lead, "Dars boshlangan sana");
+        if (hadLeadsBefore && !existingLeadIds.has(lead.id)) {
+          freshLeads.push({
+            name: lead.name ?? "—",
+            source: pickByName(lead, "Manba") || pickCustomField(lead, "utm_source"),
+          });
+        }
 
         const { data: upserted } = await db
           .from("leads")
@@ -232,6 +250,26 @@ export async function runAmocrmSync(): Promise<SyncResult> {
       }
 
       if (leads.length < 250) break;
+    }
+
+    // Coordinator alert: ping the group about brand-new leads (best-effort,
+    // capped so a large catch-up sync never spams).
+    if (freshLeads.length > 0 && freshLeads.length <= 20) {
+      try {
+        const { sendMessage, tasksChatId } = await import("@/lib/telegram/bot");
+        const lines = [
+          `🆕 *Yangi lead!*${freshLeads.length > 1 ? ` (${freshLeads.length} ta)` : ""}`,
+          "",
+          ...freshLeads
+            .slice(0, 10)
+            .map((f) => `• ${f.name}${f.source ? ` — ${f.source}` : ""}`),
+          "",
+          "⚡️ Tez bog'laning — javob tezligi sotuvni oshiradi!",
+        ];
+        await sendMessage(tasksChatId(), lines.join("\n"));
+      } catch (err) {
+        console.error("new-lead alert failed:", err);
+      }
     }
 
     await db

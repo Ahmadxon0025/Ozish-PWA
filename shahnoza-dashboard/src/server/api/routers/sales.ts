@@ -6,7 +6,7 @@ import {
   managerProcedure,
   roleProcedure,
 } from "@/server/api/trpc";
-import { monthRange } from "@/lib/dates";
+import { monthRange, currentMonthKey } from "@/lib/dates";
 import { commissionForSale } from "@/lib/business/commission";
 import { round2 } from "@/lib/business/currency";
 import { getCurrentRate } from "@/lib/business/exchange-rate";
@@ -16,6 +16,17 @@ import { sum, groupBy, resolveMonth } from "./_helpers";
 
 /** CEO layer — sets department (marketing + sales-team) goals. */
 const ceoProcedure = roleProcedure("super_admin", "owner");
+
+/**
+ * First-of-month DATE ("YYYY-MM-01") for a `YYYY-MM[-DD]` input, matching how
+ * targets are stored. NB: `resolveMonth(...).from` is a Tashkent→UTC ISO that is
+ * shifted back 5h, so its date part is the *previous* day — never use it as the
+ * month key for a DATE column.
+ */
+function monthKeyOf(month?: string | null): string {
+  if (month && /^\d{4}-\d{2}/.test(month)) return `${month.slice(0, 7)}-01`;
+  return currentMonthKey();
+}
 
 /** Metrics the CEO can set a goal for, per scope. */
 const TARGET_METRICS = {
@@ -330,7 +341,7 @@ export const salesRouter = createTRPCRouter({
     .input(z.object({ month: z.string().optional() }).optional())
     .query(async ({ ctx, input }) => {
       const range = resolveMonth(input?.month);
-      const monthKey = range.from.slice(0, 10); // first-of-month DATE
+      const monthKey = monthKeyOf(input?.month); // first-of-month DATE (matches how targets are stored)
       const [{ data: sales }, { data: users }, { data: targets }] = await Promise.all([
         ctx.supabase
           .from("sales")
@@ -416,7 +427,7 @@ export const salesRouter = createTRPCRouter({
     .input(z.object({ month: z.string().optional() }).optional())
     .query(async ({ ctx, input }) => {
       const range = resolveMonth(input?.month);
-      const monthKey = range.from.slice(0, 10); // first-of-month DATE
+      const monthKey = monthKeyOf(input?.month); // first-of-month DATE (matches how targets are stored)
       const [
         { data: targets },
         { count: leadCount },

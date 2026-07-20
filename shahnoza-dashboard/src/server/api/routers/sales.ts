@@ -4,6 +4,7 @@ import {
   createTRPCRouter,
   protectedProcedure,
   managerProcedure,
+  roleProcedure,
 } from "@/server/api/trpc";
 import { monthRange } from "@/lib/dates";
 import { commissionForSale } from "@/lib/business/commission";
@@ -12,6 +13,15 @@ import { getCurrentRate } from "@/lib/business/exchange-rate";
 import { insertAccountEntry } from "@/lib/business/account-posting";
 import { PAYMENT_PROVIDERS } from "@/lib/constants";
 import { sum, groupBy, resolveMonth } from "./_helpers";
+
+/** CEO layer — sets department (marketing + sales-team) goals. */
+const ceoProcedure = roleProcedure("super_admin", "owner");
+
+/** Metrics the CEO can set a goal for, per scope. */
+const TARGET_METRICS = {
+  marketing: ["leads", "ad_budget_uzs", "cpl_uzs", "cac_uzs", "roas"],
+  sales: ["revenue_uzs", "deals"],
+} as const;
 
 const listInput = z.object({
   search: z.string().optional(),
@@ -392,6 +402,123 @@ export const salesRouter = createTRPCRouter({
           target_deals: input.targetDeals,
         },
         { onConflict: "user_id,month" },
+      );
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      return { ok: true };
+    }),
+
+  /**
+   * Department (company) goals + live actuals for a month. Marketing KPIs
+   * (leads, ad budget, CPL, CAC, ROAS) and the sales-team totals (revenue,
+   * deals). Actuals are computed from leads / Reklama expenses / sales.
+   */
+  companyTargets: protectedProcedure
+    .input(z.object({ month: z.string().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      const range = resolveMonth(input?.month);
+      const monthKey = range.from.slice(0, 10); // first-of-month DATE
+      const [
+        { data: targets },
+        { count: leadCount },
+        { data: expenses },
+        { data: cats },
+        { data: sales },
+        rate,
+      ] = await Promise.all([
+        ctx.supabase
+          .from("company_targets")
+          .select("scope, metric, target_value")
+          .eq("month", monthKey),
+        ctx.supabase
+          .from("leads")
+          .select("id", { count: "exact", head: true })
+          .gte("created_at", range.from)
+          .lt("created_at", range.to),
+        ctx.supabase
+          .from("expenses")
+          .select("amount_usd, category_id")
+          .gte("expense_date", range.from.slice(0, 10))
+          .lt("expense_date", range.to.slice(0, 10)),
+        ctx.supabase.from("expense_categories").select("id, name"),
+        ctx.supabase
+          .from("sales")
+          .select("total_amount_uzs, is_refunded")
+          .gte("sold_at", range.from)
+          .lt("sold_at", range.to),
+        getCurrentRate(ctx.supabase),
+      ]);
+
+      // Ad spend = the Reklama expense categories, normalized to so'm.
+      const catName = new Map((cats ?? []).map((c) => [c.id, c.name ?? ""]));
+      const isAd = (name: string) => /reklama|target|ads?\b/.test(name.toLowerCase());
+      let adSpendUzs = 0;
+      for (const e of expenses ?? []) {
+        const name = e.category_id ? catName.get(e.category_id) ?? "" : "";
+        if (isAd(name)) adSpendUzs += Math.round(Number(e.amount_usd ?? 0) * rate.rate);
+      }
+
+      const leads = leadCount ?? 0;
+      const liveSales = (sales ?? []).filter((s) => !s.is_refunded);
+      const deals = liveSales.length;
+      const revenueUzs = liveSales.reduce((s, r) => s + Number(r.total_amount_uzs ?? 0), 0);
+
+      const actuals = {
+        leads,
+        ad_budget_uzs: adSpendUzs, // actually spent this month
+        cpl_uzs: leads > 0 && adSpendUzs > 0 ? Math.round(adSpendUzs / leads) : null,
+        cac_uzs: deals > 0 && adSpendUzs > 0 ? Math.round(adSpendUzs / deals) : null,
+        roas: adSpendUzs > 0 ? Math.round((revenueUzs / adSpendUzs) * 100) / 100 : null,
+        revenue_uzs: revenueUzs,
+        deals,
+      };
+
+      const targetByKey = new Map(
+        (targets ?? []).map((t) => [`${t.scope}:${t.metric}`, Number(t.target_value)]),
+      );
+      const t = (scope: string, metric: string): number | null =>
+        targetByKey.has(`${scope}:${metric}`)
+          ? Number(targetByKey.get(`${scope}:${metric}`))
+          : null;
+
+      return {
+        month: monthKey,
+        actuals,
+        targets: {
+          leads: t("marketing", "leads"),
+          ad_budget_uzs: t("marketing", "ad_budget_uzs"),
+          cpl_uzs: t("marketing", "cpl_uzs"),
+          cac_uzs: t("marketing", "cac_uzs"),
+          roas: t("marketing", "roas"),
+          revenue_uzs: t("sales", "revenue_uzs"),
+          deals: t("sales", "deals"),
+        },
+      };
+    }),
+
+  /** Set a department goal (CEO only: owner / super_admin). */
+  setCompanyTarget: ceoProcedure
+    .input(
+      z.object({
+        scope: z.enum(["marketing", "sales"]),
+        metric: z.string(),
+        month: z.string(), // YYYY-MM or YYYY-MM-DD
+        value: z.number().nonnegative(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const allowed: readonly string[] = TARGET_METRICS[input.scope];
+      if (!allowed.includes(input.metric)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Noma'lum ko'rsatkich." });
+      }
+      const monthKey = `${input.month.slice(0, 7)}-01`;
+      const { error } = await ctx.supabase.from("company_targets").upsert(
+        {
+          scope: input.scope,
+          metric: input.metric,
+          month: monthKey,
+          target_value: input.value,
+        },
+        { onConflict: "scope,metric,month" },
       );
       if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
       return { ok: true };

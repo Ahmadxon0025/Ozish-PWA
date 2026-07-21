@@ -52,27 +52,84 @@ async function gatherPeriod(
   // Revenue + commissions are recognized when the sale is made (sold_at).
   // Refunds are recognized when the refund happens (refunded_at) — which may be
   // a different month than the sale — so they're queried separately.
-  const [{ data: sales }, { data: expenses }, { data: refunded }] =
+  const [{ data: sales }, { data: expenses }, { data: refunded }, rate] =
     await Promise.all([
       ctx.supabase
         .from("sales")
-        .select("total_amount_usd, sales_person_id, is_refunded, refund_amount_usd, sold_at")
+        .select("total_amount_usd, total_amount_uzs, sales_person_id, is_refunded, refund_amount_usd, sold_at")
         .gte("sold_at", range.from)
         .lt("sold_at", range.to),
       ctx.supabase
         .from("expenses")
-        .select("amount_usd")
+        .select("amount_usd, amount_uzs")
         .gte("expense_date", range.from.slice(0, 10))
         .lt("expense_date", range.to.slice(0, 10)),
       ctx.supabase
         .from("sales")
-        .select("refund_amount_usd")
+        .select("refund_amount_usd, total_amount_usd, total_amount_uzs")
         .eq("is_refunded", true)
         .gte("refunded_at", range.from)
         .lt("refunded_at", range.to),
+      getCurrentRate(ctx.supabase),
     ]);
   const refundsUsd = sum(refunded ?? [], (r) => r.refund_amount_usd);
-  return { range, sales: sales ?? [], expenses: expenses ?? [], refundsUsd };
+  return {
+    range,
+    sales: sales ?? [],
+    expenses: expenses ?? [],
+    refunded: refunded ?? [],
+    refundsUsd,
+    rate: rate.rate,
+  };
+}
+
+/**
+ * P&L in booked so'm — computed from the so'm value each row was booked at, not
+ * today's rate. Sales carry native total_amount_uzs; expenses carry amount_uzs
+ * (post-0030). Commissions/refunds are scaled by each sale's own booked rate
+ * (uzs/usd), falling back to the current rate for legacy rows missing so'm.
+ */
+function netProfitUzsFor(
+  sales: {
+    total_amount_usd: number | null;
+    total_amount_uzs: number | null;
+    sales_person_id: string | null;
+  }[],
+  expenses: { amount_usd: number | null; amount_uzs: number | null }[],
+  refunded: { refund_amount_usd: number | null; total_amount_usd: number | null; total_amount_uzs: number | null }[],
+  currentRate: number,
+) {
+  // Per-row booked rate (uzs per usd), fallback to the current rate.
+  const bookedRate = (uzs: number | null, usd: number | null): number =>
+    uzs && usd && usd !== 0 ? uzs / usd : currentRate;
+
+  const grossRevenueUzs = sum(sales, (s) =>
+    s.total_amount_uzs ?? Math.round(Number(s.total_amount_usd ?? 0) * currentRate),
+  );
+  const operatingExpensesUzs = sum(expenses, (e) =>
+    e.amount_uzs ?? Math.round(Number(e.amount_usd ?? 0) * currentRate),
+  );
+  const refundsUzs = sum(refunded, (r) =>
+    Math.round(Number(r.refund_amount_usd ?? 0) * bookedRate(r.total_amount_uzs, r.total_amount_usd)),
+  );
+  const commissionsUzs = sum(
+    sales.map((s) => {
+      const usd = commissionForSale({
+        totalAmountUsd: s.total_amount_usd,
+        isRefunded: false,
+        refundAmountUsd: null,
+      });
+      return Math.round(usd * bookedRate(s.total_amount_uzs, s.total_amount_usd));
+    }),
+    (c) => c,
+  );
+  // computePnl is unit-agnostic arithmetic — feed it so'm to get a so'm P&L.
+  return computePnl({
+    grossRevenueUsd: grossRevenueUzs,
+    refundsUsd: refundsUzs,
+    operatingExpensesUsd: operatingExpensesUzs,
+    commissionsUsd: commissionsUzs,
+  });
 }
 
 // Net profit for a resolved range (used by P&L and distribution). Refunds are
@@ -119,10 +176,12 @@ async function getReserveRate(
 export const financeRouter = createTRPCRouter({
   /** Real-time P&L for any period (from/to or month) + waterfall steps. */
   pnl: financeProcedure.input(periodInput).query(async ({ ctx, input }) => {
-    const { range, sales, expenses, refundsUsd } = await gatherPeriod(ctx, input);
-    const result = netProfitFor(sales, expenses, refundsUsd);
+    const { range, sales, expenses, refunded, rate } = await gatherPeriod(ctx, input);
+    // Booked-so'm accounting view (stable regardless of today's rate).
+    const result = netProfitUzsFor(sales, expenses, refunded, rate);
     return {
       ...result,
+      currency: "UZS" as const,
       waterfall: pnlWaterfall(result),
       period: { from: range.from.slice(0, 10), to: range.to.slice(0, 10) },
     };

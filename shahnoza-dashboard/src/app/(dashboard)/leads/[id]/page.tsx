@@ -28,6 +28,7 @@ import {
 import { formatUsd, formatDate, formatDateTime } from "@/lib/format";
 import { LEAD_STATUS_LABELS, LEAD_STATUSES } from "@/lib/constants";
 import { toast } from "@/hooks/use-toast";
+import { PaymentsPanel } from "@/components/leads/payments-panel";
 
 const NONE = "none";
 
@@ -264,6 +265,8 @@ export default function LeadDetailPage() {
               </div>
             </CardContent>
           </Card>
+
+          <PaymentsPanel leadId={id} />
         </div>
 
         {/* Right column: timeline + sales */}

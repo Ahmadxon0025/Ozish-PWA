@@ -250,7 +250,13 @@ export interface Database {
         Row: {
           id: string;
           sale_id: string | null;
+          lead_id: string | null;
           amount_usd: number | null;
+          amount_uzs: number | null;
+          rate: number | null;
+          seq: number | null;
+          note: string | null;
+          created_by: string | null;
           status: string | null;
           due_date: string | null;
           paid_at: string | null;
@@ -260,7 +266,13 @@ export interface Database {
         Insert: {
           id?: string;
           sale_id?: string | null;
+          lead_id?: string | null;
           amount_usd?: number | null;
+          amount_uzs?: number | null;
+          rate?: number | null;
+          seq?: number | null;
+          note?: string | null;
+          created_by?: string | null;
           status?: string | null;
           due_date?: string | null;
           paid_at?: string | null;

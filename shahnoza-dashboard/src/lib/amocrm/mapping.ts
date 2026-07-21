@@ -80,8 +80,12 @@ export function pickBoolByName(lead: AmoLead, ...names: string[]): boolean {
 export function statusFromStage(stage: string | null): string {
   const s = (stage ?? "").toLowerCase();
   if (/bekor|закры|не\s*реализ|rad etil|yakunlangan/.test(s)) return "lost";
-  if (/muvaffaqiyat|успешно|реализован|100\s*%/.test(s)) return "won";
-  if (/qisman|to['’ʻ]?lov|rozi/.test(s)) return "negotiation";
+  // Won = first payment received. "Qisman to'lov" (partial/first payment) and
+  // "100% to'lov" both mean money arrived, as does a success stage. Checked
+  // before negotiation so a payment stage always wins.
+  if (/muvaffaqiyat|успешно|реализован|100\s*%|qisman/.test(s)) return "won";
+  // Agreed-to-pay ("to'lovga rozi") but no money yet stays in negotiation.
+  if (/rozi|kelishuv|to['’ʻ]?lov/.test(s)) return "negotiation";
   if (/kvalifikatsiya|qualif/.test(s)) return "qualified";
   return "new";
 }

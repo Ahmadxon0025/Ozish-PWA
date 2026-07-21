@@ -66,6 +66,15 @@ export async function GET(request: NextRequest) {
     // non-fatal
   }
 
+  // Daily collection nudge — overdue instalments + those due in the next 3 days.
+  let collection = { sent: false, overdue: 0, soon: 0 };
+  try {
+    const { sendCollectionReminders } = await import("@/lib/telegram/collection-reminders");
+    collection = await sendCollectionReminders();
+  } catch {
+    // non-fatal
+  }
+
   // Weekly AI summary on Mondays (04:00 UTC = 09:00 Tashkent) — folded into the
   // daily cron to stay within the Hobby-plan 2-cron limit. Aggregates only.
   let weekly = false;
@@ -83,5 +92,5 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, sent, reminders, weekly });
+  return NextResponse.json({ ok: true, sent, reminders, collection, weekly });
 }

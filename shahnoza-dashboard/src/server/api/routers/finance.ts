@@ -197,23 +197,42 @@ export const financeRouter = createTRPCRouter({
     const yearStart = `${year}-01-01T00:00:00.000Z`;
     const yearEnd = `${year + 1}-01-01T00:00:00.000Z`;
 
-    const [periodRes, yearRes, accRes] = await Promise.all([
+    const [periodRes, yearRes, accRes, rateRow] = await Promise.all([
       ctx.supabase
         .from("account_transactions")
-        .select("id, account_id, direction, kind, amount, currency, amount_usd, description, occurred_at")
+        .select("id, account_id, direction, kind, amount, currency, amount_usd, rate, description, occurred_at")
         .gte("occurred_at", range.from)
         .lt("occurred_at", range.to)
         .order("occurred_at", { ascending: false }),
       ctx.supabase
         .from("account_transactions")
-        .select("direction, kind, amount_usd, occurred_at")
+        .select("direction, kind, amount, currency, amount_usd, rate, occurred_at")
         .gte("occurred_at", yearStart)
         .lt("occurred_at", yearEnd),
       ctx.supabase.from("accounts").select("id, name"),
+      getCurrentRate(ctx.supabase),
     ]);
+    const currentRate = rateRow.rate;
 
     const rows = periodRes.data ?? [];
     const accName = new Map((accRes.data ?? []).map((a) => [a.id, a.name]));
+
+    // Booked so'm for a ledger entry: native amount if the account is UZS, else
+    // amount × the rate it was booked at (fallback: amount_usd × current rate).
+    const txUzs = (t: {
+      amount: number | null;
+      currency: string | null;
+      amount_usd: number | null;
+      rate: number | null;
+    }): number => {
+      const amt = Number(t.amount ?? 0);
+      if (amt) {
+        return t.currency === "UZS"
+          ? Math.round(amt)
+          : Math.round(amt * Number(t.rate ?? currentRate));
+      }
+      return Math.round(Number(t.amount_usd ?? 0) * currentRate);
+    };
 
     const external = rows.filter((t) => !INTERNAL_KINDS.has(t.kind));
     const realIn = external.filter((t) => t.direction === "in");
@@ -222,12 +241,12 @@ export const financeRouter = createTRPCRouter({
     const byKind = (list: typeof external) => {
       const g = groupBy(list, (t) => t.kind);
       return Array.from(g.entries())
-        .map(([kind, r]) => ({ kind, amount: sum(r, (x) => x.amount_usd) }))
+        .map(([kind, r]) => ({ kind, amount: sum(r, (x) => txUzs(x)) }))
         .sort((a, b) => b.amount - a.amount);
     };
 
-    const inflowUsd = round2(sum(realIn, (t) => t.amount_usd));
-    const outflowUsd = round2(sum(realOut, (t) => t.amount_usd));
+    const inflowUzs = sum(realIn, (t) => txUzs(t));
+    const outflowUzs = sum(realOut, (t) => txUzs(t));
 
     // Transaction list (external movements only).
     const transactions = external.map((t) => ({
@@ -241,37 +260,38 @@ export const financeRouter = createTRPCRouter({
       amount: Number(t.amount ?? 0),
       currency: t.currency,
       amountUsd: Number(t.amount_usd ?? 0),
+      amountUzs: txUzs(t),
     }));
 
-    // Monthly roll-up for the year (12 buckets).
+    // Monthly roll-up for the year (12 buckets), booked so'm.
     const buckets = new Map<string, { income: number; expense: number }>();
     for (const t of yearRes.data ?? []) {
       if (INTERNAL_KINDS.has(t.kind)) continue;
       const key = t.occurred_at.slice(0, 7); // YYYY-MM
       const b = buckets.get(key) ?? { income: 0, expense: 0 };
-      if (t.direction === "in") b.income += Number(t.amount_usd ?? 0);
-      else b.expense += Number(t.amount_usd ?? 0);
+      if (t.direction === "in") b.income += txUzs(t);
+      else b.expense += txUzs(t);
       buckets.set(key, b);
     }
     const monthly = Array.from({ length: 12 }, (_, i) => {
       const key = `${year}-${String(i + 1).padStart(2, "0")}`;
       const b = buckets.get(key) ?? { income: 0, expense: 0 };
-      const income = round2(b.income);
-      const expense = round2(b.expense);
-      return { key, label: UZ_MONTHS[i], income, expense, net: round2(income - expense) };
+      const income = Math.round(b.income);
+      const expense = Math.round(b.expense);
+      return { key, label: UZ_MONTHS[i], income, expense, net: income - expense };
     });
     const yearTotal = {
-      income: round2(sum(monthly, (m) => m.income)),
-      expense: round2(sum(monthly, (m) => m.expense)),
-      net: round2(sum(monthly, (m) => m.net)),
+      income: sum(monthly, (m) => m.income),
+      expense: sum(monthly, (m) => m.expense),
+      net: sum(monthly, (m) => m.net),
     };
 
     return {
       period: { from: range.from.slice(0, 10), to: range.to.slice(0, 10) },
       year,
-      inflowUsd,
-      outflowUsd,
-      netUsd: round2(inflowUsd - outflowUsd),
+      inflowUzs,
+      outflowUzs,
+      netUzs: inflowUzs - outflowUzs,
       inflowByKind: byKind(realIn),
       outflowByKind: byKind(realOut),
       transferCount: rows.filter((t) => INTERNAL_KINDS.has(t.kind)).length,
@@ -286,16 +306,18 @@ export const financeRouter = createTRPCRouter({
     .input(z.object({ month: z.string().optional() }).optional())
     .query(async ({ ctx, input }) => {
       const range = resolveMonth(input?.month);
-      const [{ data: sales }, { data: users }, { data: comp }] = await Promise.all([
+      const [{ data: sales }, { data: users }, { data: comp }, rateRow] = await Promise.all([
         ctx.supabase
           .from("sales")
-          .select("id, total_amount_usd, sales_person_id, is_refunded, refund_amount_usd, sold_at, product_id")
+          .select("id, total_amount_usd, total_amount_uzs, sales_person_id, is_refunded, refund_amount_usd, sold_at, product_id")
           .gte("sold_at", range.from)
           .lt("sold_at", range.to)
           .order("sold_at", { ascending: false }),
         ctx.supabase.from("users").select("id, full_name"),
         ctx.supabase.from("user_compensation").select("user_id, commission_rate, effective_to"),
+        getCurrentRate(ctx.supabase),
       ]);
+      const currentRate = rateRow.rate;
 
       const userName = new Map((users ?? []).map((u) => [u.id, u.full_name]));
       const rateByUser: Record<string, number> = {};
@@ -305,21 +327,26 @@ export const financeRouter = createTRPCRouter({
         }
       }
 
+      // Booked-rate so'm: scale each sale's USD amounts by its own booked rate.
       const lines = (sales ?? []).map((s) => {
         const rate = (s.sales_person_id && rateByUser[s.sales_person_id]) || 0.12;
+        const usd = Number(s.total_amount_usd ?? 0);
+        const uzs = Number(s.total_amount_uzs ?? 0);
+        const bookedRate = uzs && usd ? uzs / usd : currentRate;
+        const commissionUsd = commissionForSale({
+          totalAmountUsd: s.total_amount_usd,
+          rate,
+          isRefunded: s.is_refunded,
+          refundAmountUsd: s.refund_amount_usd,
+        });
         return {
           saleId: s.id,
           userId: s.sales_person_id,
           userName: s.sales_person_id ? userName.get(s.sales_person_id) ?? "—" : "—",
           soldAt: s.sold_at,
-          saleAmount: Number(s.total_amount_usd ?? 0),
+          saleAmount: uzs || Math.round(usd * currentRate),
           rate,
-          commission: commissionForSale({
-            totalAmountUsd: s.total_amount_usd,
-            rate,
-            isRefunded: s.is_refunded,
-            refundAmountUsd: s.refund_amount_usd,
-          }),
+          commission: Math.round(commissionUsd * bookedRate),
         };
       });
 

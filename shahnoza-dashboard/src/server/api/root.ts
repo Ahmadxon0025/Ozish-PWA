@@ -12,6 +12,7 @@ import { aiRouter } from "./routers/ai";
 import { pushRouter } from "./routers/push";
 import { filesRouter } from "./routers/files";
 import { callsRouter } from "./routers/calls";
+import { paymentsRouter } from "./routers/payments";
 
 export const appRouter = createTRPCRouter({
   dashboard: dashboardRouter,
@@ -27,6 +28,7 @@ export const appRouter = createTRPCRouter({
   push: pushRouter,
   files: filesRouter,
   calls: callsRouter,
+  payments: paymentsRouter,
 });
 
 export type AppRouter = typeof appRouter;

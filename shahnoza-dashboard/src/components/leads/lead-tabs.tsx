@@ -8,6 +8,7 @@ import {
   PieChart,
   Inbox,
   AlertTriangle,
+  HandCoins,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +18,7 @@ const TABS = [
   { href: "/leads/board", label: "Doska", icon: KanbanSquare },
   { href: "/leads/analytics", label: "Tahlil", icon: PieChart },
   { href: "/leads/debtors", label: "Qarzdor", icon: AlertTriangle },
+  { href: "/leads/collection", label: "Yig'im", icon: HandCoins },
 ];
 
 /** Sub-navigation shared by the three lead views (list / board / analytics). */

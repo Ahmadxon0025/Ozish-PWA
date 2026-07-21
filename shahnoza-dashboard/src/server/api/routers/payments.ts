@@ -112,27 +112,41 @@ export const paymentsRouter = createTRPCRouter({
     ]);
     const nameById = new Map((leads ?? []).map((l) => [l.id, l.full_name]));
 
+    const monthPrefix = today.slice(0, 7); // YYYY-MM
+
     let collectedUzs = 0;
     let scheduledUzs = 0; // still-open (pending)
     let overdueUzs = 0;
+    let upcomingUzs = 0; // due within 7 days, not overdue
+    let priorMonthDebtUzs = 0; // overdue with a due date before this month
+    const buckets = { d1_7: 0, d8_30: 0, d31_60: 0, d60p: 0 };
     const overdue: { leadId: string | null; name: string; amountUzs: number; dueDate: string; dpd: number }[] = [];
 
     for (const p of rows ?? []) {
       const amt = Number(p.amount_uzs ?? 0);
       if (p.status === "paid") {
         collectedUzs += amt;
-      } else {
-        scheduledUzs += amt;
-        if (p.due_date && daysPastDue(p.due_date, today) > 0) {
-          overdueUzs += amt;
-          overdue.push({
-            leadId: p.lead_id,
-            name: p.lead_id ? nameById.get(p.lead_id) ?? "—" : "—",
-            amountUzs: amt,
-            dueDate: p.due_date,
-            dpd: daysPastDue(p.due_date, today),
-          });
-        }
+        continue;
+      }
+      scheduledUzs += amt;
+      if (!p.due_date) continue;
+      const dpd = daysPastDue(p.due_date, today);
+      if (dpd > 0) {
+        overdueUzs += amt;
+        if (dpd <= 7) buckets.d1_7 += amt;
+        else if (dpd <= 30) buckets.d8_30 += amt;
+        else if (dpd <= 60) buckets.d31_60 += amt;
+        else buckets.d60p += amt;
+        if (p.due_date.slice(0, 7) < monthPrefix) priorMonthDebtUzs += amt;
+        overdue.push({
+          leadId: p.lead_id,
+          name: p.lead_id ? nameById.get(p.lead_id) ?? "—" : "—",
+          amountUzs: amt,
+          dueDate: p.due_date,
+          dpd,
+        });
+      } else if (dpd >= -7) {
+        upcomingUzs += amt;
       }
     }
     overdue.sort((a, b) => b.dpd - a.dpd);
@@ -143,8 +157,11 @@ export const paymentsRouter = createTRPCRouter({
       collectedUzs,
       outstandingUzs: scheduledUzs,
       overdueUzs,
+      upcomingUzs,
+      priorMonthDebtUzs,
       collectionPct: contractedUzs > 0 ? Math.round((collectedUzs / contractedUzs) * 100) : 0,
       overdueCount: overdue.length,
+      buckets,
       overdue: overdue.slice(0, 50),
     };
   }),

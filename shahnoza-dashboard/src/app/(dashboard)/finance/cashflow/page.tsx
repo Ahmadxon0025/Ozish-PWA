@@ -29,7 +29,6 @@ import {
 } from "@/components/ui/table";
 import { SimpleBarChart } from "@/components/charts/simple-bar-chart";
 import { formatUsd, formatUzs, formatUzsShort, formatDate, formatDateTime } from "@/lib/format";
-import { useUzs } from "@/hooks/use-uzs";
 
 const KIND_LABELS: Record<string, string> = {
   sale: "Sotuv",
@@ -47,12 +46,10 @@ function KindBars({
   rows,
   total,
   tone,
-  fmt,
 }: {
   rows: { kind: string; amount: number }[];
   total: number;
   tone: "in" | "out";
-  fmt: (usd: number | null | undefined) => string;
 }) {
   if (rows.length === 0)
     return <p className="py-4 text-center text-sm text-muted-foreground">— Yo'q</p>;
@@ -65,7 +62,7 @@ function KindBars({
           <div key={r.kind}>
             <div className="mb-1 flex items-center justify-between text-sm">
               <span>{KIND_LABELS[r.kind] ?? r.kind}</span>
-              <span className="font-medium">{fmt(r.amount)}</span>
+              <span className="font-medium">{formatUzs(r.amount)}</span>
             </div>
             <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
               <div className={`h-full ${bar}`} style={{ width: `${Math.min(100, pct)}%` }} />
@@ -80,7 +77,6 @@ function KindBars({
 export default function CashflowPage() {
   const [period, setPeriod] = useState<Period>(defaultPeriod());
   const cf = api.finance.cashflow.useQuery({ from: period.from, to: period.to });
-  const { fmt, toUzs } = useUzs();
   const d = cf.data;
 
   return (
@@ -100,22 +96,22 @@ export default function CashflowPage() {
           <>
             <KpiCard
               label="Kirim (jami)"
-              value={fmt(d.inflowUsd)}
+              value={formatUzs(d.inflowUzs)}
               icon={ArrowDownToLine}
               tone="success"
             />
             <KpiCard
               label="Chiqim (jami)"
-              value={fmt(d.outflowUsd)}
+              value={formatUzs(d.outflowUzs)}
               icon={ArrowUpFromLine}
               tone="destructive"
             />
             <KpiCard
               label="Sof oqim"
-              value={fmt(d.netUsd)}
-              sub={d.netUsd >= 0 ? "Musbat" : "Manfiy"}
+              value={formatUzs(d.netUzs)}
+              sub={d.netUzs >= 0 ? "Musbat" : "Manfiy"}
               icon={Activity}
-              tone={d.netUsd >= 0 ? "success" : "warning"}
+              tone={d.netUzs >= 0 ? "success" : "warning"}
             />
           </>
         )}
@@ -131,7 +127,7 @@ export default function CashflowPage() {
             {cf.isLoading || !d ? (
               <Skeleton className="h-32 w-full" />
             ) : (
-              <KindBars rows={d.inflowByKind} total={d.inflowUsd} tone="in" fmt={fmt} />
+              <KindBars rows={d.inflowByKind} total={d.inflowUzs} tone="in" />
             )}
           </CardContent>
         </Card>
@@ -145,7 +141,7 @@ export default function CashflowPage() {
             {cf.isLoading || !d ? (
               <Skeleton className="h-32 w-full" />
             ) : (
-              <KindBars rows={d.outflowByKind} total={d.outflowUsd} tone="out" fmt={fmt} />
+              <KindBars rows={d.outflowByKind} total={d.outflowUzs} tone="out" />
             )}
           </CardContent>
         </Card>
@@ -167,7 +163,7 @@ export default function CashflowPage() {
                 // Show every movement in so'm: native for UZS accounts (exact),
                 // rate-converted for USD accounts.
                 const shown =
-                  t.currency === "USD" ? fmt(t.amountUsd) : formatUzs(t.amount);
+                  formatUzs(t.amountUzs);
                 return (
                   <li key={t.id} className="flex items-center gap-3 py-3">
                     <div
@@ -220,7 +216,7 @@ export default function CashflowPage() {
               <Skeleton className="h-[240px] w-full" />
             ) : (
               <SimpleBarChart
-                data={d.monthly.map((m) => ({ label: m.label, value: toUzs(m.net) }))}
+                data={d.monthly.map((m) => ({ label: m.label, value: m.net }))}
                 valueFormatter={(v) => formatUzsShort(v)}
               />
             )}
@@ -249,30 +245,30 @@ export default function CashflowPage() {
                     <TableRow key={m.key}>
                       <TableCell>{m.label}</TableCell>
                       <TableCell className="text-right text-success">
-                        {m.income ? fmt(m.income) : "—"}
+                        {m.income ? formatUzs(m.income) : "—"}
                       </TableCell>
                       <TableCell className="text-right text-destructive">
-                        {m.expense ? fmt(m.expense) : "—"}
+                        {m.expense ? formatUzs(m.expense) : "—"}
                       </TableCell>
                       <TableCell
                         className={`text-right font-medium ${m.net >= 0 ? "" : "text-destructive"}`}
                       >
-                        {m.income || m.expense ? fmt(m.net) : "—"}
+                        {m.income || m.expense ? formatUzs(m.net) : "—"}
                       </TableCell>
                     </TableRow>
                   ))}
                   <TableRow className="font-semibold">
                     <TableCell>Jami</TableCell>
                     <TableCell className="text-right text-success">
-                      {fmt(d.yearTotal.income)}
+                      {formatUzs(d.yearTotal.income)}
                     </TableCell>
                     <TableCell className="text-right text-destructive">
-                      {fmt(d.yearTotal.expense)}
+                      {formatUzs(d.yearTotal.expense)}
                     </TableCell>
                     <TableCell
                       className={`text-right ${d.yearTotal.net >= 0 ? "" : "text-destructive"}`}
                     >
-                      {fmt(d.yearTotal.net)}
+                      {formatUzs(d.yearTotal.net)}
                     </TableCell>
                   </TableRow>
                 </TableBody>
@@ -282,7 +278,7 @@ export default function CashflowPage() {
         </Card>
       </div>
 
-      {d && d.inflowUsd === 0 && d.outflowUsd === 0 && (
+      {d && d.inflowUzs === 0 && d.outflowUzs === 0 && (
         <div className="mt-4">
           <EmptyState
             icon={Activity}

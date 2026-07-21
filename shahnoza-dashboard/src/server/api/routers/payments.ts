@@ -73,6 +73,11 @@ export const paymentsRouter = createTRPCRouter({
         .select("id")
         .single();
       if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      // Won = first payment: recognize the deal the moment money is recorded.
+      if (input.status === "paid") {
+        const { recognizeWonFromPayment } = await import("@/lib/business/recognize-won");
+        await recognizeWonFromPayment(input.leadId);
+      }
       return data;
     }),
 
@@ -89,6 +94,16 @@ export const paymentsRouter = createTRPCRouter({
         })
         .eq("id", input.id);
       if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      // Won = first payment: recognize the deal on this lead.
+      const { data: p } = await ctx.supabase
+        .from("payments")
+        .select("lead_id")
+        .eq("id", input.id)
+        .maybeSingle();
+      if (p?.lead_id) {
+        const { recognizeWonFromPayment } = await import("@/lib/business/recognize-won");
+        await recognizeWonFromPayment(p.lead_id);
+      }
       return { ok: true };
     }),
 

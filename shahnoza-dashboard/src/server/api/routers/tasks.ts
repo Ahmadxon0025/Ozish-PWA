@@ -268,6 +268,35 @@ export const tasksRouter = createTRPCRouter({
 
   /** Top-level tasks grouped by the flow statuses (kanban). Subtasks roll up
    * onto their parent as a done/total count; RLS scopes visibility. */
+  /** Reorder a subtask up/down within its parent's list (normalizes positions). */
+  moveSubtask: protectedProcedure
+    .input(z.object({ id: z.string().uuid(), direction: z.enum(["up", "down"]) }))
+    .mutation(async ({ ctx, input }) => {
+      const { data: me } = await ctx.supabase
+        .from("tasks")
+        .select("id, parent_task_id")
+        .eq("id", input.id)
+        .maybeSingle();
+      if (!me?.parent_task_id) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Ichki vazifa emas." });
+      }
+      const { data: sibs } = await ctx.supabase
+        .from("tasks")
+        .select("id")
+        .eq("parent_task_id", me.parent_task_id)
+        .order("position", { ascending: true })
+        .order("created_at", { ascending: true });
+      const ids = (sibs ?? []).map((s) => s.id);
+      const idx = ids.indexOf(input.id);
+      const target = input.direction === "up" ? idx - 1 : idx + 1;
+      if (idx < 0 || target < 0 || target >= ids.length) return { ok: true };
+      [ids[idx], ids[target]] = [ids[target], ids[idx]];
+      await Promise.all(
+        ids.map((id, i) => ctx.supabase.from("tasks").update({ position: i }).eq("id", id)),
+      );
+      return { ok: true };
+    }),
+
   board: protectedProcedure
     .input(
       z
@@ -370,6 +399,7 @@ export const tasksRouter = createTRPCRouter({
           .from("tasks")
           .select("*")
           .eq("parent_task_id", input.id)
+          .order("position", { ascending: true })
           .order("created_at", { ascending: true }),
         ctx.supabase.from("task_assignees").select("*").eq("task_id", input.id),
         ctx.supabase.from("users").select("id, full_name"),
@@ -479,11 +509,24 @@ export const tasksRouter = createTRPCRouter({
           .maybeSingle();
         spaceId = parent?.space_id ?? null;
       }
+      // Subtasks append to the end of their parent's ordered list.
+      let position = 0;
+      if (input.parentTaskId) {
+        const { data: last } = await ctx.supabase
+          .from("tasks")
+          .select("position")
+          .eq("parent_task_id", input.parentTaskId)
+          .order("position", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        position = (last?.position ?? 0) + 1;
+      }
       const { error, data } = await ctx.supabase
         .from("tasks")
         .insert({
           title: input.title,
           description: input.description ?? null,
+          position,
           assigned_to: primaryId,
           created_by: ctx.appUser.id,
           priority: input.priority,

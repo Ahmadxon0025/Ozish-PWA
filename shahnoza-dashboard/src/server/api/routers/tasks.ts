@@ -274,10 +274,18 @@ export const tasksRouter = createTRPCRouter({
         .object({
           assignedTo: z.string().uuid().optional(),
           spaceId: z.string().uuid().optional(),
+          // Due-date window (YYYY-MM-DD). `overdue` = past-due & not done.
+          from: z.string().optional(),
+          to: z.string().optional(),
+          overdue: z.boolean().optional(),
         })
         .optional(),
     )
     .query(async ({ ctx, input }) => {
+      // Tashkent (UTC+5) today for the overdue check.
+      const todayKey = new Date(Date.now() + 5 * 3600 * 1000)
+        .toISOString()
+        .slice(0, 10);
       const [{ data: tasks }, { data: users }, { data: assignees }] =
         await Promise.all([
           ctx.supabase
@@ -316,6 +324,12 @@ export const tasksRouter = createTRPCRouter({
       const withMeta = visible
         .filter((t) => !input?.assignedTo || t.assigned_to === input.assignedTo)
         .filter((t) => !input?.spaceId || t.space_id === input.spaceId)
+        .filter((t) => {
+          const due = t.due_date ? t.due_date.slice(0, 10) : null;
+          if (input?.overdue) return !!due && due < todayKey && t.status !== "done";
+          if (input?.from && input?.to) return !!due && due >= input.from && due <= input.to;
+          return true;
+        })
         .map((t) => {
           const sub = subByParent.get(t.id) ?? { total: 0, done: 0 };
           const asg = (asgByTask.get(t.id) ?? []).sort(

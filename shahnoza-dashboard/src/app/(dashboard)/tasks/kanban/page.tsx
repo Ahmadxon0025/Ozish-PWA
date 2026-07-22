@@ -493,17 +493,48 @@ function patchInCache(
   }));
 }
 
+const DUE_PRESETS: { value: string; label: string }[] = [
+  { value: "all", label: "Barcha muddat" },
+  { value: "week", label: "Bu hafta" },
+  { value: "month", label: "Bu oy" },
+  { value: "overdue", label: "Muddati o'tgan" },
+];
+
+/** from/to (YYYY-MM-DD) for the "this week"/"this month" due-date filters. */
+function dueRange(preset: string): { from?: string; to?: string } {
+  const ymd = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const now = new Date();
+  if (preset === "week") {
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - ((now.getDay() + 6) % 7)); // back to Monday
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    return { from: ymd(monday), to: ymd(sunday) };
+  }
+  if (preset === "month") {
+    return {
+      from: ymd(new Date(now.getFullYear(), now.getMonth(), 1)),
+      to: ymd(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
+    };
+  }
+  return {};
+}
+
 export default function KanbanPage() {
   const utils = api.useUtils();
   const [assignee, setAssignee] = useState<string>(ALL);
   const [space, setSpace] = useState<string>(ALL_SPACES);
+  const [due, setDue] = useState<string>("all");
   const [activeTask, setActiveTask] = useState<BoardTask | null>(null);
   const [activeStatus, setActiveStatus] = useState<string | null>(null);
   const assignees = api.tasks.assignees.useQuery();
   const me = api.users.me.useQuery();
+  const dueWindow = dueRange(due);
   const boardInput = {
     assignedTo: assignee === ALL ? undefined : assignee,
     spaceId: space === ALL_SPACES ? undefined : space,
+    ...(due === "overdue" ? { overdue: true } : dueWindow),
   };
   const board = api.tasks.board.useQuery(boardInput);
   // New tasks default to the selected bo'lim, or (for a walled member) their own.
@@ -612,7 +643,19 @@ export default function KanbanPage() {
         title="Kanban doska"
         description="Kartani boshqa ustunga torting. Mas'ul, muhimlik va muddatni kartadan bevosita o'zgartiring."
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={due} onValueChange={setDue}>
+              <SelectTrigger className="w-40">
+                <SelectValue placeholder="Muddat" />
+              </SelectTrigger>
+              <SelectContent>
+                {DUE_PRESETS.map((p) => (
+                  <SelectItem key={p.value} value={p.value}>
+                    {p.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Select value={assignee} onValueChange={setAssignee}>
               <SelectTrigger className="w-44">
                 <SelectValue placeholder="Mas'ul" />

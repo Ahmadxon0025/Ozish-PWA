@@ -297,6 +297,27 @@ export const tasksRouter = createTRPCRouter({
       return { ok: true };
     }),
 
+  /** Persist a full drag-and-drop reorder of a parent's subtasks. `ids` is the
+   * new order (top → bottom); positions are rewritten to match the array index. */
+  reorderSubtasks: protectedProcedure
+    .input(z.object({ parentTaskId: z.string().uuid(), ids: z.array(z.string().uuid()) }))
+    .mutation(async ({ ctx, input }) => {
+      // Only reorder rows that actually belong to this parent (guards against
+      // stale/foreign ids in the payload).
+      const { data: sibs } = await ctx.supabase
+        .from("tasks")
+        .select("id")
+        .eq("parent_task_id", input.parentTaskId);
+      const owned = new Set((sibs ?? []).map((s) => s.id));
+      const ordered = input.ids.filter((id) => owned.has(id));
+      await Promise.all(
+        ordered.map((id, i) =>
+          ctx.supabase.from("tasks").update({ position: i }).eq("id", id),
+        ),
+      );
+      return { ok: true };
+    }),
+
   board: protectedProcedure
     .input(
       z

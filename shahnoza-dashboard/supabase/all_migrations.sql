@@ -1417,3 +1417,15 @@ CREATE POLICY payments_write ON payments FOR ALL TO authenticated
     public.can_read_all()
     OR EXISTS (SELECT 1 FROM leads l WHERE l.id = payments.lead_id AND l.assigned_to = public.app_uid())
   );
+
+
+-- ===========================================================================
+-- 0032_task_position.sql
+-- ===========================================================================
+-- 0032_task_position.sql
+-- Additive. Ordering for tasks — used to reorder subtasks within a parent
+-- (and available for card ordering within a Kanban column later).
+
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS position INTEGER NOT NULL DEFAULT 0;
+
+CREATE INDEX IF NOT EXISTS idx_tasks_parent_position ON tasks(parent_task_id, position);

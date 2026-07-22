@@ -433,6 +433,7 @@ export interface Database {
           telegram_chat_id: string | null;
           telegram_confirm_message_id: number | null;
           space_id: string | null;
+          position: number;
         };
         Insert: {
           id?: string;
@@ -448,6 +449,7 @@ export interface Database {
           due_date?: string | null;
           completed_at?: string | null;
           created_at?: string;
+          position?: number;
           updated_at?: string;
           start_date?: string | null;
           started_at?: string | null;

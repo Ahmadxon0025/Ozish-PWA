@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { Plus, Trash2, Users2, Sparkles, Wand2 } from "lucide-react";
+import { Plus, Trash2, Users2, Sparkles, Wand2, ChevronUp, ChevronDown } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -636,6 +636,10 @@ export function SubtasksPanel({
     onSuccess: refresh,
     onError: (e) => toast({ title: "Xato", description: e.message, variant: "destructive" }),
   });
+  const move = api.tasks.moveSubtask.useMutation({
+    onSuccess: refresh,
+    onError: (e) => toast({ title: "Xato", description: e.message, variant: "destructive" }),
+  });
 
   const done = subs.filter((s) => s.status === "done").length;
 
@@ -702,11 +706,31 @@ export function SubtasksPanel({
 
       {subs.length > 0 && (
         <div className="space-y-1">
-          {subs.map((s) => (
+          {subs.map((s, i) => (
             <div
               key={s.id}
               className="flex flex-wrap items-center gap-2 rounded-md border px-2 py-1.5 text-sm"
             >
+              <div className="flex shrink-0 flex-col">
+                <button
+                  type="button"
+                  className="text-muted-foreground hover:text-foreground disabled:opacity-30"
+                  disabled={i === 0 || move.isPending}
+                  onClick={() => move.mutate({ id: s.id, direction: "up" })}
+                  aria-label="Yuqoriga"
+                >
+                  <ChevronUp className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  className="text-muted-foreground hover:text-foreground disabled:opacity-30"
+                  disabled={i === subs.length - 1 || move.isPending}
+                  onClick={() => move.mutate({ id: s.id, direction: "down" })}
+                  aria-label="Pastga"
+                >
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </button>
+              </div>
               <input
                 type="checkbox"
                 className="h-4 w-4 shrink-0"

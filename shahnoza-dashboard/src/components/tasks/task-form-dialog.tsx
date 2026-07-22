@@ -1,8 +1,25 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { Plus, Trash2, Users2, Sparkles, Wand2, ChevronUp, ChevronDown } from "lucide-react";
+import { Plus, Trash2, Users2, Sparkles, Wand2, GripVertical } from "lucide-react";
+import {
+  DndContext,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { api } from "@/lib/trpc/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -584,6 +601,148 @@ export function TaskFormDialog({
   );
 }
 
+type SubtaskLite = {
+  id: string;
+  title: string;
+  status: string;
+  assigned_to: string | null;
+  start_date: string | null;
+  due_date: string | null;
+};
+
+/** One draggable subtask row: grip handle + done toggle + inline assignee,
+ * start date, finish date and finish time. Finish date+time share the single
+ * `due_date` TIMESTAMPTZ column (date in the date part, time in the time part). */
+function SortableSubtaskRow({
+  sub,
+  users,
+  onToggle,
+  onAssignee,
+  onStart,
+  onDue,
+  onDelete,
+}: {
+  sub: SubtaskLite;
+  users: UserLite[];
+  onToggle: (id: string, done: boolean) => void;
+  onAssignee: (id: string, value: string | null) => void;
+  onStart: (id: string, value: string | null) => void;
+  onDue: (id: string, value: string | null) => void;
+  onDelete: (id: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: sub.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  const startPart = sub.start_date ? sub.start_date.slice(0, 10) : "";
+  const duePart = sub.due_date ? sub.due_date.slice(0, 10) : "";
+  const rawTime =
+    sub.due_date && sub.due_date.length > 10 ? sub.due_date.slice(11, 16) : "";
+  // Treat midnight as "no time set" so a date-only value doesn't show 00:00.
+  const timePart = rawTime === "00:00" ? "" : rawTime;
+
+  // Recombine finish date + time into a single value for the due_date column.
+  function commitDue(date: string, time: string) {
+    if (!date) return onDue(sub.id, null);
+    if (time && time !== "00:00") return onDue(sub.id, `${date}T${time}:00`);
+    return onDue(sub.id, date);
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex flex-wrap items-center gap-2 rounded-md border bg-background px-2 py-1.5 text-sm ${
+        isDragging ? "z-10 opacity-90 shadow-lg" : ""
+      }`}
+    >
+      <button
+        type="button"
+        className="shrink-0 cursor-grab touch-none text-muted-foreground hover:text-foreground active:cursor-grabbing"
+        aria-label="Sudrab tartibini o'zgartirish"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
+      <input
+        type="checkbox"
+        className="h-4 w-4 shrink-0"
+        checked={sub.status === "done"}
+        onChange={(e) => onToggle(sub.id, e.target.checked)}
+      />
+      <Link
+        href={`/tasks/${sub.id}`}
+        className={`min-w-0 flex-1 truncate hover:underline ${
+          sub.status === "done" ? "text-muted-foreground line-through" : ""
+        }`}
+        title="Ochish / to'liq tahrirlash"
+      >
+        {sub.title}
+      </Link>
+      {/* Inline assignee */}
+      <Select
+        value={sub.assigned_to ?? UNASSIGNED}
+        onValueChange={(v) => onAssignee(sub.id, v === UNASSIGNED ? null : v)}
+      >
+        <SelectTrigger className="h-7 w-28 shrink-0 text-xs">
+          <SelectValue placeholder="Mas'ul" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={UNASSIGNED}>—</SelectItem>
+          {users.map((u) => (
+            <SelectItem key={u.id} value={u.id}>
+              {u.full_name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {/* Start date */}
+      <div className="flex shrink-0 items-center gap-1">
+        <span className="text-[10px] uppercase text-muted-foreground">Boshlash</span>
+        <Input
+          type="date"
+          value={startPart}
+          onChange={(e) => onStart(sub.id, e.target.value || null)}
+          className="h-7 w-[130px] text-xs"
+          title="Boshlanish sanasi"
+        />
+      </div>
+      {/* Finish date + time */}
+      <div className="flex shrink-0 items-center gap-1">
+        <span className="text-[10px] uppercase text-muted-foreground">Tugash</span>
+        <Input
+          type="date"
+          value={duePart}
+          onChange={(e) => commitDue(e.target.value, timePart)}
+          className="h-7 w-[130px] text-xs"
+          title="Tugash sanasi"
+        />
+        <Input
+          type="time"
+          value={timePart}
+          disabled={!duePart}
+          onChange={(e) => commitDue(duePart, e.target.value)}
+          className="h-7 w-[92px] text-xs disabled:opacity-40"
+          title="Tugash vaqti"
+        />
+      </div>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7 shrink-0 text-destructive"
+        onClick={() => onDelete(sub.id)}
+        aria-label="O'chirish"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </Button>
+    </div>
+  );
+}
+
 /** Subtasks of a task — each is a real task with its own assignee + due date. */
 export function SubtasksPanel({
   taskId,
@@ -601,6 +760,7 @@ export function SubtasksPanel({
 
   const [title, setTitle] = useState("");
   const [assignedTo, setAssignedTo] = useState(UNASSIGNED);
+  const [start, setStart] = useState("");
   const [due, setDue] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
 
@@ -619,6 +779,7 @@ export function SubtasksPanel({
     onSuccess: () => {
       setTitle("");
       setAssignedTo(UNASSIGNED);
+      setStart("");
       setDue("");
       refresh();
     },
@@ -636,10 +797,55 @@ export function SubtasksPanel({
     onSuccess: refresh,
     onError: (e) => toast({ title: "Xato", description: e.message, variant: "destructive" }),
   });
-  const move = api.tasks.moveSubtask.useMutation({
-    onSuccess: refresh,
-    onError: (e) => toast({ title: "Xato", description: e.message, variant: "destructive" }),
+
+  // Drag-and-drop reorder. We keep a local ordered list of ids so the reorder
+  // is instant (optimistic); the server persists positions in the background.
+  const [orderedIds, setOrderedIds] = useState<string[]>([]);
+  const forceSync = useRef(false);
+  useEffect(() => {
+    const serverIds = subs.map((s) => s.id);
+    setOrderedIds((prev) => {
+      if (forceSync.current) {
+        forceSync.current = false;
+        return serverIds;
+      }
+      const prevSet = new Set(prev);
+      const sameMembership =
+        prev.length === serverIds.length && serverIds.every((id) => prevSet.has(id));
+      // Preserve the optimistic order while membership is unchanged; adopt the
+      // server order on initial load or when a subtask is added/removed.
+      return sameMembership ? prev : serverIds;
+    });
+  }, [subs]);
+
+  const reorder = api.tasks.reorderSubtasks.useMutation({
+    onError: (e) => {
+      toast({ title: "Xato", description: e.message, variant: "destructive" });
+      forceSync.current = true;
+      utils.tasks.get.invalidate({ id: taskId });
+    },
   });
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const subById = new Map(subs.map((s) => [s.id, s]));
+  const orderedSubs = orderedIds
+    .map((id) => subById.get(id))
+    .filter((s): s is (typeof subs)[number] => Boolean(s));
+
+  function onDragEnd(e: DragEndEvent) {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const oldIndex = orderedIds.indexOf(String(active.id));
+    const newIndex = orderedIds.indexOf(String(over.id));
+    if (oldIndex < 0 || newIndex < 0) return;
+    const next = arrayMove(orderedIds, oldIndex, newIndex);
+    setOrderedIds(next);
+    reorder.mutate({ parentTaskId: taskId, ids: next });
+  }
 
   const done = subs.filter((s) => s.status === "done").length;
 
@@ -704,88 +910,34 @@ export function SubtasksPanel({
         </div>
       )}
 
-      {subs.length > 0 && (
-        <div className="space-y-1">
-          {subs.map((s, i) => (
-            <div
-              key={s.id}
-              className="flex flex-wrap items-center gap-2 rounded-md border px-2 py-1.5 text-sm"
-            >
-              <div className="flex shrink-0 flex-col">
-                <button
-                  type="button"
-                  className="text-muted-foreground hover:text-foreground disabled:opacity-30"
-                  disabled={i === 0 || move.isPending}
-                  onClick={() => move.mutate({ id: s.id, direction: "up" })}
-                  aria-label="Yuqoriga"
-                >
-                  <ChevronUp className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  className="text-muted-foreground hover:text-foreground disabled:opacity-30"
-                  disabled={i === subs.length - 1 || move.isPending}
-                  onClick={() => move.mutate({ id: s.id, direction: "down" })}
-                  aria-label="Pastga"
-                >
-                  <ChevronDown className="h-3.5 w-3.5" />
-                </button>
-              </div>
-              <input
-                type="checkbox"
-                className="h-4 w-4 shrink-0"
-                checked={s.status === "done"}
-                onChange={(e) =>
-                  setStatus.mutate({ id: s.id, status: e.target.checked ? "done" : "todo" })
-                }
-              />
-              <Link
-                href={`/tasks/${s.id}`}
-                className={`min-w-0 flex-1 truncate hover:underline ${s.status === "done" ? "text-muted-foreground line-through" : ""}`}
-                title="Ochish / to'liq tahrirlash"
-              >
-                {s.title}
-              </Link>
-              {/* Inline assignee */}
-              <Select
-                value={s.assigned_to ?? UNASSIGNED}
-                onValueChange={(v) =>
-                  update.mutate({ id: s.id, assignedTo: v === UNASSIGNED ? null : v })
-                }
-              >
-                <SelectTrigger className="h-7 w-28 shrink-0 text-xs">
-                  <SelectValue placeholder="Mas'ul" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={UNASSIGNED}>—</SelectItem>
-                  {users.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>
-                      {u.full_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {/* Inline due date */}
-              <Input
-                type="date"
-                value={s.due_date ? s.due_date.slice(0, 10) : ""}
-                onChange={(e) =>
-                  update.mutate({ id: s.id, dueDate: e.target.value || null })
-                }
-                className="h-7 w-[130px] shrink-0 text-xs"
-              />
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 shrink-0 text-destructive"
-                onClick={() => del.mutate({ id: s.id })}
-                aria-label="O'chirish"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
+      {orderedSubs.length > 0 && (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={onDragEnd}
+        >
+          <SortableContext
+            items={orderedIds}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="space-y-1">
+              {orderedSubs.map((s) => (
+                <SortableSubtaskRow
+                  key={s.id}
+                  sub={s}
+                  users={users}
+                  onToggle={(id, isDone) =>
+                    setStatus.mutate({ id, status: isDone ? "done" : "todo" })
+                  }
+                  onAssignee={(id, v) => update.mutate({ id, assignedTo: v })}
+                  onStart={(id, v) => update.mutate({ id, startDate: v })}
+                  onDue={(id, v) => update.mutate({ id, dueDate: v })}
+                  onDelete={(id) => del.mutate({ id })}
+                />
+              ))}
             </div>
-          ))}
-        </div>
+          </SortableContext>
+        </DndContext>
       )}
 
       {/* Add subtask */}
@@ -802,6 +954,7 @@ export function SubtasksPanel({
                   title: title.trim(),
                   parentTaskId: taskId,
                   assignedTo: assignedTo === UNASSIGNED ? undefined : assignedTo,
+                  startDate: start || undefined,
                   dueDate: due || undefined,
                 });
               }
@@ -821,12 +974,26 @@ export function SubtasksPanel({
             ))}
           </SelectContent>
         </Select>
-        <Input
-          type="date"
-          value={due}
-          onChange={(e) => setDue(e.target.value)}
-          className="w-36"
-        />
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[10px] uppercase text-muted-foreground">Boshlash</span>
+          <Input
+            type="date"
+            value={start}
+            onChange={(e) => setStart(e.target.value)}
+            className="w-36"
+            title="Boshlanish sanasi"
+          />
+        </div>
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[10px] uppercase text-muted-foreground">Tugash</span>
+          <Input
+            type="date"
+            value={due}
+            onChange={(e) => setDue(e.target.value)}
+            className="w-36"
+            title="Tugash sanasi"
+          />
+        </div>
         <Button
           type="button"
           size="sm"
@@ -836,6 +1003,7 @@ export function SubtasksPanel({
               title: title.trim(),
               parentTaskId: taskId,
               assignedTo: assignedTo === UNASSIGNED ? undefined : assignedTo,
+              startDate: start || undefined,
               dueDate: due || undefined,
             })
           }

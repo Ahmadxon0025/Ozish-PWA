@@ -655,90 +655,95 @@ function SortableSubtaskRow({
     <div
       ref={setNodeRef}
       style={style}
-      className={`flex flex-wrap items-center gap-2 rounded-md border bg-background px-2 py-1.5 text-sm ${
+      className={`rounded-md border bg-background px-2 py-1.5 text-sm ${
         isDragging ? "z-10 opacity-90 shadow-lg" : ""
       }`}
     >
-      <button
-        type="button"
-        className="shrink-0 cursor-grab touch-none text-muted-foreground hover:text-foreground active:cursor-grabbing"
-        aria-label="Sudrab tartibini o'zgartirish"
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical className="h-4 w-4" />
-      </button>
-      <input
-        type="checkbox"
-        className="h-4 w-4 shrink-0"
-        checked={sub.status === "done"}
-        onChange={(e) => onToggle(sub.id, e.target.checked)}
-      />
-      <Link
-        href={`/tasks/${sub.id}`}
-        className={`min-w-0 flex-1 truncate hover:underline ${
-          sub.status === "done" ? "text-muted-foreground line-through" : ""
-        }`}
-        title="Ochish / to'liq tahrirlash"
-      >
-        {sub.title}
-      </Link>
-      {/* Inline assignee */}
-      <Select
-        value={sub.assigned_to ?? UNASSIGNED}
-        onValueChange={(v) => onAssignee(sub.id, v === UNASSIGNED ? null : v)}
-      >
-        <SelectTrigger className="h-7 w-28 shrink-0 text-xs">
-          <SelectValue placeholder="Mas'ul" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={UNASSIGNED}>—</SelectItem>
-          {users.map((u) => (
-            <SelectItem key={u.id} value={u.id}>
-              {u.full_name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      {/* Start date */}
-      <div className="flex shrink-0 items-center gap-1">
-        <span className="text-[10px] uppercase text-muted-foreground">Boshlash</span>
-        <Input
-          type="date"
-          value={startPart}
-          onChange={(e) => onStart(sub.id, e.target.value || null)}
-          className="h-7 w-[130px] text-xs"
-          title="Boshlanish sanasi"
+      {/* Line 1 — the task itself: grip, done toggle, title, assignee, delete. */}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          className="shrink-0 cursor-grab touch-none text-muted-foreground hover:text-foreground active:cursor-grabbing"
+          aria-label="Sudrab tartibini o'zgartirish"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+        <input
+          type="checkbox"
+          className="h-4 w-4 shrink-0"
+          checked={sub.status === "done"}
+          onChange={(e) => onToggle(sub.id, e.target.checked)}
         />
+        <Link
+          href={`/tasks/${sub.id}`}
+          className={`min-w-0 flex-1 truncate hover:underline ${
+            sub.status === "done" ? "text-muted-foreground line-through" : ""
+          }`}
+          title="Ochish / to'liq tahrirlash"
+        >
+          {sub.title}
+        </Link>
+        <Select
+          value={sub.assigned_to ?? UNASSIGNED}
+          onValueChange={(v) => onAssignee(sub.id, v === UNASSIGNED ? null : v)}
+        >
+          <SelectTrigger className="h-7 w-28 shrink-0 text-xs">
+            <SelectValue placeholder="Mas'ul" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={UNASSIGNED}>—</SelectItem>
+            {users.map((u) => (
+              <SelectItem key={u.id} value={u.id}>
+                {u.full_name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 shrink-0 text-destructive"
+          onClick={() => onDelete(sub.id)}
+          aria-label="O'chirish"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
       </div>
-      {/* Finish date + time */}
-      <div className="flex shrink-0 items-center gap-1">
-        <span className="text-[10px] uppercase text-muted-foreground">Tugash</span>
-        <Input
-          type="date"
-          value={duePart}
-          onChange={(e) => commitDue(e.target.value, timePart)}
-          className="h-7 w-[130px] text-xs"
-          title="Tugash sanasi"
-        />
-        <Input
-          type="time"
-          value={timePart}
-          disabled={!duePart}
-          onChange={(e) => commitDue(duePart, e.target.value)}
-          className="h-7 w-[92px] text-xs disabled:opacity-40"
-          title="Tugash vaqti"
-        />
+
+      {/* Line 2 — schedule: start date, finish date + time. Indented under the
+          title so it reads as secondary detail, not another task. */}
+      <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 pl-6 text-xs text-muted-foreground">
+        <label className="flex items-center gap-1.5">
+          <span className="w-14 shrink-0">Boshlash</span>
+          <Input
+            type="date"
+            value={startPart}
+            onChange={(e) => onStart(sub.id, e.target.value || null)}
+            className="h-7 w-[132px] text-xs"
+            title="Boshlanish sanasi"
+          />
+        </label>
+        <label className="flex items-center gap-1.5">
+          <span className="w-12 shrink-0">Tugash</span>
+          <Input
+            type="date"
+            value={duePart}
+            onChange={(e) => commitDue(e.target.value, timePart)}
+            className="h-7 w-[132px] text-xs"
+            title="Tugash sanasi"
+          />
+          <Input
+            type="time"
+            value={timePart}
+            disabled={!duePart}
+            onChange={(e) => commitDue(duePart, e.target.value)}
+            className="h-7 w-[92px] text-xs disabled:opacity-40"
+            title="Tugash vaqti"
+          />
+        </label>
       </div>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-7 w-7 shrink-0 text-destructive"
-        onClick={() => onDelete(sub.id)}
-        aria-label="O'chirish"
-      >
-        <Trash2 className="h-3.5 w-3.5" />
-      </Button>
     </div>
   );
 }
@@ -940,10 +945,11 @@ export function SubtasksPanel({
         </DndContext>
       )}
 
-      {/* Add subtask */}
-      <div className="flex flex-wrap items-end gap-2 border-t pt-2">
-        <div className="min-w-[140px] flex-1">
+      {/* Add subtask — mirrors the row layout: name on top, schedule below. */}
+      <div className="space-y-2 border-t pt-2">
+        <div className="flex items-center gap-2">
           <Input
+            className="min-w-[140px] flex-1"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Yangi ichki vazifa"
@@ -960,56 +966,59 @@ export function SubtasksPanel({
               }
             }}
           />
+          <Select value={assignedTo} onValueChange={setAssignedTo}>
+            <SelectTrigger className="w-32 shrink-0">
+              <SelectValue placeholder="Mas'ul" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={UNASSIGNED}>Mas&apos;ul yo&apos;q</SelectItem>
+              {users.map((u) => (
+                <SelectItem key={u.id} value={u.id}>
+                  {u.full_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            type="button"
+            size="sm"
+            className="shrink-0"
+            disabled={!title.trim() || create.isPending}
+            onClick={() =>
+              create.mutate({
+                title: title.trim(),
+                parentTaskId: taskId,
+                assignedTo: assignedTo === UNASSIGNED ? undefined : assignedTo,
+                startDate: start || undefined,
+                dueDate: due || undefined,
+              })
+            }
+          >
+            <Plus className="h-4 w-4" /> Qo&apos;shish
+          </Button>
         </div>
-        <Select value={assignedTo} onValueChange={setAssignedTo}>
-          <SelectTrigger className="w-32">
-            <SelectValue placeholder="Mas'ul" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={UNASSIGNED}>Mas&apos;ul yo&apos;q</SelectItem>
-            {users.map((u) => (
-              <SelectItem key={u.id} value={u.id}>
-                {u.full_name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <div className="flex flex-col gap-0.5">
-          <span className="text-[10px] uppercase text-muted-foreground">Boshlash</span>
-          <Input
-            type="date"
-            value={start}
-            onChange={(e) => setStart(e.target.value)}
-            className="w-36"
-            title="Boshlanish sanasi"
-          />
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pl-6 text-xs text-muted-foreground">
+          <label className="flex items-center gap-1.5">
+            <span className="w-14 shrink-0">Boshlash</span>
+            <Input
+              type="date"
+              value={start}
+              onChange={(e) => setStart(e.target.value)}
+              className="h-7 w-[132px] text-xs"
+              title="Boshlanish sanasi"
+            />
+          </label>
+          <label className="flex items-center gap-1.5">
+            <span className="w-12 shrink-0">Tugash</span>
+            <Input
+              type="date"
+              value={due}
+              onChange={(e) => setDue(e.target.value)}
+              className="h-7 w-[132px] text-xs"
+              title="Tugash sanasi"
+            />
+          </label>
         </div>
-        <div className="flex flex-col gap-0.5">
-          <span className="text-[10px] uppercase text-muted-foreground">Tugash</span>
-          <Input
-            type="date"
-            value={due}
-            onChange={(e) => setDue(e.target.value)}
-            className="w-36"
-            title="Tugash sanasi"
-          />
-        </div>
-        <Button
-          type="button"
-          size="sm"
-          disabled={!title.trim() || create.isPending}
-          onClick={() =>
-            create.mutate({
-              title: title.trim(),
-              parentTaskId: taskId,
-              assignedTo: assignedTo === UNASSIGNED ? undefined : assignedTo,
-              startDate: start || undefined,
-              dueDate: due || undefined,
-            })
-          }
-        >
-          <Plus className="h-4 w-4" /> Qo&apos;shish
-        </Button>
       </div>
     </div>
   );

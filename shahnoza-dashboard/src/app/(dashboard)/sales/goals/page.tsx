@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Target, Megaphone, DollarSign, Pencil, ArrowRight, Info } from "lucide-react";
+import { Target, Megaphone, DollarSign, Pencil, ArrowRight, Info, Calculator } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { PageHeader } from "@/components/layout/page-header";
 import {
@@ -25,6 +25,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { formatUzs, formatNumber } from "@/lib/format";
+import { toast } from "@/hooks/use-toast";
 import type { UserRole } from "@/types/database";
 
 const CEO_ROLES: UserRole[] = ["super_admin", "owner"];
@@ -174,6 +175,8 @@ export default function GoalsPage() {
           </Link>
         </div>
       </div>
+
+      <DecompositionCard month={month} canEdit={canEdit} onApplied={() => q.refetch()} />
     </div>
   );
 }
@@ -334,5 +337,112 @@ function SetGoalDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Reverse goal-planner (the RNP's DEKOMPOZITSIYA): revenue goal → avg check →
+ * sales needed → leads needed → ad budget. Optionally writes the results into
+ * this month's company goals (CEO only).
+ */
+function DecompositionCard({
+  month,
+  canEdit,
+  onApplied,
+}: {
+  month: string;
+  canEdit: boolean;
+  onApplied: () => void;
+}) {
+  const [goal, setGoal] = useState("");
+  const [avgCheck, setAvgCheck] = useState("");
+  const [conv, setConv] = useState("12");
+  const [cpl, setCpl] = useState("");
+
+  const goalUzs = Number(goal) || 0;
+  const avgCheckUzs = Number(avgCheck) || 0;
+  const convPct = Number(conv) || 0;
+  const cplUzs = Number(cpl) || 0;
+
+  const salesNeeded = avgCheckUzs > 0 ? goalUzs / avgCheckUzs : 0;
+  const leadsNeeded = convPct > 0 ? salesNeeded / (convPct / 100) : 0;
+  const budgetUzs = leadsNeeded * cplUzs;
+  const roas = budgetUzs > 0 ? Math.round((goalUzs / budgetUzs) * 10) / 10 : null;
+  const ready = goalUzs > 0 && avgCheckUzs > 0 && convPct > 0;
+
+  const set = api.sales.setCompanyTarget.useMutation();
+  const apply = async () => {
+    try {
+      await Promise.all([
+        set.mutateAsync({ scope: "sales", metric: "revenue_uzs", month, value: goalUzs }),
+        set.mutateAsync({ scope: "sales", metric: "deals", month, value: Math.ceil(salesNeeded) }),
+        set.mutateAsync({ scope: "marketing", metric: "leads", month, value: Math.ceil(leadsNeeded) }),
+        ...(cplUzs > 0
+          ? [
+              set.mutateAsync({ scope: "marketing", metric: "ad_budget_uzs", month, value: Math.round(budgetUzs) }),
+              set.mutateAsync({ scope: "marketing", metric: "cpl_uzs", month, value: cplUzs }),
+            ]
+          : []),
+      ]);
+      toast({ title: "Maqsadlarga o'tkazildi", variant: "success" });
+      onApplied();
+    } catch (e) {
+      toast({ title: "Xato", description: e instanceof Error ? e.message : "", variant: "destructive" });
+    }
+  };
+
+  const Out = ({ label, value }: { label: string; value: string }) => (
+    <div className="rounded-lg border bg-muted/30 p-3">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-0.5 text-lg font-bold">{value}</p>
+    </div>
+  );
+
+  return (
+    <Card className="mt-4">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Calculator className="h-4 w-4 text-primary" /> Dekompozitsiya (rejalashtirish)
+        </CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Daromad maqsadidan kerakli sotuv, lead va reklama byudjetini teskari hisoblang.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="space-y-1.5">
+            <Label>Daromad maqsadi (so&apos;m)</Label>
+            <Input type="number" inputMode="numeric" value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="masalan: 700000000" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>O&apos;rtacha chek (so&apos;m)</Label>
+            <Input type="number" inputMode="numeric" value={avgCheck} onChange={(e) => setAvgCheck(e.target.value)} placeholder="masalan: 4000000" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Lead → sotuv (%)</Label>
+            <Input type="number" inputMode="decimal" value={conv} onChange={(e) => setConv(e.target.value)} placeholder="12" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Lead narxi / CPL (so&apos;m)</Label>
+            <Input type="number" inputMode="numeric" value={cpl} onChange={(e) => setCpl(e.target.value)} placeholder="ixtiyoriy" />
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Out label="Kerakli sotuvlar" value={ready ? formatNumber(Math.ceil(salesNeeded)) : "—"} />
+          <Out label="Kerakli leadlar" value={ready ? formatNumber(Math.ceil(leadsNeeded)) : "—"} />
+          <Out label="Reklama byudjeti" value={ready && cplUzs > 0 ? formatUzs(Math.round(budgetUzs)) : "—"} />
+          <Out label="ROAS (kutilgan)" value={roas != null ? `${roas}x` : "—"} />
+        </div>
+
+        {canEdit && (
+          <div className="flex justify-end">
+            <Button disabled={!ready || set.isPending} onClick={apply}>
+              <Target className="h-4 w-4" /> {month.slice(0, 7)} maqsadlariga o&apos;tkazish
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

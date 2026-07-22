@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   CalendarDays,
@@ -17,6 +17,8 @@ import {
   Trash2,
   Search,
   X,
+  Undo2,
+  Redo2,
 } from "lucide-react";
 import {
   DndContext,
@@ -665,6 +667,108 @@ export default function KanbanPage() {
     onSettled: () => invalidate(),
   });
 
+  // ---- Undo / redo history (Ctrl+Z undoes, Ctrl+X redoes), up to 5 steps ----
+  type HistEntry = { undo: () => void; redo: () => void };
+  const undoStack = useRef<HistEntry[]>([]);
+  const redoStack = useRef<HistEntry[]>([]);
+  const [, forceHist] = useState(0); // re-render so the toolbar buttons enable/disable
+  const bump = () => forceHist((n) => n + 1);
+  const pushHistory = (entry: HistEntry) => {
+    undoStack.current.push(entry);
+    if (undoStack.current.length > 5) undoStack.current.shift();
+    redoStack.current = []; // a fresh action invalidates the redo chain
+    bump();
+  };
+  const findTask = (id: string) =>
+    board.data?.flatMap((c) => c.tasks).find((t) => t.id === id);
+
+  // Recorded actions — call these (not the raw mutations) so they enter history.
+  const doStatus = (id: string, newStatus: string) => {
+    const oldStatus = findTask(id)?.status;
+    updateStatus.mutate({ id, status: newStatus as never });
+    if (oldStatus && oldStatus !== newStatus) {
+      pushHistory({
+        undo: () => updateStatus.mutate({ id, status: oldStatus as never }),
+        redo: () => updateStatus.mutate({ id, status: newStatus as never }),
+      });
+    }
+  };
+  const doReorder = (status: string, oldIds: string[], newIds: string[]) => {
+    reorderInCache(status, newIds);
+    reorderTasks.mutate({ ids: newIds });
+    pushHistory({
+      undo: () => {
+        reorderInCache(status, oldIds);
+        reorderTasks.mutate({ ids: oldIds });
+      },
+      redo: () => {
+        reorderInCache(status, newIds);
+        reorderTasks.mutate({ ids: newIds });
+      },
+    });
+  };
+  const doPatch = (id: string, p: Patch) => {
+    const cur = findTask(id);
+    const oldP: Patch = {};
+    if (p.priority !== undefined) oldP.priority = cur?.priority as Priority | undefined;
+    if (p.dueDate !== undefined) oldP.dueDate = cur?.due_date ?? null;
+    if (p.assignedTo !== undefined) oldP.assignedTo = cur?.assigned_to ?? null;
+    patch.mutate({ id, ...p });
+    pushHistory({
+      undo: () => patch.mutate({ id, ...oldP }),
+      redo: () => patch.mutate({ id, ...p }),
+    });
+  };
+
+  const undo = () => {
+    const entry = undoStack.current.pop();
+    if (!entry) return;
+    redoStack.current.push(entry);
+    if (redoStack.current.length > 5) redoStack.current.shift();
+    bump();
+    entry.undo();
+    toast({ title: "Bekor qilindi", variant: "success" });
+  };
+  const redo = () => {
+    const entry = redoStack.current.pop();
+    if (!entry) return;
+    undoStack.current.push(entry);
+    if (undoStack.current.length > 5) undoStack.current.shift();
+    bump();
+    entry.redo();
+    toast({ title: "Qayta bajarildi", variant: "success" });
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return;
+      const el = e.target as HTMLElement | null;
+      // Don't hijack Ctrl+X/Z while typing in a field (native cut/undo wins).
+      if (
+        el &&
+        (el.tagName === "INPUT" ||
+          el.tagName === "TEXTAREA" ||
+          el.tagName === "SELECT" ||
+          el.isContentEditable)
+      )
+        return;
+      const key = e.key.toLowerCase();
+      if (key === "z") {
+        e.preventDefault();
+        undo();
+      } else if (key === "x") {
+        e.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // Handlers only touch refs + stable mutation.mutate, so bind once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const canUndo = undoStack.current.length > 0;
+  const canRedo = redoStack.current.length > 0;
+
   // Mouse: small drag threshold so taps still open editors. Touch: press-and-
   // hold (long press) so scrolling the column still works.
   const sensors = useSensors(
@@ -713,12 +817,11 @@ export default function KanbanPage() {
       const newIndex = isColumn ? ids.length - 1 : ids.indexOf(overId);
       if (oldIndex < 0 || newIndex < 0 || oldIndex === newIndex) return;
       const nextIds = arrayMove(ids, oldIndex, newIndex);
-      reorderInCache(fromStatus, nextIds);
-      reorderTasks.mutate({ ids: nextIds });
+      doReorder(fromStatus, ids, nextIds);
     } else {
       // Move to a different column (status change).
       if (!TASK_FLOW_STATUSES.includes(toStatus as never)) return;
-      updateStatus.mutate({ id: activeId, status: toStatus as never });
+      doStatus(activeId, toStatus);
     }
   };
 
@@ -729,6 +832,28 @@ export default function KanbanPage() {
         description="Kartani boshqa ustunga torting. Mas'ul, muhimlik va muddatni kartadan bevosita o'zgartiring."
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={undo}
+                disabled={!canUndo}
+                title="Bekor qilish (Ctrl+Z)"
+                aria-label="Bekor qilish"
+              >
+                <Undo2 className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={redo}
+                disabled={!canRedo}
+                title="Qayta bajarish (Ctrl+X)"
+                aria-label="Qayta bajarish"
+              >
+                <Redo2 className="h-4 w-4" />
+              </Button>
+            </div>
             <div className="relative">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -825,11 +950,9 @@ export default function KanbanPage() {
                       status={col.status}
                       users={users}
                       onSaved={invalidate}
-                      onPatch={(p) => patch.mutate({ id: t.id, ...p })}
+                      onPatch={(p) => doPatch(t.id, p)}
                       patching={patch.isPending}
-                      onStatus={(s) =>
-                        updateStatus.mutate({ id: t.id, status: s as never })
-                      }
+                      onStatus={(s) => doStatus(t.id, s)}
                       onDelete={() => {
                         if (window.confirm(`"${t.title}" o'chirilsinmi?`))
                           del.mutate({ id: t.id });

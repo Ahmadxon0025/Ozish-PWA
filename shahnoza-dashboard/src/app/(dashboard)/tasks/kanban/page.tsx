@@ -12,6 +12,7 @@ import {
   Pencil,
   MoreVertical,
   CheckCircle2,
+  Circle,
   PauseCircle,
   Trash2,
 } from "lucide-react";
@@ -159,6 +160,25 @@ function TaskCardBody({
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 items-start gap-1">
             {dragHandle}
+            {onStatus && (
+              <button
+                type="button"
+                onPointerDown={stop}
+                onClick={(e) => {
+                  stop(e);
+                  onStatus(task.status === "done" ? "todo" : "done");
+                }}
+                className="mt-0.5 shrink-0 text-muted-foreground transition-colors hover:text-success"
+                title="Bajarildi deb belgilash"
+                aria-label={task.status === "done" ? "Bajarilmagan" : "Bajarildi"}
+              >
+                {task.status === "done" ? (
+                  <CheckCircle2 className="h-4 w-4 text-success" />
+                ) : (
+                  <Circle className="h-4 w-4" />
+                )}
+              </button>
+            )}
             <div className="min-w-0">
               {task.parentTitle && (
                 <div className="truncate text-[11px] text-muted-foreground">

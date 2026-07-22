@@ -700,6 +700,19 @@ export default function KanbanPage() {
                     />
                   ))
                 )}
+                <TaskFormDialog
+                  defaultStatus={col.status as (typeof TASK_FLOW_STATUSES)[number]}
+                  defaultSpaceId={defaultSpaceForNew}
+                  onSaved={invalidate}
+                  trigger={
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-border/70 py-2 text-sm text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+                    >
+                      <Plus className="h-4 w-4" /> Vazifa qo&apos;shish
+                    </button>
+                  }
+                />
               </Column>
             ))}
           </div>

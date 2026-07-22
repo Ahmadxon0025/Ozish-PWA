@@ -49,6 +49,39 @@ export const integrationsRouter = createTRPCRouter({
       return data ?? [];
     }),
 
+  /** AmoCRM sync health: is it fresh, when did it last succeed, last error. */
+  syncHealth: superAdminProcedure.query(async ({ ctx }) => {
+    const db = ctx.admin ?? ctx.supabase;
+    const { data } = await db
+      .from("sync_logs")
+      .select("status, records_synced, started_at, completed_at, error_message")
+      .eq("service", "amocrm")
+      .order("started_at", { ascending: false })
+      .limit(25);
+    const rows = data ?? [];
+    const last = rows[0] ?? null;
+    const lastSuccess = rows.find((r) => r.status === "success") ?? null;
+    const lastErrorRow = rows.find((r) => r.status === "error") ?? null;
+    const lastSuccessAt = lastSuccess?.completed_at ?? lastSuccess?.started_at ?? null;
+    const nowMs = new Date().getTime();
+    const hoursSinceSuccess = lastSuccessAt
+      ? Math.round(((nowMs - Date.parse(lastSuccessAt)) / 3_600_000) * 10) / 10
+      : null;
+    // Daily cron + webhooks; flag stale if no success in > 26h.
+    const stale = hoursSinceSuccess == null || hoursSinceSuccess > 26;
+    return {
+      lastStatus: last?.status ?? null,
+      lastAt: last?.started_at ?? null,
+      lastRecords: last?.records_synced ?? null,
+      lastSuccessAt,
+      hoursSinceSuccess,
+      stale,
+      lastError: lastErrorRow?.error_message ?? null,
+      recentErrors: rows.filter((r) => r.status === "error").length,
+      totalRuns: rows.length,
+    };
+  }),
+
   /** Read-only AmoCRM structure: pipelines, statuses, custom-field catalog.
    *  Used to map fields precisely before a full sync. */
   amocrmStructure: superAdminProcedure.mutation(async () => {

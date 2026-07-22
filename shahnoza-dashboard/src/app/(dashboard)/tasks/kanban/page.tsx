@@ -24,13 +24,20 @@ import {
   MouseSensor,
   TouchSensor,
   KeyboardSensor,
+  closestCorners,
   useSensor,
   useSensors,
-  useDraggable,
   useDroppable,
   type DragStartEvent,
   type DragEndEvent,
 } from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  arrayMove,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@/server/api/root";
 import { api } from "@/lib/trpc/react";
@@ -423,13 +430,22 @@ function DraggableCard({
   onStatus: (status: string) => void;
   onDelete: () => void;
 }) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: task.id,
-    data: { status },
-  });
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: task.id, data: { status } });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
   return (
     <div
       ref={setNodeRef}
+      style={style}
       {...listeners}
       {...attributes}
       className={`cursor-grab outline-none active:cursor-grabbing ${
@@ -452,14 +468,16 @@ function DraggableCard({
   );
 }
 
-/** A droppable status column. */
+/** A droppable status column whose cards are sortable (reorder within column). */
 function Column({
   status,
   count,
+  items,
   children,
 }: {
   status: string;
   count: number;
+  items: string[];
   children: React.ReactNode;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
@@ -476,7 +494,9 @@ function Column({
         </h2>
         <Badge variant="secondary">{count}</Badge>
       </div>
-      <div className="space-y-3">{children}</div>
+      <SortableContext items={items} strategy={verticalListSortingStrategy}>
+        <div className="space-y-3">{children}</div>
+      </SortableContext>
     </div>
   );
 }
@@ -576,6 +596,28 @@ export default function KanbanPage() {
     });
   };
 
+  // Reorder cards within one column in the cached board (optimistic feedback).
+  const reorderInCache = (status: string, nextIds: string[]) => {
+    utils.tasks.board.setData(boardInput, (old) => {
+      if (!old) return old;
+      return old.map((col) => {
+        if (col.status !== status) return col;
+        const byId = new Map(col.tasks.map((t) => [t.id, t]));
+        const tasks = nextIds
+          .map((id) => byId.get(id))
+          .filter((t): t is BoardTask => Boolean(t));
+        return { ...col, tasks };
+      });
+    });
+  };
+
+  const reorderTasks = api.tasks.reorderTasks.useMutation({
+    onError: (e) => {
+      toast({ title: "Xatolik", description: e.message, variant: "destructive" });
+      invalidate();
+    },
+  });
+
   const updateStatus = api.tasks.updateStatus.useMutation({
     onMutate: async ({ id, status }) => {
       await utils.tasks.board.cancel(boardInput);
@@ -645,12 +687,39 @@ export default function KanbanPage() {
   const onDragEnd = (e: DragEndEvent) => {
     setActiveTask(null);
     setActiveStatus(null);
-    const from =
-      (e.active.data.current as { status?: string })?.status ?? activeStatus;
-    const to = e.over?.id ? String(e.over.id) : null;
-    if (!to || !from || to === from) return;
-    if (!TASK_FLOW_STATUSES.includes(to as never)) return;
-    updateStatus.mutate({ id: String(e.active.id), status: to as never });
+    const { active, over } = e;
+    if (!over) return;
+    const activeId = String(active.id);
+    const fromStatus =
+      (active.data.current as { status?: string })?.status ?? activeStatus;
+    if (!fromStatus) return;
+    const overId = String(over.id);
+
+    // `over` is either a column (its status id) or another card. Resolve the
+    // target column either way.
+    const isColumn = TASK_FLOW_STATUSES.includes(overId as never);
+    const cols = board.data ?? [];
+    const toStatus = isColumn
+      ? overId
+      : cols.find((c) => c.tasks.some((t) => t.id === overId))?.status ??
+        fromStatus;
+
+    if (toStatus === fromStatus) {
+      // Reorder within the same column.
+      const col = cols.find((c) => c.status === fromStatus);
+      if (!col) return;
+      const ids = col.tasks.map((t) => t.id);
+      const oldIndex = ids.indexOf(activeId);
+      const newIndex = isColumn ? ids.length - 1 : ids.indexOf(overId);
+      if (oldIndex < 0 || newIndex < 0 || oldIndex === newIndex) return;
+      const nextIds = arrayMove(ids, oldIndex, newIndex);
+      reorderInCache(fromStatus, nextIds);
+      reorderTasks.mutate({ ids: nextIds });
+    } else {
+      // Move to a different column (status change).
+      if (!TASK_FLOW_STATUSES.includes(toStatus as never)) return;
+      updateStatus.mutate({ id: activeId, status: toStatus as never });
+    }
   };
 
   return (
@@ -728,6 +797,7 @@ export default function KanbanPage() {
       ) : (
         <DndContext
           sensors={sensors}
+          collisionDetection={closestCorners}
           onDragStart={onDragStart}
           onDragEnd={onDragEnd}
           onDragCancel={() => {
@@ -737,7 +807,12 @@ export default function KanbanPage() {
         >
           <div className="flex gap-4 overflow-x-auto pb-2">
             {filteredBoard.map((col) => (
-              <Column key={col.status} status={col.status} count={col.tasks.length}>
+              <Column
+                key={col.status}
+                status={col.status}
+                count={col.tasks.length}
+                items={col.tasks.map((t) => t.id)}
+              >
                 {col.tasks.length === 0 ? (
                   <p className="px-1 py-6 text-center text-sm text-muted-foreground">
                     {q ? "Topilmadi" : "Bo'sh"}

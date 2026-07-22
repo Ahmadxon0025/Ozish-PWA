@@ -318,6 +318,19 @@ export const tasksRouter = createTRPCRouter({
       return { ok: true };
     }),
 
+  /** Persist a Kanban column's card order. `ids` is the new top→bottom order
+   * within one status column; positions are rewritten to the array index. */
+  reorderTasks: protectedProcedure
+    .input(z.object({ ids: z.array(z.string().uuid()) }))
+    .mutation(async ({ ctx, input }) => {
+      await Promise.all(
+        input.ids.map((id, i) =>
+          ctx.supabase.from("tasks").update({ position: i }).eq("id", id),
+        ),
+      );
+      return { ok: true };
+    }),
+
   board: protectedProcedure
     .input(
       z
@@ -341,6 +354,9 @@ export const tasksRouter = createTRPCRouter({
           ctx.supabase
             .from("tasks")
             .select("*")
+            // Manual card order first (position), then due date for any column
+            // the user hasn't hand-sorted (all position 0 → sorts by due date).
+            .order("position", { ascending: true })
             .order("due_date", { ascending: true, nullsFirst: false }),
           ctx.supabase.from("users").select("id, full_name"),
           ctx.supabase.from("task_assignees").select("task_id, user_id, is_primary"),

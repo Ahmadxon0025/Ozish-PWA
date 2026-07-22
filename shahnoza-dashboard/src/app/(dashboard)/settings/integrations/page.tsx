@@ -481,7 +481,9 @@ function SecurityCard({
 
 function SyncLogsCard() {
   const logs = api.integrations.syncLogs.useQuery({ limit: 20 });
+  const health = api.integrations.syncHealth.useQuery();
   const items = logs.data ?? [];
+  const h = health.data;
 
   return (
     <Card>
@@ -492,6 +494,32 @@ function SyncLogsCard() {
         </CardTitle>
         <CardDescription>So'nggi sinxronlash amaliyotlari.</CardDescription>
       </CardHeader>
+      {h && (
+        <div className="px-5 pb-3 sm:px-5">
+          <div
+            className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border p-3 text-sm ${
+              h.stale
+                ? "border-destructive/40 bg-destructive/5 text-destructive"
+                : "border-success/40 bg-success/5 text-success"
+            }`}
+          >
+            {h.stale ? <XCircle className="h-4 w-4 shrink-0" /> : <CheckCircle2 className="h-4 w-4 shrink-0" />}
+            <span className="font-medium">
+              {h.stale ? "AmoCRM sinxronizatsiyasi eskirgan" : "AmoCRM sinxronizatsiyasi yangi"}
+            </span>
+            <span className="text-muted-foreground">
+              Oxirgi muvaffaqiyat:{" "}
+              {h.lastSuccessAt
+                ? `${formatDateTime(h.lastSuccessAt)}${h.hoursSinceSuccess != null ? ` · ${h.hoursSinceSuccess} soat oldin` : ""}`
+                : "hech qachon"}
+              {h.lastRecords != null ? ` · ${h.lastRecords} yozuv` : ""}
+            </span>
+            {h.lastError && (
+              <span className="w-full text-xs text-destructive">Oxirgi xato: {h.lastError}</span>
+            )}
+          </div>
+        </div>
+      )}
       <CardContent className="p-0 sm:px-5 sm:pb-5">
         {logs.isLoading ? (
           <div className="space-y-2 p-5 pt-0 sm:p-0">

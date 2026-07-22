@@ -53,11 +53,16 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: "Sotuv sharhi", href: "/sales", icon: TrendingUp },
       { label: "Maqsadlar", href: "/sales/goals", icon: Target, roles: FINANCE_ROLES },
-      { label: "Marketing tahlili", href: "/sales/marketing", icon: Megaphone, roles: FINANCE_ROLES },
       { label: "Sotuvlar ro'yxati", href: "/sales/list", icon: ListOrdered },
       { label: "Sotuv jamoasi", href: "/sales/team", icon: Users2 },
       { label: "Leadlar", href: "/leads", icon: UserSquare2 },
       { label: "Qo'ng'iroq tahlili", href: "/sales/calls", icon: Headphones },
+    ],
+  },
+  {
+    label: "Marketing",
+    items: [
+      { label: "Marketing tahlili", href: "/marketing", icon: Megaphone, roles: FINANCE_ROLES },
     ],
   },
   {

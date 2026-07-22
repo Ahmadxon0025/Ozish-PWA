@@ -15,6 +15,8 @@ import {
   Circle,
   PauseCircle,
   Trash2,
+  Search,
+  X,
 } from "lucide-react";
 import {
   DndContext,
@@ -158,7 +160,7 @@ function TaskCardBody({
     >
       <CardContent className="space-y-3 p-3">
         <div className="flex items-start justify-between gap-2">
-          <div className="flex min-w-0 items-start gap-1">
+          <div className="flex min-w-0 flex-1 items-start gap-1">
             {dragHandle}
             {onStatus && (
               <button
@@ -179,7 +181,7 @@ function TaskCardBody({
                 )}
               </button>
             )}
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               {task.parentTitle && (
                 <div className="truncate text-[11px] text-muted-foreground">
                   ↳ {task.parentTitle}
@@ -188,44 +190,13 @@ function TaskCardBody({
               <Link
                 href={`/tasks/${task.id}`}
                 onPointerDown={stop}
-                className="block text-left text-sm font-medium hover:underline"
+                className="break-words text-left text-sm font-medium line-clamp-3 hover:underline"
               >
                 {task.title}
               </Link>
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            {onPatch && editing === "priority" ? (
-              <Select
-                value={task.priority}
-                onValueChange={(v) => {
-                  onPatch({ priority: v as Priority });
-                  setEditing(null);
-                }}
-              >
-                <SelectTrigger onPointerDown={stop} className="h-6 w-[104px] text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TASK_PRIORITIES.map((p) => (
-                    <SelectItem key={p} value={p}>
-                      {TASK_PRIORITY_LABELS[p] ?? p}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <button
-                onPointerDown={stop}
-                onClick={() => onPatch && setEditing("priority")}
-                disabled={!onPatch}
-                title={onPatch ? "Muhimlikni o'zgartirish" : undefined}
-              >
-                <Badge variant={priorityVariant(task.priority)}>
-                  {TASK_PRIORITY_LABELS[task.priority] ?? task.priority}
-                </Badge>
-              </button>
-            )}
             {onDelete && (
               <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
                 <DropdownMenuTrigger asChild>
@@ -311,7 +282,7 @@ function TaskCardBody({
               </span>
             </button>
           )}
-          <div className="flex items-center gap-2 text-muted-foreground">
+          <div className="flex shrink-0 items-center gap-2 text-muted-foreground">
             {task.subtaskTotal > 0 && (
               <span className="flex items-center gap-0.5 text-xs">
                 <ListChecks className="h-3.5 w-3.5" />
@@ -319,6 +290,37 @@ function TaskCardBody({
               </span>
             )}
             {task.recurrence && <Repeat className="h-3.5 w-3.5" />}
+            {onPatch && editing === "priority" ? (
+              <Select
+                value={task.priority}
+                onValueChange={(v) => {
+                  onPatch({ priority: v as Priority });
+                  setEditing(null);
+                }}
+              >
+                <SelectTrigger onPointerDown={stop} className="h-6 w-[96px] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TASK_PRIORITIES.map((p) => (
+                    <SelectItem key={p} value={p}>
+                      {TASK_PRIORITY_LABELS[p] ?? p}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <button
+                onPointerDown={stop}
+                onClick={() => onPatch && setEditing("priority")}
+                disabled={!onPatch}
+                title={onPatch ? "Muhimlikni o'zgartirish" : undefined}
+              >
+                <Badge variant={priorityVariant(task.priority)}>
+                  {TASK_PRIORITY_LABELS[task.priority] ?? task.priority}
+                </Badge>
+              </button>
+            )}
           </div>
         </div>
 
@@ -519,6 +521,7 @@ export default function KanbanPage() {
   const [assignee, setAssignee] = useState<string>(ALL);
   const [space, setSpace] = useState<string>(ALL_SPACES);
   const [due, setDue] = useState<string>("all");
+  const [query, setQuery] = useState("");
   const [activeTask, setActiveTask] = useState<BoardTask | null>(null);
   const [activeStatus, setActiveStatus] = useState<string | null>(null);
   const assignees = api.tasks.assignees.useQuery();
@@ -532,6 +535,26 @@ export default function KanbanPage() {
   const board = api.tasks.board.useQuery(boardInput);
   // New tasks default to the selected bo'lim, or (for a walled member) their own.
   const defaultSpaceForNew = space === ALL_SPACES ? me.data?.space_id ?? null : space;
+
+  // Client-side text search across title, parent, assignees and labels.
+  const q = query.trim().toLowerCase();
+  const filteredBoard = (board.data ?? []).map((col) => ({
+    ...col,
+    tasks: q
+      ? col.tasks.filter((t) =>
+          [
+            t.title,
+            t.parentTitle,
+            t.assignedName,
+            ...t.assignees.map((a) => a.name),
+            ...(t.labels ?? []),
+          ]
+            .filter(Boolean)
+            .some((s) => String(s).toLowerCase().includes(q)),
+        )
+      : col.tasks,
+  }));
+  const matchCount = filteredBoard.reduce((n, c) => n + c.tasks.length, 0);
 
   const users: UserLite[] = assignees.data ?? [];
   const nameById = new Map(users.map((u) => [u.id, u.full_name]));
@@ -637,6 +660,25 @@ export default function KanbanPage() {
         description="Kartani boshqa ustunga torting. Mas'ul, muhimlik va muddatni kartadan bevosita o'zgartiring."
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Vazifa qidirish…"
+                className="w-52 pl-8 pr-8"
+              />
+              {query && (
+                <button
+                  type="button"
+                  onClick={() => setQuery("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label="Tozalash"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
             <Select value={due} onValueChange={setDue}>
               <SelectTrigger className="w-40">
                 <SelectValue placeholder="Muddat" />
@@ -694,11 +736,11 @@ export default function KanbanPage() {
           }}
         >
           <div className="flex gap-4 overflow-x-auto pb-2">
-            {(board.data ?? []).map((col) => (
+            {filteredBoard.map((col) => (
               <Column key={col.status} status={col.status} count={col.tasks.length}>
                 {col.tasks.length === 0 ? (
                   <p className="px-1 py-6 text-center text-sm text-muted-foreground">
-                    Bo&apos;sh
+                    {q ? "Topilmadi" : "Bo'sh"}
                   </p>
                 ) : (
                   col.tasks.map((t) => (

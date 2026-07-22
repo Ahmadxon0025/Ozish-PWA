@@ -128,6 +128,39 @@ async function getTaskStatus(db: Db, personName?: string) {
   };
 }
 
+/** A concrete list of open tasks ordered by due date — "what's ahead". */
+async function getUpcomingTasks(db: Db, personName?: string) {
+  const { data: users } = await db.from("users").select("id, full_name");
+  const today = tashToday();
+  const tashDay = (iso: string) =>
+    new Date(Date.parse(iso) + 5 * 3600 * 1000).toISOString().slice(0, 10);
+  let personId: string | null = null;
+  if (personName) {
+    const wanted = personName.toLowerCase();
+    personId =
+      (users ?? []).find((u) => (u.full_name ?? "").toLowerCase().includes(wanted))?.id ??
+      null;
+  }
+  let q = db
+    .from("tasks")
+    .select("title, status, due_date, priority, assigned_to, parent_task_id")
+    .neq("status", "done")
+    .neq("status", "cancelled")
+    .order("due_date", { ascending: true, nullsFirst: false });
+  if (personId) q = q.eq("assigned_to", personId);
+  const { data: tasks } = await q;
+  const nameById = new Map((users ?? []).map((u) => [u.id, u.full_name]));
+  const rows = (tasks ?? []).slice(0, 30).map((t) => ({
+    title: t.title,
+    due: t.due_date ? tashDay(t.due_date) : null,
+    overdue: !!t.due_date && tashDay(t.due_date) < today,
+    priority: t.priority,
+    assignee: t.assigned_to ? nameById.get(t.assigned_to) ?? "—" : null,
+    isSubtask: !!t.parent_task_id,
+  }));
+  return { person: personName ?? null, today, count: rows.length, tasks: rows };
+}
+
 async function getFinanceSummary(db: Db, period: string) {
   const r = rangeFor(period === "today" || period === "yesterday" ? "month" : period);
   const [{ data: sales }, { data: expenses }, { data: accs }, { data: txns }, rate] =
@@ -267,6 +300,15 @@ const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: "get_upcoming_tasks",
+    description:
+      "Oldindagi (bajarilishi kerak) vazifalar RO'YXATI — nomi, muddati, mas'ul va muhimlik bilan, muddat bo'yicha tartiblangan. 'Qanday vazifalar bor', 'oldinda nima bor', 'bugun/bu hafta nima qilish kerak' kabi savollar uchun. Bitta odam uchun personName bering.",
+    input_schema: {
+      type: "object",
+      properties: { personName: { type: "string", description: "Xodim ismi (ixtiyoriy)" } },
+    },
+  },
+  {
     name: "get_finance_summary",
     description:
       "Moliya (bu oy): tushum, xarajat, komissiya, sof foyda, kassa qoldig'i — hammasi so'mda.",
@@ -304,6 +346,8 @@ async function runTool(
       return getLeadFunnel(db);
     case "get_task_status":
       return getTaskStatus(db, input.personName ? String(input.personName) : undefined);
+    case "get_upcoming_tasks":
+      return getUpcomingTasks(db, input.personName ? String(input.personName) : undefined);
     case "get_finance_summary":
       return getFinanceSummary(db, "month");
     case "create_task":

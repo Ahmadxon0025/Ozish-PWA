@@ -130,7 +130,7 @@ export const salesRouter = createTRPCRouter({
         ctx.supabase
           .from("sales")
           .select(
-            "total_amount_usd, product_id, sold_at, is_refunded, refund_amount_usd, sales_person_id, lead_id, payment_provider",
+            "total_amount_usd, total_amount_uzs, product_id, sold_at, is_refunded, refund_amount_usd, sales_person_id, lead_id, payment_provider",
           )
           .gte("sold_at", range.from)
           .lt("sold_at", range.to),
@@ -627,16 +627,19 @@ export const salesRouter = createTRPCRouter({
     .input(
       z.object({
         saleId: z.string().uuid(),
-        refundAmountUsd: z.number().nonnegative(),
+        refundAmountUzs: z.number().nonnegative(),
         reason: z.string().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      const rate = await getCurrentRate(ctx.supabase);
+      const refundAmountUsd =
+        rate.rate > 0 ? round2(input.refundAmountUzs / rate.rate) : 0;
       const { data: sale, error } = await ctx.supabase
         .from("sales")
         .update({
           is_refunded: true,
-          refund_amount_usd: input.refundAmountUsd,
+          refund_amount_usd: refundAmountUsd,
           refund_reason: input.reason ?? null,
           refunded_at: new Date().toISOString(),
         })
@@ -645,14 +648,14 @@ export const salesRouter = createTRPCRouter({
         .single();
       if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
 
-      // Money leaves the account it was credited to.
-      if (sale?.account_id && input.refundAmountUsd > 0) {
-        const rate = await getCurrentRate(ctx.supabase);
+      // Money leaves the account it was credited to (booked so'm + rate).
+      if (sale?.account_id && input.refundAmountUzs > 0) {
         await insertAccountEntry(ctx.supabase, {
           accountId: sale.account_id,
           direction: "out",
           kind: "sale",
-          amountUsd: input.refundAmountUsd,
+          amountUsd: refundAmountUsd,
+          amountUzs: input.refundAmountUzs,
           rate: rate.rate,
           description: "Qaytarish (refund)",
           relatedType: "sale_refund",

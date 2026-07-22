@@ -45,9 +45,12 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
-import { formatUsd, formatDate } from "@/lib/format";
+import { formatUsd, formatUzs, formatDate } from "@/lib/format";
 import { PAYMENT_PROVIDERS } from "@/lib/constants";
+import type { UserRole } from "@/types/database";
 import { toast } from "@/hooks/use-toast";
+
+const MANAGER_ROLES: UserRole[] = ["super_admin", "owner", "sales_manager"];
 
 const ALL = "all";
 const PAGE_SIZE = 25;
@@ -74,6 +77,9 @@ export default function SalesListPage() {
   const [page, setPage] = useState(1);
 
   const users = api.users.list.useQuery({ activeOnly: true });
+  const me = api.users.me.useQuery();
+  const canManage = MANAGER_ROLES.includes((me.data?.role ?? "") as UserRole);
+  const utils = api.useUtils();
   const list = api.sales.list.useQuery({
     search: search || undefined,
     salesPersonId: salesPersonId === ALL ? undefined : salesPersonId,
@@ -213,11 +219,20 @@ export default function SalesListPage() {
                         {formatUsd(s.total_amount_usd)}
                       </TableCell>
                       <TableCell>
-                        {s.is_refunded ? (
-                          <Badge variant="destructive">Qaytarilgan</Badge>
-                        ) : (
-                          <Badge variant="success">To'landi</Badge>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {s.is_refunded ? (
+                            <Badge variant="destructive">Qaytarilgan</Badge>
+                          ) : (
+                            <Badge variant="success">To'landi</Badge>
+                          )}
+                          {canManage && !s.is_refunded && (
+                            <RefundDialog
+                              saleId={s.id}
+                              defaultUzs={Number(s.total_amount_uzs ?? 0)}
+                              onDone={() => utils.sales.list.invalidate()}
+                            />
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="max-w-[200px] truncate text-muted-foreground">
                         {s.notes || "—"}
@@ -249,11 +264,20 @@ export default function SalesListPage() {
                     <span className="text-xs text-muted-foreground">
                       {formatDate(s.sold_at)}
                     </span>
-                    {s.is_refunded ? (
-                      <Badge variant="destructive">Qaytarilgan</Badge>
-                    ) : (
-                      <Badge variant="success">To'landi</Badge>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {s.is_refunded ? (
+                        <Badge variant="destructive">Qaytarilgan</Badge>
+                      ) : (
+                        <Badge variant="success">To'landi</Badge>
+                      )}
+                      {canManage && !s.is_refunded && (
+                        <RefundDialog
+                          saleId={s.id}
+                          defaultUzs={Number(s.total_amount_uzs ?? 0)}
+                          onDone={() => utils.sales.list.invalidate()}
+                        />
+                      )}
+                    </div>
                   </div>
                   {s.notes && (
                     <p className="mt-2 text-sm text-muted-foreground">
@@ -528,6 +552,77 @@ function NewSaleDialog({
             </Button>
           </DialogFooter>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RefundDialog({
+  saleId,
+  defaultUzs,
+  onDone,
+}: {
+  saleId: string;
+  defaultUzs: number;
+  onDone: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [amount, setAmount] = useState(defaultUzs ? String(defaultUzs) : "");
+  const [reason, setReason] = useState("");
+  const refund = api.sales.refund.useMutation({
+    onSuccess: () => {
+      toast({ title: "Qaytarildi", variant: "success" });
+      setOpen(false);
+      onDone();
+    },
+    onError: (e) => toast({ title: "Xato", description: e.message, variant: "destructive" }),
+  });
+  const amt = Number(amount) || 0;
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="sm" className="h-7 gap-1 text-destructive">
+          <RotateCcw className="h-3.5 w-3.5" /> Qaytarish
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Sotuvni qaytarish (refund)</DialogTitle>
+          <DialogDescription>
+            Qaytarilgan summa hisobdan chiqadi va P&amp;L&apos;da o&apos;sha oyda tan olinadi.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label>Qaytariladigan summa (so&apos;m)</Label>
+            <Input
+              type="number"
+              inputMode="numeric"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder={defaultUzs ? formatUzs(defaultUzs) : "0"}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Sabab</Label>
+            <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="masalan: mijoz voz kechdi" />
+          </div>
+        </div>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button variant="ghost">Bekor</Button>
+          </DialogClose>
+          <Button
+            variant="destructive"
+            disabled={amt <= 0 || refund.isPending}
+            onClick={() =>
+              refund.mutate({ saleId, refundAmountUzs: amt, reason: reason || undefined })
+            }
+          >
+            Qaytarish
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

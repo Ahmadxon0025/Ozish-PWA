@@ -48,9 +48,18 @@ export async function sendMessage(
   }
 }
 
-/** Group for task reminders + the weekly summary (falls back to finance). */
+/**
+ * Chat for task reminders, the evening recap, collection nudges and the weekly
+ * summary. Prefers a dedicated tasks group, then the finance group, then falls
+ * back to the admin/owner DM so these messages never silently go to nowhere.
+ */
 export function tasksChatId(): string {
-  return env.TELEGRAM_TASKS_CHAT_ID || env.TELEGRAM_FINANCE_CHAT_ID;
+  return (
+    env.TELEGRAM_TASKS_CHAT_ID ||
+    env.TELEGRAM_FINANCE_CHAT_ID ||
+    env.TELEGRAM_ADMIN_CHAT_ID ||
+    env.TELEGRAM_OWNER_CHAT_ID
+  );
 }
 
 /** The distinct chats that should receive the daily finance report. */

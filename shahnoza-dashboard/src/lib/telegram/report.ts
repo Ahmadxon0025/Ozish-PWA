@@ -1,10 +1,16 @@
 import "server-only";
 import { requireAdminClient } from "@/lib/supabase/admin";
-import { monthRange, yesterdayRange, todayRange, todayKey } from "@/lib/dates";
+import {
+  monthRange,
+  yesterdayRange,
+  todayRange,
+  todayKey,
+  currentMonthKey,
+} from "@/lib/dates";
 import { computePnl } from "@/lib/business/pnl";
-import { computeCommissions } from "@/lib/business/commission";
-import { MONTHLY_SALES_PLAN_USD } from "@/lib/constants";
-import { formatUsd } from "@/lib/format";
+import { commissionForSale } from "@/lib/business/commission";
+import { getCurrentRate } from "@/lib/business/exchange-rate";
+import { formatUzs } from "@/lib/format";
 import { env } from "@/lib/env";
 import { broadcast } from "./bot";
 
@@ -12,70 +18,109 @@ function sum<T>(rows: T[], pick: (r: T) => number | null | undefined): number {
   return rows.reduce((a, r) => a + Number(pick(r) ?? 0), 0);
 }
 
-/** Build the Uzbek daily report text from live data. */
+/** Build the Uzbek daily report text from live data (so'm-native, like the app). */
 export async function buildDailyReport(): Promise<string> {
   const db = requireAdminClient();
   const month = monthRange();
   const yesterday = yesterdayRange();
   const today = todayRange();
+  const monthKey = currentMonthKey();
 
-  const [salesMonth, salesYday, salesToday, leadsMonth, expMonth, expYday, users] =
-    await Promise.all([
-      db
-        .from("sales")
-        .select("total_amount_usd, sales_person_id, is_refunded, refund_amount_usd")
-        .gte("sold_at", month.from)
-        .lt("sold_at", month.to),
-      db
-        .from("sales")
-        .select("total_amount_usd")
-        .gte("sold_at", yesterday.from)
-        .lt("sold_at", yesterday.to),
-      db
-        .from("sales")
-        .select("total_amount_usd, sales_person_id")
-        .gte("sold_at", today.from)
-        .lt("sold_at", today.to),
-      db
-        .from("leads")
-        .select("qualified_at, sold_at")
-        .gte("created_at", month.from)
-        .lt("created_at", month.to),
-      db
-        .from("expenses")
-        .select("amount_usd")
-        .gte("expense_date", month.from.slice(0, 10))
-        .lt("expense_date", month.to.slice(0, 10)),
-      db
-        .from("expenses")
-        .select("amount_usd")
-        .gte("expense_date", yesterday.from.slice(0, 10))
-        .lt("expense_date", yesterday.to.slice(0, 10)),
-      db.from("users").select("id, full_name"),
-    ]);
+  const [
+    salesMonth,
+    salesYday,
+    salesToday,
+    leadsMonth,
+    expMonth,
+    expYday,
+    users,
+    salesTarget,
+    rateRow,
+  ] = await Promise.all([
+    db
+      .from("sales")
+      .select("total_amount_usd, total_amount_uzs, sales_person_id, is_refunded, refund_amount_usd")
+      .gte("sold_at", month.from)
+      .lt("sold_at", month.to),
+    db
+      .from("sales")
+      .select("total_amount_usd, total_amount_uzs")
+      .gte("sold_at", yesterday.from)
+      .lt("sold_at", yesterday.to),
+    db
+      .from("sales")
+      .select("total_amount_usd, total_amount_uzs, sales_person_id")
+      .gte("sold_at", today.from)
+      .lt("sold_at", today.to),
+    db
+      .from("leads")
+      .select("qualified_at, sold_at")
+      .gte("created_at", month.from)
+      .lt("created_at", month.to),
+    db
+      .from("expenses")
+      .select("amount_usd, amount_uzs")
+      .gte("expense_date", month.from.slice(0, 10))
+      .lt("expense_date", month.to.slice(0, 10)),
+    db
+      .from("expenses")
+      .select("amount_usd, amount_uzs")
+      .gte("expense_date", yesterday.from.slice(0, 10))
+      .lt("expense_date", yesterday.to.slice(0, 10)),
+    db.from("users").select("id, full_name"),
+    db
+      .from("company_targets")
+      .select("target_value")
+      .eq("scope", "sales")
+      .eq("metric", "revenue_uzs")
+      .eq("month", monthKey)
+      .maybeSingle(),
+    getCurrentRate(db),
+  ]);
+
+  const currentRate = rateRow.rate;
+  // Booked so'm per row: native so'm if present, else USD × today's rate.
+  const saleUzs = (s: { total_amount_uzs: number | null; total_amount_usd: number | null }) =>
+    s.total_amount_uzs ?? Math.round(Number(s.total_amount_usd ?? 0) * currentRate);
+  // Per-row booked rate (uzs per usd), for scaling refunds/commissions.
+  const bookedRate = (uzs: number | null, usd: number | null): number =>
+    uzs && usd && usd !== 0 ? uzs / usd : currentRate;
 
   const sm = salesMonth.data ?? [];
-  const monthAmount = sum(sm, (s) => s.total_amount_usd);
-  const ydayAmount = sum(salesYday.data ?? [], (s) => s.total_amount_usd);
-  const refunds = sum(sm, (s) => (s.is_refunded ? s.refund_amount_usd : 0));
-  const expMonthTotal = sum(expMonth.data ?? [], (e) => e.amount_usd);
-  const commissions = sum(
-    computeCommissions(
-      sm.map((s, i) => ({
-        id: String(i),
-        sales_person_id: s.sales_person_id,
-        total_amount_usd: s.total_amount_usd,
-        is_refunded: s.is_refunded,
-        refund_amount_usd: s.refund_amount_usd,
-      })),
-    ),
-    (c) => c.amountUsd,
+  const monthAmountUzs = sum(sm, saleUzs);
+  const ydayAmountUzs = sum(salesYday.data ?? [], saleUzs);
+
+  const refundsUzs = sum(sm, (s) =>
+    s.is_refunded
+      ? Math.round(
+          Number(s.refund_amount_usd ?? 0) *
+            bookedRate(s.total_amount_uzs, s.total_amount_usd),
+        )
+      : 0,
   );
+  const expMonthUzs = sum(
+    expMonth.data ?? [],
+    (e) => e.amount_uzs ?? Math.round(Number(e.amount_usd ?? 0) * currentRate),
+  );
+  const expYdayUzs = sum(
+    expYday.data ?? [],
+    (e) => e.amount_uzs ?? Math.round(Number(e.amount_usd ?? 0) * currentRate),
+  );
+  const commissionsUzs = sum(sm, (s) => {
+    const usd = commissionForSale({
+      totalAmountUsd: s.total_amount_usd,
+      isRefunded: s.is_refunded,
+      refundAmountUsd: s.refund_amount_usd,
+    });
+    return Math.round(usd * bookedRate(s.total_amount_uzs, s.total_amount_usd));
+  });
+
+  // computePnl is unit-agnostic arithmetic — feed so'm to get a so'm P&L.
   const pnl = computePnl({
-    grossRevenueUsd: monthAmount,
-    refundsUsd: refunds,
-    operatingExpensesUsd: expMonthTotal,
-    commissionsUsd: commissions,
+    grossRevenueUsd: monthAmountUzs,
+    refundsUsd: refundsUzs,
+    operatingExpensesUsd: expMonthUzs,
+    commissionsUsd: commissionsUzs,
   });
 
   const lm = leadsMonth.data ?? [];
@@ -84,18 +129,23 @@ export async function buildDailyReport(): Promise<string> {
   const sold = lm.filter((l) => l.sold_at).length;
   const qPct = newLeads ? Math.round((qualified / newLeads) * 100) : 0;
   const sPct = newLeads ? Math.round((sold / newLeads) * 100) : 0;
-  const planPct = MONTHLY_SALES_PLAN_USD
-    ? Math.round((monthAmount / MONTHLY_SALES_PLAN_USD) * 100)
-    : 0;
 
-  // Top sellers today.
+  // Monthly sales plan = the CEO's revenue goal for this month (so'm).
+  const revenueTargetUzs = salesTarget.data?.target_value
+    ? Number(salesTarget.data.target_value)
+    : null;
+  const planLine = revenueTargetUzs
+    ? `Oylik reja: ${Math.round((monthAmountUzs / revenueTargetUzs) * 100)}% (${formatUzs(revenueTargetUzs)})`
+    : `Oylik reja: — (maqsad belgilanmagan)`;
+
+  // Top sellers today (booked so'm).
   const nameById = new Map((users.data ?? []).map((u) => [u.id, u.full_name]));
   const byPerson = new Map<string, { count: number; amount: number }>();
   for (const s of salesToday.data ?? []) {
     if (!s.sales_person_id) continue;
     const cur = byPerson.get(s.sales_person_id) ?? { count: 0, amount: 0 };
     cur.count += 1;
-    cur.amount += Number(s.total_amount_usd ?? 0);
+    cur.amount += saleUzs(s);
     byPerson.set(s.sales_person_id, cur);
   }
   const top = Array.from(byPerson.entries())
@@ -107,13 +157,12 @@ export async function buildDailyReport(): Promise<string> {
     top.length > 0
       ? top
           .map(
-            (t, i) =>
-              `${medals[i]} ${t.name}: ${t.count} ta (${formatUsd(t.amount)})`,
+            (t, i) => `${medals[i]} ${t.name}: ${t.count} ta (${formatUzs(t.amount)})`,
           )
           .join("\n")
       : "— Bugun sotuv yo'q";
 
-  // Account balances (kassa).
+  // Account balances (kassa). Each account shows in its own currency.
   const [{ data: accts }, { data: acctTxns }] = await Promise.all([
     db.from("accounts").select("id, name, currency").order("sort_order"),
     db.from("account_transactions").select("account_id, direction, amount"),
@@ -131,8 +180,8 @@ export async function buildDailyReport(): Promise<string> {
             const bal = balByAcct.get(a.id) ?? 0;
             const shown =
               a.currency === "USD"
-                ? formatUsd(bal)
-                : `${new Intl.NumberFormat("en-US").format(Math.round(bal))} so'm`;
+                ? `$${new Intl.NumberFormat("en-US").format(Math.round(bal))}`
+                : formatUzs(bal);
             return `• ${a.name}: ${shown}`;
           })
           .join("\n")
@@ -142,9 +191,9 @@ export async function buildDailyReport(): Promise<string> {
     `📊 *KUNLIK HISOBOT* — ${todayKey()}`,
     ``,
     `💰 *SOTUV*`,
-    `Kecha: ${salesYday.data?.length ?? 0} ta (${formatUsd(ydayAmount)})`,
-    `Bu oy: ${sm.length} ta (${formatUsd(monthAmount)})`,
-    `Oylik reja: ${planPct}%`,
+    `Kecha: ${salesYday.data?.length ?? 0} ta (${formatUzs(ydayAmountUzs)})`,
+    `Bu oy: ${sm.length} ta (${formatUzs(monthAmountUzs)})`,
+    planLine,
     ``,
     `🎯 *LEAD FUNNEL*`,
     `Yangi lead: ${newLeads}`,
@@ -152,11 +201,11 @@ export async function buildDailyReport(): Promise<string> {
     `Sotuv: ${sold} (${sPct}%)`,
     ``,
     `📢 *XARAJAT*`,
-    `Kecha: ${formatUsd(sum(expYday.data ?? [], (e) => e.amount_usd))}`,
-    `Bu oy: ${formatUsd(expMonthTotal)}`,
+    `Kecha: ${formatUzs(expYdayUzs)}`,
+    `Bu oy: ${formatUzs(expMonthUzs)}`,
     ``,
     `📈 *SOF FOYDA (bu oy)*`,
-    `${formatUsd(pnl.netProfitUsd)}`,
+    `${formatUzs(pnl.netProfitUsd)}`,
     ``,
     `💳 *HISOBLAR (BALANS)*`,
     acctLines,

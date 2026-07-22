@@ -54,6 +54,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
 import { SpaceBar, ALL_SPACES } from "@/components/tasks/space-bar";
+import { DUE_PRESETS, dueRange } from "@/lib/task-due";
 import { initials } from "@/lib/format";
 import {
   TASK_STATUS_LABELS,
@@ -491,34 +492,6 @@ function patchInCache(
       return n;
     }),
   }));
-}
-
-const DUE_PRESETS: { value: string; label: string }[] = [
-  { value: "all", label: "Barcha muddat" },
-  { value: "week", label: "Bu hafta" },
-  { value: "month", label: "Bu oy" },
-  { value: "overdue", label: "Muddati o'tgan" },
-];
-
-/** from/to (YYYY-MM-DD) for the "this week"/"this month" due-date filters. */
-function dueRange(preset: string): { from?: string; to?: string } {
-  const ymd = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  const now = new Date();
-  if (preset === "week") {
-    const monday = new Date(now);
-    monday.setDate(now.getDate() - ((now.getDay() + 6) % 7)); // back to Monday
-    const sunday = new Date(monday);
-    sunday.setDate(monday.getDate() + 6);
-    return { from: ymd(monday), to: ymd(sunday) };
-  }
-  if (preset === "month") {
-    return {
-      from: ymd(new Date(now.getFullYear(), now.getMonth(), 1)),
-      to: ymd(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
-    };
-  }
-  return {};
 }
 
 export default function KanbanPage() {

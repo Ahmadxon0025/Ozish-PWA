@@ -15,6 +15,7 @@ import {
   ListTodo,
 } from "lucide-react";
 import { api } from "@/lib/trpc/react";
+import { matchesDue } from "@/lib/task-due";
 import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { Card, CardContent } from "@/components/ui/card";
@@ -38,6 +39,12 @@ import { formatDue, priorityVariant } from "@/lib/task-ui";
 import { toast } from "@/hooks/use-toast";
 
 type Bucket = "all" | "today" | "overdue" | "upcoming" | "done";
+
+const MY_DUE_PRESETS: { value: string; label: string }[] = [
+  { value: "all", label: "Barcha muddat" },
+  { value: "week", label: "Bu hafta" },
+  { value: "month", label: "Bu oy" },
+];
 
 /** Tashkent (UTC+5) calendar date of a stored timestamp. */
 function tashDate(iso: string): string {
@@ -88,6 +95,7 @@ function FilterCard({
 export default function MyTasksPage() {
   const utils = api.useUtils();
   const [bucket, setBucket] = useState<Bucket>("all");
+  const [due, setDue] = useState<string>("all");
   const tasks = api.tasks.my.useQuery({});
 
   const invalidate = () => {
@@ -122,15 +130,17 @@ export default function MyTasksPage() {
     done: all.filter((t) => t.status === "done").length,
   };
 
-  const shown = all.filter((t) => {
-    if (bucket === "done") return t.status === "done";
-    if (!isOpen(t.status)) return false;
-    if (bucket === "all") return true;
-    if (bucket === "today") return t.due_date && tashDate(t.due_date) === today;
-    if (bucket === "overdue") return t.due_date && tashDate(t.due_date) < today;
-    if (bucket === "upcoming") return t.due_date && tashDate(t.due_date) > today;
-    return true;
-  });
+  const shown = all
+    .filter((t) => matchesDue(t.due_date, due, t.status))
+    .filter((t) => {
+      if (bucket === "done") return t.status === "done";
+      if (!isOpen(t.status)) return false;
+      if (bucket === "all") return true;
+      if (bucket === "today") return t.due_date && tashDate(t.due_date) === today;
+      if (bucket === "overdue") return t.due_date && tashDate(t.due_date) < today;
+      if (bucket === "upcoming") return t.due_date && tashDate(t.due_date) > today;
+      return true;
+    });
 
   return (
     <div>
@@ -138,14 +148,28 @@ export default function MyTasksPage() {
         title="Vazifalarim"
         description="Sizga tegishli va siz yaratgan vazifalar."
         actions={
-          <TaskFormDialog
-            trigger={
-              <Button>
-                <Plus className="h-4 w-4" /> Yangi vazifa
-              </Button>
-            }
-            onSaved={invalidate}
-          />
+          <div className="flex items-center gap-2">
+            <Select value={due} onValueChange={setDue}>
+              <SelectTrigger className="w-36">
+                <SelectValue placeholder="Muddat" />
+              </SelectTrigger>
+              <SelectContent>
+                {MY_DUE_PRESETS.map((p) => (
+                  <SelectItem key={p.value} value={p.value}>
+                    {p.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <TaskFormDialog
+              trigger={
+                <Button>
+                  <Plus className="h-4 w-4" /> Yangi vazifa
+                </Button>
+              }
+              onSaved={invalidate}
+            />
+          </div>
         }
       />
 

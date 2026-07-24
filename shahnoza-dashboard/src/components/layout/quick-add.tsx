@@ -7,7 +7,6 @@ import {
   ListTodo,
   Receipt,
   DollarSign,
-  UserPlus,
 } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { cn } from "@/lib/utils";
@@ -215,9 +214,6 @@ export function QuickAdd() {
             )}
             <Link href="/sales" onClick={close} className={pill}>
               <DollarSign className="h-4 w-4" /> Sotuv
-            </Link>
-            <Link href="/leads" onClick={close} className={pill}>
-              <UserPlus className="h-4 w-4" /> Lead
             </Link>
           </div>
         )}

@@ -633,7 +633,10 @@ export default function KanbanPage() {
       if (ctx?.prev) utils.tasks.board.setData(boardInput, ctx.prev);
       toast({ title: "Xatolik", description: e.message, variant: "destructive" });
     },
-    onSettled: () => invalidate(),
+    onSettled: async () => {
+      invalidate();
+      await board.refetch();
+    },
   });
 
   const patch = api.tasks.update.useMutation({
@@ -649,7 +652,10 @@ export default function KanbanPage() {
       if (ctx?.prev) utils.tasks.board.setData(boardInput, ctx.prev);
       toast({ title: "Xatolik", description: e.message, variant: "destructive" });
     },
-    onSettled: () => invalidate(),
+    onSettled: async () => {
+      invalidate();
+      await board.refetch();
+    },
   });
 
   const del = api.tasks.delete.useMutation({
@@ -945,7 +951,13 @@ export default function KanbanPage() {
       ) : viewMode === "calendar" ? (
         <div className="space-y-4">
           <TasksCalendarBoard
-            tasks={matchCount > 0 ? filteredBoard.flatMap((col) => col.tasks) : []}
+            tasks={
+              matchCount > 0
+                ? filteredBoard
+                    .flatMap((col) => col.tasks)
+                    .filter((t) => t.status !== "done")
+                : []
+            }
             onMarkComplete={(taskId) => doStatus(taskId, "done")}
             onReschedule={(taskId, newDate) => {
               doPatch(taskId, { dueDate: newDate });

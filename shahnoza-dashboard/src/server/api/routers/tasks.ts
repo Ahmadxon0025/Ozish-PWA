@@ -679,6 +679,19 @@ export const tasksRouter = createTRPCRouter({
       const { error } = await ctx.supabase.from("tasks").update(patch).eq("id", input.id);
       if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
 
+      // Send completion notification
+      if (input.status === "done" && ctx.authUser && ctx.appUser) {
+        const { notifyTaskCompletion } = await import("@/lib/task-notifications");
+        notifyTaskCompletion(
+          input.id,
+          current.title,
+          { id: ctx.authUser.id, name: ctx.appUser.full_name },
+          current.assigned_to ?? current.created_by,
+          current.due_date,
+          now
+        ).catch((err) => console.error("Notification error:", err));
+      }
+
       // Recurring task completed → spawn the next occurrence (carry assignees).
       if (input.status === "done" && current.recurrence && current.status !== "done") {
         const nextDue = current.due_date ? shiftDate(current.due_date, current.recurrence) : null;

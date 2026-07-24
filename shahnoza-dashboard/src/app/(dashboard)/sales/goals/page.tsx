@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Target, Megaphone, DollarSign, Pencil, ArrowRight, Info, Calculator } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ShieldAlert, Target, Megaphone, DollarSign, Pencil, ArrowRight, Info, Calculator } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { PageHeader } from "@/components/layout/page-header";
+import { EmptyState } from "@/components/dashboard/empty-state";
 import {
   MonthSelect,
   currentMonthValue,
@@ -26,9 +28,10 @@ import {
 } from "@/components/ui/dialog";
 import { formatUzs, formatNumber } from "@/lib/format";
 import { toast } from "@/hooks/use-toast";
+import { OWNER_ONLY } from "@/lib/role-check";
 import type { UserRole } from "@/types/database";
 
-const CEO_ROLES: UserRole[] = ["super_admin", "owner"];
+const CEO_ROLES: UserRole[] = OWNER_ONLY;
 
 type Scope = "marketing" | "sales";
 type Unit = "uzs" | "num" | "x";
@@ -104,11 +107,42 @@ const TONE_BAR: Record<string, string> = {
 };
 
 export default function GoalsPage() {
+  const router = useRouter();
   const [month, setMonth] = useState<string>(currentMonthValue());
   const q = api.sales.companyTargets.useQuery({ month });
   const me = api.users.me.useQuery();
-  const canEdit = CEO_ROLES.includes((me.data?.role ?? "") as UserRole);
+  const isOwner = me.data && CEO_ROLES.includes(me.data.role as UserRole);
+  const canEdit = Boolean(isOwner);
   const elapsed = monthElapsed(month);
+
+  // Hard block unauthorized access
+  useEffect(() => {
+    if (!me.isLoading && me.data && !isOwner) {
+      router.replace("/dashboard");
+    }
+  }, [me.isLoading, me.data, isOwner, router]);
+
+  if (me.isLoading) {
+    return (
+      <div>
+        <PageHeader title="Maqsadlar" />
+        <Skeleton className="h-96 w-full rounded-lg" />
+      </div>
+    );
+  }
+
+  if (!isOwner) {
+    return (
+      <div>
+        <PageHeader title="Maqsadlar" />
+        <EmptyState
+          icon={ShieldAlert}
+          title="Ruxsat yo'q"
+          description="Maqsadlarni faqat egalar (owner) sozlashi mumkin."
+        />
+      </div>
+    );
+  }
 
   const actuals = (q.data?.actuals ?? {}) as ActualsMap;
   const targets = (q.data?.targets ?? {}) as TargetsMap;

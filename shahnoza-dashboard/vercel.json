@@ -8,6 +8,14 @@
     {
       "path": "/api/cron/evening-report",
       "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/telegram/operational-manager",
+      "schedule": "0 8 * * 1-5"
+    },
+    {
+      "path": "/api/telegram/operational-manager",
+      "schedule": "0 18 * * 1-5"
     }
   ]
 }

@@ -58,20 +58,23 @@ export const usersRouter = createTRPCRouter({
   create: superAdminProcedure
     .input(
       z.object({
-        email: z.string().email(),
+        email: z.string().email().optional(),
         fullName: z.string().min(1),
         role: roleEnum,
         phone: z.string().optional(),
         telegramId: z.string().optional(),
         spaceId: z.string().uuid().nullable().optional(),
-      }),
+      }).refine(
+        (data) => data.email || data.phone,
+        { message: "Kamita email yoki telefon raqamni kiriting." }
+      ),
     )
     .mutation(async ({ ctx, input }) => {
       const db = ctx.admin ?? ctx.supabase;
       const { error, data } = await db
         .from("users")
         .insert({
-          email: input.email,
+          email: input.email ?? null,
           full_name: input.fullName,
           role: input.role as never,
           phone: input.phone ?? null,

@@ -593,16 +593,24 @@ function AddUserDialog() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!email || !fullName || !role) {
+    if (!fullName || !role) {
       toast({
         title: "Ma'lumot yetarli emas",
-        description: "Email, ism va rolni to'ldiring.",
+        description: "Ism va rolni to'ldiring.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!email && !phone) {
+      toast({
+        title: "Ma'lumot yetarli emas",
+        description: "Kamida email yoki telefon raqamni kiriting.",
         variant: "destructive",
       });
       return;
     }
     create.mutate({
-      email,
+      email: email || undefined,
       fullName,
       role: role as UserRole,
       phone: phone || undefined,
@@ -635,15 +643,17 @@ function AddUserDialog() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="new-email">Email</Label>
+            <Label htmlFor="new-email">Email yoki telefon raqam</Label>
             <Input
               id="new-email"
-              type="email"
-              placeholder="user@example.com"
+              type="text"
+              placeholder="user@example.com yoki 901234567"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              required
             />
+            <p className="text-xs text-muted-foreground">
+              Kamita email yoki telefon raqamni kiriting.
+            </p>
           </div>
 
           <div className="space-y-1.5">

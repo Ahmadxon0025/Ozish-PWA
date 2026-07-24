@@ -1,11 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { ArrowDownToLine, ArrowUpFromLine, Activity } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { ArrowDownToLine, ArrowUpFromLine, Activity, ShieldAlert } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { PageHeader } from "@/components/layout/page-header";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { EmptyState } from "@/components/dashboard/empty-state";
+import { OWNER_ONLY } from "@/lib/role-check";
+import type { UserRole } from "@/types/database";
 import {
   PeriodSelect,
   defaultPeriod,
@@ -75,8 +78,43 @@ function KindBars({
 }
 
 export default function CashflowPage() {
+  const router = useRouter();
+  const me = api.users.me.useQuery();
+  const isOwner = me.data && OWNER_ONLY.includes(me.data.role as UserRole);
+
+  // Move all hooks before conditionals
   const [period, setPeriod] = useState<Period>(defaultPeriod());
   const cf = api.finance.cashflow.useQuery({ from: period.from, to: period.to });
+
+  // Hard block unauthorized access
+  useEffect(() => {
+    if (!me.isLoading && me.data && !isOwner) {
+      router.replace("/dashboard");
+    }
+  }, [me.isLoading, me.data, isOwner, router]);
+
+  if (me.isLoading) {
+    return (
+      <div>
+        <PageHeader title="Pul oqimi (Cashflow)" />
+        <Skeleton className="h-96 w-full rounded-lg" />
+      </div>
+    );
+  }
+
+  if (!isOwner) {
+    return (
+      <div>
+        <PageHeader title="Pul oqimi (Cashflow)" />
+        <EmptyState
+          icon={ShieldAlert}
+          title="Ruxsat yo'q"
+          description="Moliya ma'lumotlari faqat egalar (owner) ko'ra oladi."
+        />
+      </div>
+    );
+  }
+
   const d = cf.data;
 
   return (

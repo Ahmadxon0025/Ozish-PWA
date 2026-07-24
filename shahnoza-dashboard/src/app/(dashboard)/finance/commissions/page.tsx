@@ -1,11 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { Percent, Users2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { Percent, Users2, ShieldAlert } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { PageHeader } from "@/components/layout/page-header";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { EmptyState } from "@/components/dashboard/empty-state";
+import { OWNER_ONLY } from "@/lib/role-check";
+import type { UserRole } from "@/types/database";
 import {
   MonthSelect,
   currentMonthValue,
@@ -31,10 +34,44 @@ import { formatUzs, formatDate, formatPct100 } from "@/lib/format";
 import { DEFAULT_COMMISSION_RATE } from "@/lib/constants";
 
 export default function CommissionsPage() {
+  const router = useRouter();
+  const me = api.users.me.useQuery();
+  const isOwner = me.data && OWNER_ONLY.includes(me.data.role as UserRole);
+
+  // Move all hooks before conditionals
   const [month, setMonth] = useState<string>(currentMonthValue());
   const commissions = api.finance.commissions.useQuery({ month });
-  const c = commissions.data;
 
+  // Hard block unauthorized access
+  useEffect(() => {
+    if (!me.isLoading && me.data && !isOwner) {
+      router.replace("/dashboard");
+    }
+  }, [me.isLoading, me.data, isOwner, router]);
+
+  if (me.isLoading) {
+    return (
+      <div>
+        <PageHeader title="Komissiyalar" />
+        <Skeleton className="h-96 w-full rounded-lg" />
+      </div>
+    );
+  }
+
+  if (!isOwner) {
+    return (
+      <div>
+        <PageHeader title="Komissiyalar" />
+        <EmptyState
+          icon={ShieldAlert}
+          title="Ruxsat yo'q"
+          description="Komissiya ma'lumotlari faqat egalar (owner) ko'ra oladi."
+        />
+      </div>
+    );
+  }
+
+  const c = commissions.data;
   const perUser = c?.perUser ?? [];
   const lines = c?.lines ?? [];
   const hasData = !!c && lines.length > 0;

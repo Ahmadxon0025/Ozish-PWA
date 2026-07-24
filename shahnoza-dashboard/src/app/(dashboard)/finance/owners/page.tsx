@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   PieChart,
   TrendingUp,
@@ -10,11 +11,14 @@ import {
   Plus,
   AlertTriangle,
   PiggyBank,
+  ShieldAlert,
 } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { PageHeader } from "@/components/layout/page-header";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { EmptyState } from "@/components/dashboard/empty-state";
+import { OWNER_ONLY } from "@/lib/role-check";
+import type { UserRole } from "@/types/database";
 import {
   PeriodSelect,
   defaultPeriod,
@@ -66,6 +70,11 @@ function today() {
 }
 
 export default function OwnersPage() {
+  const router = useRouter();
+  const me = api.users.me.useQuery();
+  const isOwner = me.data && OWNER_ONLY.includes(me.data.role as UserRole);
+
+  // Move all hooks before conditionals
   const [period, setPeriod] = useState<Period>(defaultPeriod());
   const utils = api.useUtils();
   const dist = api.finance.distribution.useQuery({ from: period.from, to: period.to });
@@ -73,6 +82,36 @@ export default function OwnersPage() {
   const payouts = api.finance.ownerPayouts.useQuery({ limit: 30 });
   const reserve = api.finance.reserveRate.useQuery();
   const { fmt } = useUzs();
+
+  // Hard block unauthorized access
+  useEffect(() => {
+    if (!me.isLoading && me.data && !isOwner) {
+      router.replace("/dashboard");
+    }
+  }, [me.isLoading, me.data, isOwner, router]);
+
+  if (me.isLoading) {
+    return (
+      <div>
+        <PageHeader title="Taqsimot (Egalar ulushi)" />
+        <Skeleton className="h-96 w-full rounded-lg" />
+      </div>
+    );
+  }
+
+  if (!isOwner) {
+    return (
+      <div>
+        <PageHeader title="Taqsimot (Egalar ulushi)" />
+        <EmptyState
+          icon={ShieldAlert}
+          title="Ruxsat yo'q"
+          description="Egalar ulushi ma'lumotlari faqat egalar (owner) ko'ra oladi."
+        />
+      </div>
+    );
+  }
+
   const d = dist.data;
 
   const invalidate = () => {

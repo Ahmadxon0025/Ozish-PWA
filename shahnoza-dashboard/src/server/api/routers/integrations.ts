@@ -137,16 +137,11 @@ export const integrationsRouter = createTRPCRouter({
     .input(z.object({ groupId: z.string().min(1, "Guruh ID bo'sh bo'lishi mumkin emas") }))
     .mutation(async ({ ctx, input }) => {
       const db = ctx.admin ?? ctx.supabase;
-      const updateData: Record<string, any> = {
-        key: "task_management_group_id",
-        value: input.groupId,
-      };
-      if (ctx.authUser?.id) {
-        updateData.updated_by = ctx.authUser.id;
-      }
       const { error } = await db
         .from("app_settings")
-        .upsert(updateData, { onConflict: "key" });
+        .update({ value: input.groupId })
+        .eq("key", "task_management_group_id");
+
       if (error) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",

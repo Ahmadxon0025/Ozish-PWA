@@ -1,14 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronLeft, ChevronRight, CheckCircle2, Clock, AlertCircle } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Circle, AlertCircle } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Card, CardContent } from "@/components/ui/card";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@/server/api/root";
-import { formatDate, initials } from "@/lib/format";
+import { initials } from "@/lib/format";
 
 type BoardTask = inferRouterOutputs<AppRouter>["tasks"]["board"][0]["tasks"][0];
 
@@ -39,32 +35,35 @@ function getDayBucket(dueDate: string | null): string {
   return "later";
 }
 
-function getBucketLabel(bucket: string): { label: string; color: string; icon: React.ReactNode } {
-  const icons = {
-    overdue: <AlertCircle className="h-4 w-4" />,
-    today: <Clock className="h-4 w-4" />,
-    tomorrow: <Clock className="h-4 w-4" />,
-    "this-week": <Clock className="h-4 w-4" />,
-    "this-month": <Clock className="h-4 w-4" />,
-    later: <Clock className="h-4 w-4" />,
-    "no-date": <Clock className="h-4 w-4" />,
-  };
+function getDateLabel(bucket: string): string {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
-  const labels = {
-    overdue: { label: "Muddati o'tgan", color: "bg-red-100 text-red-900 dark:bg-red-900 dark:text-red-100" },
-    today: { label: "Bugun", color: "bg-orange-100 text-orange-900 dark:bg-orange-900 dark:text-orange-100" },
-    tomorrow: { label: "Ertaga", color: "bg-yellow-100 text-yellow-900 dark:bg-yellow-900 dark:text-yellow-100" },
-    "this-week": { label: "Bu hafta", color: "bg-blue-100 text-blue-900 dark:bg-blue-900 dark:text-blue-100" },
-    "this-month": { label: "Bu oy", color: "bg-green-100 text-green-900 dark:bg-green-900 dark:text-green-100" },
-    later: { label: "Keyinroq", color: "bg-gray-100 text-gray-900 dark:bg-gray-900 dark:text-gray-100" },
-    "no-date": { label: "Muddat yo'q", color: "bg-gray-200 text-gray-900 dark:bg-gray-800 dark:text-gray-100" },
-  };
+  if (bucket === "overdue") return "Overdue";
+  if (bucket === "today") {
+    const day = today.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return `${day} · Today`;
+  }
+  if (bucket === "tomorrow") {
+    const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+    const day = tomorrow.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return `${day} · Tomorrow`;
+  }
 
-  return {
-    label: labels[bucket as keyof typeof labels].label,
-    color: labels[bucket as keyof typeof labels].color,
-    icon: icons[bucket as keyof typeof icons],
-  };
+  const upcoming = new Date(today.getTime() + 2 * 24 * 60 * 60 * 1000);
+  let daysAhead = 2;
+  for (let i = 0; i < 30; i++) {
+    const checkDate = new Date(today.getTime() + i * 24 * 60 * 60 * 1000);
+    if (getDayBucket(checkDate.toISOString()) === bucket && i > 0) {
+      daysAhead = i;
+      break;
+    }
+  }
+  const day = new Date(today.getTime() + daysAhead * 24 * 60 * 60 * 1000).toLocaleDateString(
+    "en-US",
+    { month: "short", day: "numeric" }
+  );
+  return day;
 }
 
 export function TasksCalendarBoard({
@@ -73,7 +72,6 @@ export function TasksCalendarBoard({
   onReschedule,
   isLoading,
 }: TasksCalendarBoardProps) {
-  // Group tasks by due date, sorted by due time
   const grouped = tasks.reduce(
     (acc, task) => {
       const bucket = getDayBucket(task.due_date);
@@ -84,7 +82,6 @@ export function TasksCalendarBoard({
     {} as Record<string, BoardTask[]>
   );
 
-  // Sort tasks within each bucket by due time
   Object.keys(grouped).forEach((bucket) => {
     grouped[bucket].sort((a, b) => {
       const aTime = a.due_date?.split("T")[1] || "23:59";
@@ -99,101 +96,92 @@ export function TasksCalendarBoard({
     return <div className="p-4">Loading...</div>;
   }
 
-  return (
-    <div className="space-y-4">
-      {bucketOrder.map((bucket) => {
-        const taskList = grouped[bucket];
-        if (!taskList || taskList.length === 0) return null;
+  const visibleBuckets = bucketOrder.filter((b) => grouped[b] && grouped[b].length > 0);
 
-        const { label, color, icon } = getBucketLabel(bucket);
+  if (visibleBuckets.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-muted-foreground">Hech qanday vazifa yo'q</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex gap-4 overflow-x-auto pb-4">
+      {visibleBuckets.map((bucket) => {
+        const taskList = grouped[bucket]!;
+        const dateLabel = getDateLabel(bucket);
+        const isOverdue = bucket === "overdue";
+        const isToday = bucket === "today";
 
         return (
-          <div key={bucket}>
-            <div className="flex items-center gap-2 mb-3">
-              <div className={`flex items-center gap-2 px-3 py-1 rounded-full ${color}`}>
-                {icon}
-                <span className="font-medium text-sm">
-                  {label} ({taskList.length})
-                </span>
+          <div key={bucket} className="flex-shrink-0 w-80 rounded-lg border bg-card/50 p-4">
+            {/* Header */}
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">{dateLabel}</h3>
+                <p className="text-xs text-muted-foreground">{taskList.length} task{taskList.length !== 1 ? "s" : ""}</p>
               </div>
+              {isOverdue && <AlertCircle className="h-5 w-5 text-destructive" />}
+              {isToday && <div className="text-xs font-medium text-primary">Today</div>}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {/* Tasks */}
+            <div className="space-y-2 mb-4 max-h-96 overflow-y-auto">
               {taskList.map((task) => (
-                <Card
+                <div
                   key={task.id}
-                  className="cursor-pointer hover:shadow-md transition-shadow"
+                  className="rounded-md bg-background p-3 border border-border/50 hover:border-border transition-colors"
                 >
-                  <CardContent className="p-3 space-y-2">
-                    {/* Status & Priority */}
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1">
-                        <h3 className="font-medium text-sm line-clamp-2">{task.title}</h3>
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onMarkComplete(task.id);
-                        }}
-                        className="flex-shrink-0 text-muted-foreground hover:text-foreground"
-                        title="Tugallangan deb belgilash"
-                      >
-                        <CheckCircle2 className="h-5 w-5" />
-                      </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => onMarkComplete(task.id)}
+                      className="mt-1 shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                      title="Mark complete"
+                    >
+                      <Circle className="h-4 w-4" />
+                    </button>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium line-clamp-2 text-foreground">{task.title}</p>
+
+                      {task.assignedName && (
+                        <div className="mt-1.5 flex items-center gap-1.5">
+                          <Avatar className="h-5 w-5">
+                            <AvatarFallback className="text-[10px]">
+                              {initials(task.assignedName)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="text-xs text-muted-foreground truncate">{task.assignedName}</span>
+                        </div>
+                      )}
+
+                      {task.labels && task.labels.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                          {task.labels.slice(0, 2).map((label) => (
+                            <span key={label} className="inline-block text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary rounded">
+                              {label}
+                            </span>
+                          ))}
+                          {task.labels.length > 2 && (
+                            <span className="text-[10px] text-muted-foreground px-1">
+                              +{task.labels.length - 2}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
-
-                    {/* Assignee */}
-                    {task.assignedName && (
-                      <div className="flex items-center gap-2">
-                        <Avatar className="h-6 w-6">
-                          <AvatarFallback className="text-xs">
-                            {initials(task.assignedName)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span className="text-xs text-muted-foreground">{task.assignedName}</span>
-                      </div>
-                    )}
-
-                    {/* Due Date & Time */}
-                    {task.due_date && (
-                      <div className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        <span>
-                          {formatDate(task.due_date.slice(0, 10))} {task.due_date.slice(11, 16)}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Labels/Tags */}
-                    {task.labels && task.labels.length > 0 && (
-                      <div className="flex flex-wrap gap-1">
-                        {task.labels.map((label) => (
-                          <Badge key={label} variant="secondary" className="text-xs">
-                            {label}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Subtasks */}
-                    {task.subtaskTotal && task.subtaskTotal > 0 && (
-                      <div className="text-xs text-muted-foreground">
-                        {task.subtaskDone}/{task.subtaskTotal} subtasks
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               ))}
             </div>
+
+            {/* Add task button */}
+            <button className="w-full text-center py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+              + Add task
+            </button>
           </div>
         );
       })}
-
-      {Object.values(grouped).flat().length === 0 && (
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">Hech qanday vazifa yo'q</p>
-        </div>
-      )}
     </div>
   );
 }

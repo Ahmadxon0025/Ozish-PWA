@@ -120,4 +120,39 @@ export const integrationsRouter = createTRPCRouter({
     const result = await sendDailyReport();
     return result;
   }),
+
+  /** Get task management group ID for Telegram notifications. */
+  getTaskGroupId: superAdminProcedure.query(async ({ ctx }) => {
+    const db = ctx.admin ?? ctx.supabase;
+    const { data } = await db
+      .from("app_settings")
+      .select("value")
+      .eq("key", "task_management_group_id")
+      .single();
+    return { groupId: data?.value || "" };
+  }),
+
+  /** Save task management group ID for Telegram notifications. */
+  setTaskGroupId: superAdminProcedure
+    .input(z.object({ groupId: z.string().min(1, "Guruh ID bo'sh bo'lishi mumkin emas") }))
+    .mutation(async ({ ctx, input }) => {
+      const db = ctx.admin ?? ctx.supabase;
+      const { error } = await db
+        .from("app_settings")
+        .upsert(
+          {
+            key: "task_management_group_id",
+            value: input.groupId,
+            updated_by: ctx.authUser?.id,
+          },
+          { onConflict: "key" }
+        );
+      if (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: error.message,
+        });
+      }
+      return { success: true };
+    }),
 });

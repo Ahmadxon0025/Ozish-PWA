@@ -1,6 +1,7 @@
 "use client";
 
-import { Circle, AlertCircle } from "lucide-react";
+import Link from "next/link";
+import { Circle, CheckCircle2, AlertCircle } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@/server/api/root";
@@ -129,20 +130,37 @@ export function TasksCalendarBoard({
             {/* Tasks */}
             <div className="space-y-2 mb-4 max-h-96 overflow-y-auto">
               {taskList.map((task) => (
-                <div
+                <Link
                   key={task.id}
-                  className="rounded-md bg-background p-3 border border-border/50 hover:border-border transition-colors"
+                  href={`/tasks/${task.id}`}
+                  className="block rounded-md bg-background p-3 border border-border/50 hover:border-border transition-colors hover:bg-accent/50"
                 >
                   <div className="flex gap-2">
                     <button
-                      onClick={() => onMarkComplete(task.id)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onMarkComplete(task.id);
+                      }}
                       className="mt-1 shrink-0 text-muted-foreground hover:text-foreground transition-colors"
                       title="Mark complete"
                     >
-                      <Circle className="h-4 w-4" />
+                      {task.status === "done" ? (
+                        <CheckCircle2 className="h-4 w-4 text-success" />
+                      ) : (
+                        <Circle className="h-4 w-4" />
+                      )}
                     </button>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium line-clamp-2 text-foreground">{task.title}</p>
+                      <p
+                        className={`text-sm font-medium line-clamp-2 ${
+                          task.status === "done"
+                            ? "line-through text-muted-foreground"
+                            : "text-foreground"
+                        }`}
+                      >
+                        {task.title}
+                      </p>
 
                       {task.assignedName && (
                         <div className="mt-1.5 flex items-center gap-1.5">
@@ -171,7 +189,7 @@ export function TasksCalendarBoard({
                       )}
                     </div>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
 

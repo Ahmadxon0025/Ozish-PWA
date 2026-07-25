@@ -766,6 +766,30 @@ export const tasksRouter = createTRPCRouter({
           console.error("❌ Notification function threw error:", notifErr);
           throw notifErr;
         }
+
+        // Alfred learns from task completion
+        try {
+          const { learnFromTaskCompletion } = await import("@/lib/alfred/learning-engine");
+          const daysLate = current.due_date
+            ? Math.max(0, Math.floor((new Date(now).getTime() - new Date(current.due_date).getTime()) / (1000 * 60 * 60 * 24)))
+            : 0;
+
+          await learnFromTaskCompletion({
+            taskId: input.id,
+            assigneeId: current.assigned_to?.[0] || current.created_by,
+            estimatedDays: current.estimate_hours ? Math.ceil(current.estimate_hours / 8) : 1,
+            actualDays: current.start_date
+              ? Math.ceil((new Date(now).getTime() - new Date(current.start_date).getTime()) / (1000 * 60 * 60 * 24))
+              : 1,
+            daysLate,
+            wasReworked: false, // TODO: track rework flag
+            qualityScore: 4, // TODO: get from user input
+            collaborators: current.assigned_to?.slice(1) || [],
+            projectType: current.category || "general",
+          });
+        } catch (learnErr) {
+          console.error("⚠️ Alfred learning failed (non-blocking):", learnErr);
+        }
       } else {
         console.error(`🔥 NOT SENDING NOTIFICATION - status is "${input.status}", not "done"`);
       }

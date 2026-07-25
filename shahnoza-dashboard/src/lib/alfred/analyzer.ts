@@ -40,10 +40,13 @@ interface AlfredAnalysis {
   }>;
 }
 
+/**
+ * Enhanced analyzer that uses learned knowledge for smarter predictions
+ */
 export async function analyzeAllTasks(
   tasks: Task[],
   users: User[],
-  historicalData?: any
+  knowledge?: any
 ): Promise<AlfredAnalysis> {
   const now = new Date();
   const userMap = new Map(users.map(u => [u.id, u]));

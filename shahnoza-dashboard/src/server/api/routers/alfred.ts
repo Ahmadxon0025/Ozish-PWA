@@ -5,6 +5,11 @@ import {
   updateTaskDeadline,
   reassignTask,
 } from "@/lib/alfred/orchestrator";
+import {
+  buildKnowledgeBase,
+  getPersonalizedInsights,
+  getRiskWarnings,
+} from "@/lib/alfred/knowledge-base";
 
 export const alfredRouter = createTRPCRouter({
   /**
@@ -84,4 +89,57 @@ export const alfredRouter = createTRPCRouter({
       return null;
     }
   }),
+
+  /**
+   * Build and return Alfred's knowledge base
+   * Contains all learned insights about team, project, patterns
+   */
+  getKnowledge: protectedProcedure.query(async () => {
+    try {
+      const knowledge = await buildKnowledgeBase();
+      return {
+        success: true,
+        knowledge,
+        learningConfidence: knowledge.learningConfidence,
+      };
+    } catch (error) {
+      console.error("Failed to build knowledge base:", error);
+      return { success: false, knowledge: null };
+    }
+  }),
+
+  /**
+   * Get personalized insights for the current user
+   */
+  getMyInsights: protectedProcedure.query(async ({ ctx }) => {
+    try {
+      const knowledge = await buildKnowledgeBase();
+      const insights = await getPersonalizedInsights(ctx.appUser.id, knowledge);
+      return { success: true, insights };
+    } catch (error) {
+      console.error("Failed to get insights:", error);
+      return { success: false, insights: [] };
+    }
+  }),
+
+  /**
+   * Get risk warnings for a proposed task assignment
+   */
+  getRiskWarnings: protectedProcedure
+    .input(
+      z.object({
+        userId: z.string(),
+        projectType: z.string(),
+      })
+    )
+    .query(async ({ input }) => {
+      try {
+        const knowledge = await buildKnowledgeBase();
+        const warnings = await getRiskWarnings(input.userId, input.projectType, knowledge);
+        return { success: true, warnings };
+      } catch (error) {
+        console.error("Failed to get risk warnings:", error);
+        return { success: false, warnings: [] };
+      }
+    }),
 });

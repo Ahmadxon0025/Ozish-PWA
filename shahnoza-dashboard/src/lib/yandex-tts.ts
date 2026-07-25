@@ -17,8 +17,7 @@ export async function textToSpeech(text: string): Promise<Buffer> {
   const params = new URLSearchParams({
     text,
     lang: "uz-UZ",
-    voice: "zahar",
-    emotion: "evil",
+    voice: "omazh",
     format: "oggopus",
     sampleRateHertz: "48000",
   });

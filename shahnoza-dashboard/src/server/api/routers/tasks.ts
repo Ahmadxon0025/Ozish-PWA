@@ -643,9 +643,13 @@ export const tasksRouter = createTRPCRouter({
       if (input.dueDate !== undefined && currentTask?.status !== "done") {
         const oldDate = currentTask?.due_date;
         const newDate = input.dueDate;
-        if (oldDate !== newDate && oldDate && newDate) {
+        console.log("📅 Deadline check:", { oldDate, newDate, taskId: input.id, taskStatus: currentTask?.status });
+
+        if (oldDate && newDate && oldDate !== newDate) {
+          console.log("📅 Deadline changed, calculating times...");
           const oldTime = new Date(oldDate).getTime();
           const newTime = new Date(newDate).getTime();
+          console.log("📅 Time comparison:", { oldTime, newTime, willTrigger: true });
 
           try {
             const { notifyDeadlineMissed, notifyDeadlineExtended, notifyDeadlineShortened } =
@@ -654,42 +658,55 @@ export const tasksRouter = createTRPCRouter({
             if (newTime < oldTime) {
               // Deadline moved earlier
               const now = new Date().getTime();
+              console.log("📅 Deadline moved earlier:", { now, newTime, isPast: now > newTime });
               if (now > newTime) {
                 // New deadline already passed = missed deadline
-                notifyDeadlineMissed(
+                console.log("📅 Calling notifyDeadlineMissed...");
+                await notifyDeadlineMissed(
                   input.id,
                   currentTask.title,
                   { id: ctx.appUser.id, name: ctx.appUser.full_name || "User" },
                   currentTask.assigned_to ?? currentTask.created_by,
                   oldDate,
                   newDate
-                ).catch((err) => console.error("❌ Missed deadline notification error:", err));
+                );
+                console.log("✅ notifyDeadlineMissed completed");
               } else {
                 // Deadline shortened but not yet passed
-                notifyDeadlineShortened(
+                console.log("📅 Calling notifyDeadlineShortened...");
+                await notifyDeadlineShortened(
                   input.id,
                   currentTask.title,
                   { id: ctx.appUser.id, name: ctx.appUser.full_name || "User" },
                   currentTask.assigned_to ?? currentTask.created_by,
                   oldDate,
                   newDate
-                ).catch((err) => console.error("❌ Deadline shortened notification error:", err));
+                );
+                console.log("✅ notifyDeadlineShortened completed");
               }
             } else if (newTime > oldTime) {
               // Deadline extended
-              notifyDeadlineExtended(
+              console.log("📅 Calling notifyDeadlineExtended...");
+              await notifyDeadlineExtended(
                 input.id,
                 currentTask.title,
                 { id: ctx.appUser.id, name: ctx.appUser.full_name || "User" },
                 currentTask.assigned_to ?? currentTask.created_by,
                 oldDate,
                 newDate
-              ).catch((err) => console.error("❌ Deadline extended notification error:", err));
+              );
+              console.log("✅ notifyDeadlineExtended completed");
+            } else {
+              console.log("📅 Deadline times are equal, no notification");
             }
           } catch (err) {
-            console.error("❌ Error importing notification functions:", err);
+            console.error("❌ Error importing/calling notification functions:", err);
           }
+        } else {
+          console.log("📅 Skipping deadline notification - oldDate or newDate missing/same:", { oldDate, newDate });
         }
+      } else {
+        console.log("📅 Skipping deadline check - dueDate unchanged or task already done");
       }
 
       // Keep the assignee rows in sync when the owner or collaborators change.

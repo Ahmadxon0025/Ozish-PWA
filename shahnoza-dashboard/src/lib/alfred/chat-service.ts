@@ -83,12 +83,17 @@ export class AlfredChatService {
         messages: messages,
       });
 
-      const content = response.content[0];
-      if (content.type !== "text") {
-        throw new Error("Unexpected response type");
-      }
+      // The model may return thinking or other block types before the text
+      // block, so collect every text block instead of assuming content[0].
+      const fullText = response.content
+        .filter((block): block is Anthropic.TextBlock => block.type === "text")
+        .map((block) => block.text)
+        .join("\n")
+        .trim();
 
-      const fullText = content.text;
+      if (!fullText) {
+        throw new Error("Model returned no text content");
+      }
 
       // Parse response for proposals
       const proposal = this.parseProposal(fullText);

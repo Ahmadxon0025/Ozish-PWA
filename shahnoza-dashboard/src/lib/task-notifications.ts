@@ -117,14 +117,13 @@ export async function notifyDeadlineMissed(
       .eq("id", ownerId)
       .maybeSingle();
 
-    const ownerName = owner?.full_name || "Owner";
     const template = getRandomMessage(MISSED_DEADLINE_MESSAGES);
     const message = template
-      .replace("[NAME]", updatedBy.name || "Friend")
+      .replace("[NAME]", `@${updatedBy.name || "Friend"}`)
       .replace("[OLD_DATE]", formatDate(oldDueDate))
       .replace("[NEW_DATE]", formatDate(newDueDate));
 
-    const caption = `${message}\n\n📌 Task: ${taskTitle}\n👤 Owner: @${ownerName}\n⚠️ Reason: Deadline moved earlier after passing`;
+    const caption = `${message}\n\n📌 Vazifa: ${taskTitle}`;
 
     // Try voice message if TTS is configured
     if (isYandexTtsConfigured()) {
@@ -173,12 +172,12 @@ export async function notifyDeadlineExtended(
     const daysExtended = daysBetween(oldDueDate, newDueDate);
     const template = getRandomMessage(DEADLINE_EXTENDED_MESSAGES);
     const message = template
-      .replace("[NAME]", updatedBy.name || "Friend")
+      .replace("[NAME]", `@${updatedBy.name || "Friend"}`)
       .replace("[OLD_DATE]", formatDate(oldDueDate))
       .replace("[NEW_DATE]", formatDate(newDueDate))
       .replace("[DAYS_EXTENDED]", daysExtended.toString());
 
-    const caption = `${message}\n\n📌 Task: ${taskTitle}\n👤 Owner: @${ownerName}\n✨ Extra time: +${daysExtended} days`;
+    const caption = `${message}\n\n📌 Vazifa: ${taskTitle}`;
 
     if (isYandexTtsConfigured()) {
       try {
@@ -222,16 +221,15 @@ export async function notifyDeadlineShortened(
       .eq("id", ownerId)
       .maybeSingle();
 
-    const ownerName = owner?.full_name || "Owner";
     const daysShortenend = daysBetween(newDueDate, oldDueDate);
     const template = getRandomMessage(DEADLINE_SHORTENED_MESSAGES);
     const message = template
-      .replace("[NAME]", updatedBy.name || "Friend")
+      .replace("[NAME]", `@${updatedBy.name || "Friend"}`)
       .replace("[OLD_DATE]", formatDate(oldDueDate))
       .replace("[NEW_DATE]", formatDate(newDueDate))
       .replace("[DAYS_SHORTENED]", daysShortenend.toString());
 
-    const caption = `${message}\n\n📌 Task: ${taskTitle}\n👤 Owner: @${ownerName}\n⏱️ Deadline moved: -${daysShortenend} days`;
+    const caption = `${message}\n\n📌 Vazifa: ${taskTitle}`;
 
     if (isYandexTtsConfigured()) {
       try {
@@ -283,10 +281,10 @@ export async function notifyFinishedVeryLate(
 
     const template = getRandomMessage(FINISHED_VERY_LATE_MESSAGES);
     const message = template
-      .replace("[NAME]", completedBy.name || "Friend")
+      .replace("[NAME]", `@${completedBy.name || "Friend"}`)
       .replace("[DAYS_LATE]", daysLate.toString());
 
-    const caption = `${message}\n\n📌 Task: ${taskTitle}\n👤 Owner: @${ownerName}\n✅ Completed by: @${completedBy.name || "unknown"}\n⏳ Days late: ${daysLate}`;
+    const caption = `${message}\n\n📌 Vazifa: ${taskTitle}`;
 
     if (isYandexTtsConfigured()) {
       try {
@@ -349,9 +347,9 @@ export async function notifyTaskCompletion(
     }
 
     const template = getRandomMessage(messageList);
-    const message = template.replace("[NAME]", completedBy.name || "Friend");
+    const message = template.replace("[NAME]", `@${completedBy.name || "Friend"}`);
 
-    const caption = `${message}\n\n📌 Task: ${taskTitle}\n👤 Owner: @${ownerName || "unknown"}\n✅ Completed by: @${completedBy.name || "unknown"}\n🔗 Status: ${status}`;
+    const caption = `${message}\n\n📌 Vazifa: ${taskTitle}`;
 
     console.log("🎙️ TTS Config check:", { isConfigured: isYandexTtsConfigured() });
 

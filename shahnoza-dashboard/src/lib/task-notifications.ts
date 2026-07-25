@@ -48,17 +48,25 @@ export async function notifyTaskCompletion(
     return;
   }
   try {
+    console.log("📋 Getting admin client...");
     const client = requireAdminClient();
+    console.log("✅ Admin client ready");
 
     // Get group ID from settings
-    const { data: settings } = await client
+    console.log("📋 Querying app_settings for task_management_group_id...");
+    const { data: settings, error: settingsError } = await client
       .from("app_settings")
       .select("value")
       .eq("key", "task_management_group_id")
-      .single();
+      .maybeSingle();
+
+    if (settingsError) {
+      console.error("❌ Error fetching app_settings:", settingsError);
+      return;
+    }
 
     if (!settings?.value) {
-      console.log("❌ task_management_group_id not configured");
+      console.log("❌ task_management_group_id is empty or not configured. Value:", settings?.value);
       return;
     }
 
@@ -66,13 +74,19 @@ export async function notifyTaskCompletion(
     console.log("✅ Found group ID:", groupId);
 
     // Get owner name
-    const { data: owner } = await client
+    console.log("📋 Querying users for owner:", ownerId);
+    const { data: owner, error: ownerError } = await client
       .from("users")
       .select("full_name")
       .eq("id", ownerId)
-      .single();
+      .maybeSingle();
+
+    if (ownerError) {
+      console.error("❌ Error fetching owner:", ownerError);
+    }
 
     const ownerName = owner?.full_name || "Owner";
+    console.log("✅ Owner name:", ownerName);
 
     // Determine if on-time, late, or overdue
     let messageList = LATE_MESSAGES;
@@ -88,44 +102,60 @@ export async function notifyTaskCompletion(
       }
     }
 
+    console.log("📋 Status:", status);
     const template = getRandomMessage(messageList);
     const message = template.replace("[NAME]", completedBy.name || "Friend");
 
     // Send to Telegram
     const tgMessage = `${message}\n\n📌 Task: ${taskTitle}\n👤 Owner: @${ownerName || "unknown"}\n✅ Completed by: @${completedBy.name || "unknown"}\n🔗 Status: ${status}`;
 
+    console.log("📤 About to send Telegram message...");
     await notifyTelegram(groupId, tgMessage);
 
-    console.log(`Task notification sent: ${taskId} (${status})`);
+    console.log(`✅ Task notification sent: ${taskId} (${status})`);
   } catch (error) {
-    console.error("Task notification error:", error);
+    console.error("❌ Task notification error:", error);
   }
 }
 
 async function notifyTelegram(chatId: string, message: string) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
+  console.log("🔐 TELEGRAM_BOT_TOKEN exists:", !!token);
   if (!token) {
-    console.error("❌ TELEGRAM_BOT_TOKEN not configured");
-    return;
+    console.error("❌ TELEGRAM_BOT_TOKEN not configured in environment");
+    throw new Error("TELEGRAM_BOT_TOKEN not set");
   }
 
   try {
-    console.log("📤 Sending Telegram message to", chatId);
-    const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    console.log("📤 Sending Telegram message to chat:", chatId);
+    console.log("📝 Message length:", message.length);
+
+    const url = `https://api.telegram.org/bot${token}/sendMessage`;
+    console.log("🌐 Calling Telegram API at:", url.replace(token, "***"));
+
+    const payload = {
+      chat_id: chatId,
+      text: message,
+      parse_mode: "HTML",
+    };
+    console.log("📦 Payload:", JSON.stringify(payload, null, 2));
+
+    const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: message,
-        parse_mode: "HTML",
-      }),
+      body: JSON.stringify(payload),
     });
 
+    console.log("📊 Response status:", response.status, response.statusText);
+
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Telegram API error: ${response.statusText} - ${error}`);
+      const errorText = await response.text();
+      console.error("❌ Telegram API returned error:", errorText);
+      throw new Error(`Telegram API error: ${response.statusText} - ${errorText}`);
     }
-    console.log("✅ Telegram message sent successfully");
+
+    const result = await response.json();
+    console.log("✅ Telegram message sent successfully. Result:", result);
   } catch (error) {
     console.error("❌ Telegram send error:", error);
     throw error;

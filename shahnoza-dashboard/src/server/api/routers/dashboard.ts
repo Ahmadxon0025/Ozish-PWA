@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
+import { createTRPCRouter, roleProcedure } from "@/server/api/trpc";
+
+// The company panel exposes profit, cash and margins — owner-level only.
+const ownerProcedure = roleProcedure("super_admin", "owner");
 import { monthRange, yesterdayRange, todayRange, currentMonthKey } from "@/lib/dates";
 import { computePnl } from "@/lib/business/pnl";
 import { computeCommissions } from "@/lib/business/commission";
@@ -16,7 +19,7 @@ const AD_CATEGORIES = [
 
 export const dashboardRouter = createTRPCRouter({
   /** Headline KPI bundle for the dashboard home page. */
-  summary: protectedProcedure.query(async ({ ctx }) => {
+  summary: ownerProcedure.query(async ({ ctx }) => {
     const month = monthRange();
     const yesterday = yesterdayRange();
     const today = todayRange();
@@ -153,7 +156,7 @@ export const dashboardRouter = createTRPCRouter({
   }),
 
   /** Decision metrics (current month): ad spend, ROAS, CAC, AOV, ROI, cash. */
-  metrics: protectedProcedure.query(async ({ ctx }) => {
+  metrics: ownerProcedure.query(async ({ ctx }) => {
     const month = monthRange();
     const [salesRes, expRes, catRes, accRes, txnRes, rate, refundedRes] = await Promise.all([
       ctx.supabase
@@ -245,7 +248,7 @@ export const dashboardRouter = createTRPCRouter({
   }),
 
   /** Daily sales totals for the current month (for the trend chart). */
-  salesTrend: protectedProcedure
+  salesTrend: ownerProcedure
     .input(z.object({ days: z.number().min(7).max(90).default(30) }).optional())
     .query(async ({ ctx, input }) => {
       const days = input?.days ?? 30;
@@ -274,7 +277,7 @@ export const dashboardRouter = createTRPCRouter({
     }),
 
   /** Top sellers today (for the leaderboard widget). */
-  topSellersToday: protectedProcedure.query(async ({ ctx }) => {
+  topSellersToday: ownerProcedure.query(async ({ ctx }) => {
     const today = todayRange();
     const [{ data: sales }, { data: users }] = await Promise.all([
       ctx.supabase

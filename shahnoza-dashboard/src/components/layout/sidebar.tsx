@@ -18,7 +18,7 @@ export function Sidebar({ role }: { role: UserRole | null }) {
   const groups = visibleNav(role);
 
   return (
-    <aside className="hidden w-64 shrink-0 flex-col border-r bg-card lg:flex">
+    <aside className="hidden h-dvh w-64 shrink-0 flex-col border-r bg-card lg:flex">
       <div className="flex h-16 items-center gap-2 border-b px-5">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
           <Stethoscope className="h-5 w-5" />

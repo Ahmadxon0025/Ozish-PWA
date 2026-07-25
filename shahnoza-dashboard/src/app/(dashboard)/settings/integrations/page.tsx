@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import React, { Suspense, useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   Loader2,
@@ -390,6 +390,28 @@ function TelegramCard({
     ownerChatSet: boolean;
   };
 }) {
+  const [groupIdInput, setGroupIdInput] = useState("");
+  const utils = api.useUtils();
+
+  const groupId = api.integrations.getTaskGroupId.useQuery();
+  const setGroupId = api.integrations.setTaskGroupId.useMutation({
+    onSuccess: () => {
+      void utils.integrations.getTaskGroupId.invalidate();
+      toast({
+        title: "Saqlandi",
+        description: "Vazifa guruh ID muvaffaqiyatli yangilandi.",
+        variant: "success",
+      });
+    },
+    onError: (err) => {
+      toast({
+        title: "Xatolik",
+        description: err.message || "Saqlashda xatolik.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const test = api.integrations.sendTestReport.useMutation({
     onSuccess: (res) => {
       toast({
@@ -408,6 +430,13 @@ function TelegramCard({
       });
     },
   });
+
+  // Load current value on mount
+  useEffect(() => {
+    if (groupId.data?.groupId) {
+      setGroupIdInput(groupId.data.groupId);
+    }
+  }, [groupId.data?.groupId]);
 
   return (
     <Card>
@@ -436,9 +465,44 @@ function TelegramCard({
           />
         </div>
 
+        <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="task-group-id">Vazifa obunalari guruh ID</Label>
+            <p className="text-xs text-muted-foreground">
+              Vazifalar tugaganda bildirishnomalar yuborish uchun Telegram guruhining ID raqami.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Input
+              id="task-group-id"
+              placeholder="-123456789"
+              value={groupIdInput}
+              onChange={(e) => setGroupIdInput(e.target.value)}
+              disabled={groupId.isLoading}
+              className="font-mono text-sm"
+            />
+            <Button
+              onClick={() => setGroupId.mutate({ groupId: groupIdInput })}
+              disabled={
+                setGroupId.isPending ||
+                groupId.isLoading ||
+                !groupIdInput.trim() ||
+                groupIdInput === groupId.data?.groupId
+              }
+            >
+              {setGroupId.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                "Saqlash"
+              )}
+            </Button>
+          </div>
+        </div>
+
         <Button
           onClick={() => test.mutate()}
           disabled={test.isPending}
+          variant="outline"
         >
           {test.isPending ? (
             <Loader2 className="h-4 w-4 animate-spin" />

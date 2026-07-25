@@ -48,11 +48,11 @@ export default async function DashboardLayout({
   };
 
   return (
-    <div className="flex min-h-dvh">
+    <div className="flex h-dvh">
       <Sidebar role={appUser.role} />
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Topbar user={user} role={appUser.role} />
-        <main className="flex-1 px-4 py-5 pb-28 lg:px-6 lg:pb-6">{children}</main>
+        <main className="flex-1 overflow-y-auto px-4 py-5 pb-28 lg:px-6 lg:pb-6">{children}</main>
         <BottomNav role={appUser.role} />
         <QuickAdd />
       </div>

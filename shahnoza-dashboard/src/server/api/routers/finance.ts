@@ -18,7 +18,9 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { sum, groupBy, resolveMonth, resolvePeriod } from "./_helpers";
 import type { Range } from "@/lib/dates";
 
-// Finance is visible to super_admin, owner, and sales_manager.
+// Owner-level finance: P&L, cash, owner shares, bonuses — super_admin + owner.
+const ownerProcedure = roleProcedure("super_admin", "owner");
+// Commissions are shared with the sales manager (ROP), who runs the team.
 const financeProcedure = roleProcedure("super_admin", "owner", "sales_manager");
 
 // Internal moves (between own accounts) — excluded from real cashflow.
@@ -175,7 +177,7 @@ async function getReserveRate(
 
 export const financeRouter = createTRPCRouter({
   /** Real-time P&L for any period (from/to or month) + waterfall steps. */
-  pnl: financeProcedure.input(periodInput).query(async ({ ctx, input }) => {
+  pnl: ownerProcedure.input(periodInput).query(async ({ ctx, input }) => {
     const { range, sales, expenses, refunded, rate } = await gatherPeriod(ctx, input);
     // Booked-so'm accounting view (stable regardless of today's rate).
     const result = netProfitUzsFor(sales, expenses, refunded, rate);
@@ -191,7 +193,7 @@ export const financeRouter = createTRPCRouter({
    * Cashflow for a period from the account ledger: money in vs out, grouped by
    * kind, plus the net movement.
    */
-  cashflow: financeProcedure.input(periodInput).query(async ({ ctx, input }) => {
+  cashflow: ownerProcedure.input(periodInput).query(async ({ ctx, input }) => {
     const range: Range = resolvePeriod(input);
     const year = Number(range.from.slice(0, 4));
     const yearStart = `${year}-01-01T00:00:00.000Z`;
@@ -366,7 +368,7 @@ export const financeRouter = createTRPCRouter({
     }),
 
   /** Bonus calculation (Super Admin's 30% profit share) for a month. */
-  bonus: financeProcedure
+  bonus: ownerProcedure
     .input(z.object({ month: z.string().optional() }).optional())
     .query(async ({ ctx, input }) => {
       const { range, sales, expenses, refundsUsd } = await gatherPeriod(ctx, { month: input?.month });
@@ -452,7 +454,7 @@ export const financeRouter = createTRPCRouter({
       return { ok: true };
     }),
 
-  bonusHistory: protectedProcedure.query(async ({ ctx }) => {
+  bonusHistory: ownerProcedure.query(async ({ ctx }) => {
     const { data } = await ctx.supabase
       .from("monthly_bonuses")
       .select("*")
@@ -463,7 +465,7 @@ export const financeRouter = createTRPCRouter({
   // ---- Owner profit distribution (Taqsimot) -------------------------------
 
   /** The owners (super_admin + owner roles) with their current share %. */
-  ownerShares: financeProcedure.query(async ({ ctx }) => {
+  ownerShares: ownerProcedure.query(async ({ ctx }) => {
     const [{ data: owners }, { data: shares }] = await Promise.all([
       ctx.supabase
         .from("users")
@@ -496,7 +498,7 @@ export const financeRouter = createTRPCRouter({
   }),
 
   /** Profit split for a period: entitlement vs taken vs owed, per owner. */
-  distribution: financeProcedure.input(periodInput).query(async ({ ctx, input }) => {
+  distribution: ownerProcedure.input(periodInput).query(async ({ ctx, input }) => {
     const { range, sales, expenses, refundsUsd } = await gatherPeriod(ctx, input);
     const pnl = netProfitFor(sales, expenses, refundsUsd);
     const reserveRate = await getReserveRate(ctx.supabase);
@@ -578,7 +580,7 @@ export const financeRouter = createTRPCRouter({
   }),
 
   /** Current reinvestment reserve fraction (0..1). */
-  reserveRate: financeProcedure.query(async ({ ctx }) => {
+  reserveRate: ownerProcedure.query(async ({ ctx }) => {
     return { rate: await getReserveRate(ctx.supabase) };
   }),
 
@@ -672,7 +674,7 @@ export const financeRouter = createTRPCRouter({
     }),
 
   /** Recent owner payouts (drawings). */
-  ownerPayouts: financeProcedure
+  ownerPayouts: ownerProcedure
     .input(z.object({ limit: z.number().min(1).max(100).default(30) }).optional())
     .query(async ({ ctx, input }) => {
       const [{ data: payouts }, { data: owners }] = await Promise.all([

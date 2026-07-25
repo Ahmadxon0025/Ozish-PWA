@@ -1,11 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { Trophy, Save } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { Trophy, Save, ShieldAlert } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { PageHeader } from "@/components/layout/page-header";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { EmptyState } from "@/components/dashboard/empty-state";
+import { OWNER_ONLY } from "@/lib/role-check";
+import type { UserRole } from "@/types/database";
 import {
   MonthSelect,
   currentMonthValue,
@@ -44,12 +47,46 @@ function statusVariant(
 }
 
 export default function BonusesPage() {
+  const router = useRouter();
+  const me = api.users.me.useQuery();
+  const isOwner = me.data && OWNER_ONLY.includes(me.data.role as UserRole);
+
+  // Move all hooks before conditionals
   const [month, setMonth] = useState<string>(currentMonthValue());
   const utils = api.useUtils();
-
   const bonus = api.finance.bonus.useQuery({ month });
   const history = api.finance.bonusHistory.useQuery();
   const { fmt } = useUzs();
+
+  // Hard block unauthorized access
+  useEffect(() => {
+    if (!me.isLoading && me.data && !isOwner) {
+      router.replace("/dashboard");
+    }
+  }, [me.isLoading, me.data, isOwner, router]);
+
+  if (me.isLoading) {
+    return (
+      <div>
+        <PageHeader title="Bonus kalkulyatori" />
+        <Skeleton className="h-96 w-full rounded-lg" />
+      </div>
+    );
+  }
+
+  if (!isOwner) {
+    return (
+      <div>
+        <PageHeader title="Bonus kalkulyatori" />
+        <EmptyState
+          icon={ShieldAlert}
+          title="Ruxsat yo'q"
+          description="Bonus ma'lumotlari faqat egalar (owner) ko'ra oladi."
+        />
+      </div>
+    );
+  }
+
   const b = bonus.data;
 
   const save = api.finance.saveBonus.useMutation({

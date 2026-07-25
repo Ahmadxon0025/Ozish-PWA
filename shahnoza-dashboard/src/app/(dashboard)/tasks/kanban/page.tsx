@@ -66,6 +66,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
 import { SpaceBar, ALL_SPACES } from "@/components/tasks/space-bar";
+import { TasksCalendarBoard } from "@/components/tasks/tasks-calendar-board";
 import { DUE_PRESETS, dueRange } from "@/lib/task-due";
 import { initials } from "@/lib/format";
 import {
@@ -546,6 +547,7 @@ export default function KanbanPage() {
   const [query, setQuery] = useState("");
   const [activeTask, setActiveTask] = useState<BoardTask | null>(null);
   const [activeStatus, setActiveStatus] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"kanban" | "calendar">("kanban");
   const assignees = api.tasks.assignees.useQuery();
   const me = api.users.me.useQuery();
   const dueWindow = dueRange(due);
@@ -631,7 +633,10 @@ export default function KanbanPage() {
       if (ctx?.prev) utils.tasks.board.setData(boardInput, ctx.prev);
       toast({ title: "Xatolik", description: e.message, variant: "destructive" });
     },
-    onSettled: () => invalidate(),
+    onSettled: async () => {
+      invalidate();
+      await board.refetch();
+    },
   });
 
   const patch = api.tasks.update.useMutation({
@@ -647,7 +652,10 @@ export default function KanbanPage() {
       if (ctx?.prev) utils.tasks.board.setData(boardInput, ctx.prev);
       toast({ title: "Xatolik", description: e.message, variant: "destructive" });
     },
-    onSettled: () => invalidate(),
+    onSettled: async () => {
+      invalidate();
+      await board.refetch();
+    },
   });
 
   const del = api.tasks.delete.useMutation({
@@ -829,9 +837,30 @@ export default function KanbanPage() {
     <div>
       <PageHeader
         title="Kanban doska"
-        description="Kartani boshqa ustunga torting. Mas'ul, muhimlik va muddatni kartadan bevosita o'zgartiring."
+        description={
+          viewMode === "kanban"
+            ? "Kartani boshqa ustunga torting. Mas'ul, muhimlik va muddatni kartadan bevosita o'zgartiring."
+            : "Vazifalarni sanasi bo'yicha ko'ring. 30 kunlik plan."
+        }
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
+              <Button
+                variant={viewMode === "kanban" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode("kanban")}
+              >
+                Kanban
+              </Button>
+              <Button
+                variant={viewMode === "calendar" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode("calendar")}
+              >
+                <CalendarDays className="h-4 w-4 mr-1" />
+                Takvim
+              </Button>
+            </div>
             <div className="flex items-center gap-1">
               <Button
                 variant="outline"
@@ -918,6 +947,23 @@ export default function KanbanPage() {
           {Array.from({ length: 5 }).map((_, i) => (
             <Skeleton key={i} className="h-96 min-w-[240px] flex-1 rounded-xl" />
           ))}
+        </div>
+      ) : viewMode === "calendar" ? (
+        <div className="space-y-4">
+          <TasksCalendarBoard
+            tasks={
+              matchCount > 0
+                ? filteredBoard
+                    .flatMap((col) => col.tasks)
+                    .filter((t) => t.status !== "done")
+                : []
+            }
+            onMarkComplete={(taskId) => doStatus(taskId, "done")}
+            onReschedule={(taskId, newDate) => {
+              doPatch(taskId, { dueDate: newDate });
+            }}
+            isLoading={board.isLoading}
+          />
         </div>
       ) : (
         <DndContext

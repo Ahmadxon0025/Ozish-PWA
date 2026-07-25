@@ -38,42 +38,47 @@ export interface NavGroup {
   items: NavItem[];
 }
 
-const FINANCE_ROLES: UserRole[] = ["super_admin", "owner", "sales_manager"];
+// Owner-level = full finance + company panel. ROP (sales_manager) is trusted
+// with sales, marketing, commissions and goals but NOT the company P&L, cash,
+// accounts, owner bonuses or the AI brain (which can surface finance).
+const OWNER_ROLES: UserRole[] = ["super_admin", "owner"];
+const OWNER_ROP: UserRole[] = ["super_admin", "owner", "sales_manager"];
+const SALES_VIEW: UserRole[] = ["super_admin", "owner", "sales_manager", "sales"];
 
 export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Umumiy",
     items: [
-      { label: "Boshqaruv paneli", href: "/dashboard", icon: LayoutDashboard },
-      { label: "AI Miya", href: "/brain", icon: Sparkles, roles: FINANCE_ROLES },
+      { label: "Boshqaruv paneli", href: "/dashboard", icon: LayoutDashboard, roles: OWNER_ROLES },
+      { label: "AI Miya", href: "/brain", icon: Sparkles, roles: OWNER_ROLES },
     ],
   },
   {
     label: "Sotuv",
     items: [
-      { label: "Sotuv sharhi", href: "/sales", icon: TrendingUp },
-      { label: "Maqsadlar", href: "/sales/goals", icon: Target, roles: FINANCE_ROLES },
-      { label: "Sotuvlar ro'yxati", href: "/sales/list", icon: ListOrdered },
-      { label: "Sotuv jamoasi", href: "/sales/team", icon: Users2 },
+      { label: "Sotuv sharhi", href: "/sales", icon: TrendingUp, roles: SALES_VIEW },
+      { label: "Maqsadlar", href: "/sales/goals", icon: Target, roles: SALES_VIEW },
+      { label: "Sotuvlar ro'yxati", href: "/sales/list", icon: ListOrdered, roles: SALES_VIEW },
+      { label: "Sotuv jamoasi", href: "/sales/team", icon: Users2, roles: SALES_VIEW },
       { label: "Leadlar", href: "/leads", icon: UserSquare2 },
-      { label: "Qo'ng'iroq tahlili", href: "/sales/calls", icon: Headphones },
+      { label: "Qo'ng'iroq tahlili", href: "/sales/calls", icon: Headphones, roles: SALES_VIEW },
     ],
   },
   {
     label: "Marketing",
     items: [
-      { label: "Marketing tahlili", href: "/marketing", icon: Megaphone, roles: FINANCE_ROLES },
+      { label: "Marketing tahlili", href: "/marketing", icon: Megaphone, roles: OWNER_ROP },
     ],
   },
   {
     label: "Moliya",
     items: [
-      { label: "P&L (Foyda)", href: "/finance/pnl", icon: Wallet, roles: FINANCE_ROLES },
-      { label: "Pul oqimi", href: "/finance/cashflow", icon: Activity, roles: FINANCE_ROLES },
-      { label: "Taqsimot (Egalar)", href: "/finance/owners", icon: PieChart, roles: ["super_admin", "owner"] },
-      { label: "Hisoblar (Kassa)", href: "/finance/accounts", icon: Landmark, roles: FINANCE_ROLES },
-      { label: "Bonuslar", href: "/finance/bonuses", icon: PiggyBank, roles: FINANCE_ROLES },
-      { label: "Komissiyalar", href: "/finance/commissions", icon: Percent, roles: FINANCE_ROLES },
+      { label: "P&L (Foyda)", href: "/finance/pnl", icon: Wallet, roles: OWNER_ROLES },
+      { label: "Pul oqimi", href: "/finance/cashflow", icon: Activity, roles: OWNER_ROLES },
+      { label: "Taqsimot (Egalar)", href: "/finance/owners", icon: PieChart, roles: OWNER_ROLES },
+      { label: "Hisoblar (Kassa)", href: "/finance/accounts", icon: Landmark, roles: OWNER_ROLES },
+      { label: "Bonuslar", href: "/finance/bonuses", icon: PiggyBank, roles: OWNER_ROLES },
+      { label: "Komissiyalar", href: "/finance/commissions", icon: Percent, roles: OWNER_ROP },
     ],
   },
   {
@@ -111,10 +116,10 @@ export function visibleNav(role: UserRole | null): NavGroup[] {
 
 /** Compact bottom-nav for mobile (max 5). */
 export const MOBILE_NAV: NavItem[] = [
-  { label: "Panel", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Sotuv", href: "/sales", icon: TrendingUp },
+  { label: "Panel", href: "/dashboard", icon: LayoutDashboard, roles: OWNER_ROLES },
+  { label: "Sotuv", href: "/sales", icon: TrendingUp, roles: SALES_VIEW },
   { label: "Leadlar", href: "/leads", icon: UserSquare2 },
-  { label: "P&L", href: "/finance/pnl", icon: Wallet, roles: FINANCE_ROLES },
+  { label: "P&L", href: "/finance/pnl", icon: Wallet, roles: OWNER_ROLES },
   { label: "Vazifa", href: "/tasks/my", icon: CheckSquare },
 ];
 

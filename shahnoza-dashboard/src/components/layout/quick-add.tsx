@@ -7,11 +7,12 @@ import {
   ListTodo,
   Receipt,
   DollarSign,
-  UserPlus,
 } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { OWNER_ONLY } from "@/lib/role-check";
+import type { UserRole } from "@/types/database";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -178,6 +179,8 @@ function QuickExpenseDialog({
 export function QuickAdd() {
   const [menu, setMenu] = useState(false);
   const close = () => setMenu(false);
+  const me = api.users.me.useQuery();
+  const isOwner = me.data && OWNER_ONLY.includes(me.data.role as UserRole);
 
   return (
     <>
@@ -199,19 +202,18 @@ export function QuickAdd() {
                 </button>
               }
             />
-            <QuickExpenseDialog
-              onDone={close}
-              trigger={
-                <button className={pill}>
-                  <Receipt className="h-4 w-4" /> Xarajat
-                </button>
-              }
-            />
+            {isOwner && (
+              <QuickExpenseDialog
+                onDone={close}
+                trigger={
+                  <button className={pill}>
+                    <Receipt className="h-4 w-4" /> Xarajat
+                  </button>
+                }
+              />
+            )}
             <Link href="/sales" onClick={close} className={pill}>
               <DollarSign className="h-4 w-4" /> Sotuv
-            </Link>
-            <Link href="/leads" onClick={close} className={pill}>
-              <UserPlus className="h-4 w-4" /> Lead
             </Link>
           </div>
         )}

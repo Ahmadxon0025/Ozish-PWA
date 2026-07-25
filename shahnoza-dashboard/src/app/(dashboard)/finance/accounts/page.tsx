@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   Landmark,
   Wallet,
@@ -14,11 +15,14 @@ import {
   Plus,
   Pencil,
   Trash2,
+  ShieldAlert,
 } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { PageHeader } from "@/components/layout/page-header";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { EmptyState } from "@/components/dashboard/empty-state";
+import { OWNER_ONLY } from "@/lib/role-check";
+import type { UserRole } from "@/types/database";
 import {
   Card,
   CardContent,
@@ -96,14 +100,52 @@ function kindLabel(kind: string, categoryName: string | null): string {
 }
 
 export default function AccountsPage() {
+  const router = useRouter();
+  const me = api.users.me.useQuery();
+  const isOwner = me.data && OWNER_ONLY.includes(me.data.role as UserRole);
+
+  // Move all hooks before conditionals
   const utils = api.useUtils();
   const accounts = api.accounts.list.useQuery();
   const txns = api.accounts.transactions.useQuery({ limit: 50 });
   const categories = api.expenses.categories.useQuery();
+  const { fmt } = useUzs();
+
+  // Hard block unauthorized access
+  useEffect(() => {
+    if (!me.isLoading && me.data && !isOwner) {
+      router.replace("/dashboard");
+    }
+  }, [me.isLoading, me.data, isOwner, router]);
+
+  if (me.isLoading) {
+    return (
+      <div>
+        <PageHeader title="Hisoblar (Kassa)" />
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-28 rounded-xl" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (!isOwner) {
+    return (
+      <div>
+        <PageHeader title="Hisoblar (Kassa)" />
+        <EmptyState
+          icon={ShieldAlert}
+          title="Ruxsat yo'q"
+          description="Hisoblar va moliya faqat egalar (owner) ko'ra oladi."
+        />
+      </div>
+    );
+  }
 
   const rate = accounts.data?.rate;
   const items = accounts.data?.items ?? [];
-  const { fmt } = useUzs();
 
   const invalidate = () => {
     utils.accounts.list.invalidate();

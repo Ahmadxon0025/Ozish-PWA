@@ -18,6 +18,16 @@ import { APP_NAME } from "@/lib/constants";
 
 type Status = "idle" | "loading" | "sent" | "error";
 
+/** Detect if input is email or phone. */
+function detectInputType(value: string): "email" | "phone" | "unknown" {
+  const trimmed = value.trim();
+  // Phone: digits only, typically 9-15 chars (international format)
+  if (/^\d{7,15}$/.test(trimmed)) return "phone";
+  // Email: contains @
+  if (/@/.test(trimmed)) return "email";
+  return "unknown";
+}
+
 /** Friendlier Uzbek messages for the common Supabase auth errors. */
 function friendly(msg: string): string {
   if (/invalid login credentials/i.test(msg)) return "Email yoki parol noto'g'ri.";
@@ -27,21 +37,45 @@ function friendly(msg: string): string {
 
 export default function LoginPage() {
   const [mode, setMode] = useState<"password" | "magic">("password");
-  const [email, setEmail] = useState("");
+  const [credential, setCredential] = useState(""); // email or phone
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [message, setMessage] = useState("");
   const configured = isSupabaseConfigured();
+  const inputType = detectInputType(credential);
 
   async function loginWithPassword(e: React.FormEvent) {
     e.preventDefault();
-    if (!email || !password) return;
+    if (!credential || !password) return;
     setStatus("loading");
     setMessage("");
     try {
       const supabase = createClient();
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
+
+      if (inputType === "phone") {
+        // Look up email by phone number via API
+        const res = await fetch("/api/auth/phone-to-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone: credential.trim() }),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.message || "Telefon raqami topilmadi.");
+        }
+        const { email } = await res.json();
+
+        // Now sign in with the resolved email
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+      } else {
+        // Direct email sign-in
+        const { error } = await supabase.auth.signInWithPassword({
+          email: credential.trim(),
+          password,
+        });
+        if (error) throw error;
+      }
       window.location.href = "/dashboard";
     } catch (err) {
       setStatus("error");
@@ -51,13 +85,18 @@ export default function LoginPage() {
 
   async function sendMagicLink(e: React.FormEvent) {
     e.preventDefault();
-    if (!email) return;
+    if (!credential) return;
+    if (inputType !== "email") {
+      setStatus("error");
+      setMessage("Kirish havolasi faqat email uchun ishlaydi.");
+      return;
+    }
     setStatus("loading");
     setMessage("");
     try {
       const supabase = createClient();
       const { error } = await supabase.auth.signInWithOtp({
-        email,
+        email: credential.trim(),
         options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
       });
       if (error) throw error;
@@ -93,7 +132,7 @@ export default function LoginPage() {
               <div>
                 <p className="font-medium">Havola yuborildi!</p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  <b>{email}</b> pochtangizga kirish havolasini yubordik.
+                  <b>{credential}</b> pochtangizga kirish havolasini yubordik.
                 </p>
               </div>
               <Button variant="ghost" onClick={() => setStatus("idle")} className="mt-2">
@@ -103,18 +142,23 @@ export default function LoginPage() {
           ) : mode === "password" ? (
             <form onSubmit={loginWithPassword} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email">Email manzil</Label>
+                <Label htmlFor="credential">Email yoki telefon raqam</Label>
                 <Input
-                  id="email"
-                  type="email"
+                  id="credential"
+                  type="text"
                   inputMode="email"
                   autoComplete="username"
-                  placeholder="siz@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="siz@example.com yoki 901234567"
+                  value={credential}
+                  onChange={(e) => setCredential(e.target.value)}
                   required
                   disabled={!configured || status === "loading"}
                 />
+                {credential && inputType === "unknown" && (
+                  <p className="text-xs text-muted-foreground">
+                    Email (@) yoki raqam kiriting (7-15 raqam)
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password">Parol</Label>
@@ -172,8 +216,8 @@ export default function LoginPage() {
                   inputMode="email"
                   autoComplete="email"
                   placeholder="siz@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  value={credential}
+                  onChange={(e) => setCredential(e.target.value)}
                   required
                   disabled={!configured || status === "loading"}
                 />

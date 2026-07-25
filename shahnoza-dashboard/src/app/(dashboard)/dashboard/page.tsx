@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   DollarSign,
   ShoppingCart,
@@ -22,15 +24,45 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SalesTrendChart } from "@/components/charts/sales-trend-chart";
 import { EmptyState } from "@/components/dashboard/empty-state";
+import { OWNER_ONLY } from "@/lib/role-check";
 import { formatUzs, formatPct100 } from "@/lib/format";
+import type { UserRole } from "@/types/database";
 
 export default function DashboardPage() {
+  const router = useRouter();
+  const me = api.users.me.useQuery();
+  const isOwner = me.data && OWNER_ONLY.includes(me.data.role as UserRole);
+
+  // Redirect sales team to sales overview
+  useEffect(() => {
+    if (!me.isLoading && me.data && !isOwner) {
+      router.replace("/sales");
+    }
+  }, [me.isLoading, me.data, isOwner, router]);
+
   const summary = api.dashboard.summary.useQuery();
   const metrics = api.dashboard.metrics.useQuery();
   const trend = api.dashboard.salesTrend.useQuery({ days: 30 });
   const top = api.dashboard.topSellersToday.useQuery();
   const s = summary.data;
   const m = metrics.data;
+
+  if (me.isLoading) {
+    return (
+      <div>
+        <PageHeader title="Boshqaruv paneli" />
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-28 rounded-xl" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (!isOwner) {
+    return null;
+  }
 
   return (
     <div>

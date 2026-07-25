@@ -6,6 +6,7 @@ import {
   roleProcedure,
   managerProcedure,
   superAdminProcedure,
+  protectedProcedure,
 } from "@/server/api/trpc";
 import { getCurrentRate } from "@/lib/business/exchange-rate";
 import { round2 } from "@/lib/business/currency";
@@ -25,12 +26,12 @@ function toUsdAt(amount: number, currency: string, uzsPerUsd: number): number {
 
 export const accountsRouter = createTRPCRouter({
   /** Current CBU rate (UZS per 1 USD) + freshness. */
-  currentRate: financeProcedure.query(async ({ ctx }) => {
+  currentRate: protectedProcedure.query(async ({ ctx }) => {
     return getCurrentRate(ctx.supabase);
   }),
 
   /** All accounts with live balances (native currency + USD equivalent). */
-  list: financeProcedure.query(async ({ ctx }) => {
+  list: ownerProcedure.query(async ({ ctx }) => {
     const [{ data: accounts }, { data: txns }, rate] = await Promise.all([
       ctx.supabase
         .from("accounts")
@@ -66,7 +67,7 @@ export const accountsRouter = createTRPCRouter({
   }),
 
   /** Ledger, optionally filtered to one account. */
-  transactions: financeProcedure
+  transactions: ownerProcedure
     .input(
       z
         .object({
@@ -125,7 +126,7 @@ export const accountsRouter = createTRPCRouter({
    * and cashflow (hence P&L/cashflow can disagree). Surfaced so the owner can
    * fix or delete them. Delete via accounts.deleteSource (passes the id here).
    */
-  orphanExpenses: financeProcedure.query(async ({ ctx }) => {
+  orphanExpenses: ownerProcedure.query(async ({ ctx }) => {
     const [{ data: exp }, { data: cats }] = await Promise.all([
       ctx.supabase
         .from("expenses")
@@ -148,7 +149,7 @@ export const accountsRouter = createTRPCRouter({
   }),
 
   /** Deposit money into an account (e.g. incoming from abroad to the Visa card). */
-  deposit: managerProcedure
+  deposit: ownerProcedure
     .input(
       z.object({
         accountId: z.string().uuid(),
@@ -178,7 +179,7 @@ export const accountsRouter = createTRPCRouter({
     }),
 
   /** Withdraw money from an account. */
-  withdraw: managerProcedure
+  withdraw: ownerProcedure
     .input(
       z.object({
         accountId: z.string().uuid(),
@@ -211,7 +212,7 @@ export const accountsRouter = createTRPCRouter({
    * is converted at the CBU rate (or an override), and both legs are recorded.
    * `amount` is expressed in the SOURCE account's currency.
    */
-  transfer: managerProcedure
+  transfer: ownerProcedure
     .input(
       z.object({
         fromAccountId: z.string().uuid(),
@@ -281,7 +282,7 @@ export const accountsRouter = createTRPCRouter({
       return { ok: true, toAmount, rate };
     }),
 
-  createAccount: managerProcedure
+  createAccount: ownerProcedure
     .input(
       z.object({
         name: z.string().min(1),
@@ -299,7 +300,7 @@ export const accountsRouter = createTRPCRouter({
       return data;
     }),
 
-  updateAccount: managerProcedure
+  updateAccount: ownerProcedure
     .input(
       z.object({
         id: z.string().uuid(),
@@ -325,7 +326,7 @@ export const accountsRouter = createTRPCRouter({
    * leg's stored rate). Entries created by an expense/sale must be edited at
    * their source, so those are rejected.
    */
-  updateTransaction: managerProcedure
+  updateTransaction: ownerProcedure
     .input(
       z.object({
         id: z.string().uuid(),
@@ -427,7 +428,7 @@ export const accountsRouter = createTRPCRouter({
 
   /** Delete a manual entry (both legs of a transfer). Expense/sale-linked
    * entries must be removed at their source. */
-  deleteTransaction: managerProcedure
+  deleteTransaction: ownerProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const { data: txn } = await ctx.supabase

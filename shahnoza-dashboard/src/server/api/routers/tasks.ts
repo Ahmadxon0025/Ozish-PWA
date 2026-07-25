@@ -661,6 +661,7 @@ export const tasksRouter = createTRPCRouter({
   updateStatus: protectedProcedure
     .input(z.object({ id: z.string().uuid(), status: statusEnum }))
     .mutation(async ({ ctx, input }) => {
+      console.log("📌 updateStatus mutation called", { taskId: input.id, newStatus: input.status });
       const { data: current } = await ctx.supabase
         .from("tasks")
         .select("*")
@@ -678,6 +679,35 @@ export const tasksRouter = createTRPCRouter({
       }
       const { error } = await ctx.supabase.from("tasks").update(patch).eq("id", input.id);
       if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      console.log("✅ Task status updated in DB", { taskId: input.id, newStatus: input.status });
+
+      // Send completion notification
+      const statusStr = String(input.status);
+      const isDone = statusStr === "done";
+      console.error(`🔥 DEBUG: input.status="${input.status}" type=${typeof input.status} isDone=${isDone}`);
+
+      if (isDone) {
+        console.error("🚀 NOTIFICATION CODE REACHED - marking task:", current.title);
+        try {
+          const { notifyTaskCompletion } = await import("@/lib/task-notifications");
+          console.error("✅ Imported notifyTaskCompletion");
+
+          const result = await notifyTaskCompletion(
+            input.id,
+            current.title,
+            { id: ctx.appUser.id, name: ctx.appUser.full_name || "User" },
+            current.assigned_to ?? current.created_by,
+            current.due_date,
+            now
+          );
+          console.error("✅ notifyTaskCompletion completed, result:", result);
+        } catch (notifErr) {
+          console.error("❌ Notification function threw error:", notifErr);
+          throw notifErr;
+        }
+      } else {
+        console.error(`🔥 NOT SENDING NOTIFICATION - status is "${input.status}", not "done"`);
+      }
 
       // Recurring task completed → spawn the next occurrence (carry assignees).
       if (input.status === "done" && current.recurrence && current.status !== "done") {

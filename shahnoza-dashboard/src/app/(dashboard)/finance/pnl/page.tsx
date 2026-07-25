@@ -1,10 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { DollarSign, TrendingUp, Receipt, Wallet } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { DollarSign, TrendingUp, Receipt, Wallet, ShieldAlert } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { PageHeader } from "@/components/layout/page-header";
 import { KpiCard } from "@/components/dashboard/kpi-card";
+import { EmptyState } from "@/components/dashboard/empty-state";
+import { OWNER_ONLY } from "@/lib/role-check";
+import type { UserRole } from "@/types/database";
 import {
   PeriodSelect,
   defaultPeriod,
@@ -22,8 +26,43 @@ import { PnlWaterfallChart } from "@/components/charts/pnl-waterfall-chart";
 import { formatUzs, formatUzsShort, formatPct100, formatDate } from "@/lib/format";
 
 export default function PnlPage() {
+  const router = useRouter();
+  const me = api.users.me.useQuery();
+  const isOwner = me.data && OWNER_ONLY.includes(me.data.role as UserRole);
+
+  // Move all hooks before conditionals
   const [period, setPeriod] = useState<Period>(defaultPeriod());
   const pnl = api.finance.pnl.useQuery({ from: period.from, to: period.to });
+
+  // Hard block unauthorized access
+  useEffect(() => {
+    if (!me.isLoading && me.data && !isOwner) {
+      router.replace("/dashboard");
+    }
+  }, [me.isLoading, me.data, isOwner, router]);
+
+  if (me.isLoading) {
+    return (
+      <div>
+        <PageHeader title="Foyda va zarar (P&L)" />
+        <Skeleton className="h-96 w-full rounded-lg" />
+      </div>
+    );
+  }
+
+  if (!isOwner) {
+    return (
+      <div>
+        <PageHeader title="Foyda va zarar (P&L)" />
+        <EmptyState
+          icon={ShieldAlert}
+          title="Ruxsat yo'q"
+          description="Moliya ma'lumotlari faqat egalar (owner) ko'ra oladi."
+        />
+      </div>
+    );
+  }
+
   // The router returns booked so'm (stable at the rate each row was booked at).
   const d = pnl.data;
 

@@ -150,8 +150,9 @@ export class AlfredActionExecutor {
       let assigneeId = data.assigneeId ?? "";
       let assigneeLabel = assigneeId;
 
-      if (data.task_title) {
-        const task = await this.resolveTaskByTitle(data.task_title);
+      const assignTitle = data.task_title ?? (data as any).title;
+      if (assignTitle) {
+        const task = await this.resolveTaskByTitle(assignTitle);
         if ("error" in task) return { success: false, message: task.error };
         taskIds = [task.id];
       }
@@ -234,30 +235,48 @@ export class AlfredActionExecutor {
 
   private async executeUpdate(data: {
     task_title?: string;
+    title?: string;
     taskId?: string;
-    updates: Record<string, any>;
+    assignee_name?: string;
+    updates?: Record<string, any>;
+    [key: string]: any;
   }): Promise<ActionResult> {
     try {
       let taskId = data.taskId ?? "";
       let taskLabel = taskId;
 
-      if (data.task_title) {
-        const task = await this.resolveTaskByTitle(data.task_title);
+      const updateTitle = data.task_title ?? data.title;
+      if (updateTitle) {
+        const task = await this.resolveTaskByTitle(updateTitle);
         if ("error" in task) return { success: false, message: task.error };
         taskId = task.id;
         taskLabel = task.title;
       }
 
-      if (!taskId || !data.updates) {
-        return { success: false, message: "Vazifa yoki o'zgarish aniqlanmadi" };
+      if (!taskId) {
+        return { success: false, message: "Vazifa aniqlanmadi" };
       }
 
-      // Whitelist the fields the model may change
+      // Whitelist the fields the model may change. The model sometimes puts
+      // fields at the top level instead of inside `updates` — accept both.
       const allowed = ["status", "due_date", "priority"];
+      const source = data.updates ?? data;
       const updates: Record<string, any> = {};
       for (const key of allowed) {
-        if (data.updates[key] !== undefined) updates[key] = data.updates[key];
+        if (source[key] !== undefined) updates[key] = source[key];
       }
+
+      // An update carrying assignee_name is also a reassignment
+      let newAssigneeId: string | null = null;
+      if (data.assignee_name || data.updates?.assignee_name) {
+        const user = await this.resolveUserByName(
+          data.assignee_name ?? data.updates?.assignee_name
+        );
+        if ("error" in user) return { success: false, message: user.error };
+        newAssigneeId = user.id;
+        updates.assigned_to = user.id;
+      }
+
       if (Object.keys(updates).length === 0) {
         return { success: false, message: "Ruxsat etilgan o'zgarish yo'q" };
       }
@@ -280,6 +299,10 @@ export class AlfredActionExecutor {
         .update(updates)
         .eq("id", taskId);
       if (error) throw error;
+
+      if (newAssigneeId) {
+        await this.syncPrimaryAssignee(taskId, newAssigneeId);
+      }
 
       return {
         success: true,

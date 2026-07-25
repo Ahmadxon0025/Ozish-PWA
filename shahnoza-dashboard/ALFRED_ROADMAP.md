@@ -45,15 +45,29 @@ dashboard (finance, sales, leads, tasks, treasury) on Next.js + Supabase.
 | Audit log | `alfred_action_log`, `ai_usage_log` | ✅ shipped |
 | Scheduled agents | Daily/evening Telegram crons + collection reminders (the "Creditor Watchdog" already existed) + Alfred morning brief | ✅ shipped |
 | Cost metering | `ai_usage_log` (tokens per feature per user) | ✅ shipped (no UI yet) |
+| Intent pills + half-written prompts | 6 categories (Topish/Yaratish/O'zgartirish/Tahlil/Ustuvorlik/Moliya) × 4 prompts, injected into composer | ✅ shipped |
+| Rotating personalized empty state | Headline cycles incl. "{ism}ning AI yordamchisi" | ✅ shipped |
+| Chat history | listConversations + reopen/continue any past chat | ✅ shipped |
+| Follow-up chips | Model-generated FOLLOWUPS block → 2-3 next-action chips | ✅ shipped |
+| Answer action bar | Copy + retry (regenerate replaces last exchange) | ✅ shipped |
+| Inspectable memory | Memory pane: view + delete learned facts | ✅ shipped |
 
 ## Deliberately skipped (big-company problems)
 
-- Multi-entity / multi-currency context chips — single entity, UZS/USD only
+- Multi-entity / multi-currency context chips — single entity, UZS/UZS only
 - Conversational agent builder + 90-agent catalog — we hand-build the 3–5
   agents this team needs
-- Model routing UI — server picks the model (`claude-sonnet-5` for chat,
-  `claude-haiku-4-5` for extraction/briefs)
+- Model routing UI / model picker — server picks the model
+  (`claude-sonnet-5` for chat, `claude-haiku-4-5` for extraction/briefs)
 - Per-seat AI quotas — team of ~5; `ai_usage_log` is enough for now
+- Full ChangeSet spec (digest-signed approval tokens, staleness etags,
+  saga atomicity, SoD dual sign-off, approval inbox) — presupposes batch
+  Tier C actions and AP/PO/GRN modules that don't exist here. Revisit the
+  digest + staleness ideas the day a batch or finance-write tool ships.
+- AP/creditors tool registry — no vendor-invoice pipeline in this product;
+  receivable instalments are already covered by payments + collection crons
+- Voice input, streaming reasoning traces, live record chips in answers —
+  polish; after the above
 
 ## Next increments (in order of value)
 

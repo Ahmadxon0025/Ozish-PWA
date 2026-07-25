@@ -66,6 +66,8 @@ export interface ChatResponse {
   message: string;
   proposal?: AlfredProposal;
   thinking?: string;
+  /** 2–3 short model-suggested next questions/actions. */
+  followUps?: string[];
 }
 
 export class AlfredChatService {
@@ -120,12 +122,14 @@ export class AlfredChatService {
         throw new Error("Model returned no text content");
       }
 
-      // Pull the structured action block (if any) out of the reply
-      const { proposal, cleanedText } = this.parseActionBlock(fullText);
+      // Pull structured blocks (follow-ups, then actions) out of the reply
+      const { followUps, remainingText } = this.parseFollowUps(fullText);
+      const { proposal, cleanedText } = this.parseActionBlock(remainingText);
 
       return {
         message: cleanedText,
         proposal: proposal || undefined,
+        followUps,
       };
     } catch (error) {
       console.error("Alfred chat error:", error);
@@ -232,6 +236,15 @@ Action types and their data fields:
 - "update": {"task_title": exact title from OPEN TASKS, "updates": {"status"? (todo|in_progress|review|done), "due_date"?, "priority"? (low|medium|high|urgent)}}
 
 due_date format: "YYYY-MM-DD" for date-only, or "YYYY-MM-DDTHH:mm:00+05:00" when the user gives a time (Tashkent is UTC+5) — times ARE supported, never tell the user otherwise.
+
+FOLLOW-UPS — after EVERY reply:
+Append this block at the very end of every message (after the ACTION block when there is one):
+
+<<<FOLLOWUPS
+["short follow-up 1","short follow-up 2","short follow-up 3"]
+FOLLOWUPS>>>
+
+2–3 items, each under 60 characters, in the user's language, phrased as things the user could ask or do next that build directly on your answer (e.g. a deeper question, a related check, or an action like "Bu vazifani Bekzodga biriktir"). Never mention this block in your visible text.
 
 Action rules:
 - The block executes AUTOMATICALLY right after your reply — task changes are applied instantly and the user can undo them with one click. So phrase your reply as "doing it now" (e.g. "Yarataman..."), never ask for permission.
@@ -345,6 +358,35 @@ Respond with [] if nothing new is worth remembering.`,
     } catch (error) {
       console.error("Memory extraction error:", error);
       return [];
+    }
+  }
+
+  /**
+   * Extract the <<<FOLLOWUPS [...] FOLLOWUPS>>> block: 2–3 suggested next
+   * questions rendered as chips under the answer. Stripped from the visible
+   * text; missing/malformed blocks are simply ignored.
+   */
+  private parseFollowUps(text: string): {
+    followUps: string[] | undefined;
+    remainingText: string;
+  } {
+    const match = text.match(/<<<FOLLOWUPS\s*([\s\S]*?)\s*FOLLOWUPS>>>/);
+    if (!match) return { followUps: undefined, remainingText: text };
+
+    const remainingText = text.replace(match[0], "").trim();
+    try {
+      const parsed = JSON.parse(match[1]);
+      if (!Array.isArray(parsed)) return { followUps: undefined, remainingText };
+      const followUps = parsed
+        .filter((f: any) => typeof f === "string" && f.trim().length > 0)
+        .map((f: string) => f.trim().slice(0, 80))
+        .slice(0, 3);
+      return {
+        followUps: followUps.length > 0 ? followUps : undefined,
+        remainingText,
+      };
+    } catch {
+      return { followUps: undefined, remainingText };
     }
   }
 

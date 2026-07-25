@@ -362,6 +362,7 @@ export const alfredRouter = createTRPCRouter({
           response: response.message,
           proposal: response.proposal,
           thinking: response.thinking,
+          followUps: response.followUps,
           conversationId,
           learned,
           executed,
@@ -418,18 +419,25 @@ export const alfredRouter = createTRPCRouter({
     return { suggestions: suggestions.slice(0, 3) };
   }),
 
-  /** Latest active conversation for the signed-in user, for panel hydration. */
-  getConversation: protectedProcedure.query(async ({ ctx }) => {
+  /**
+   * Load a conversation: the latest active one by default (panel hydration),
+   * or a specific one by id (reopening from history).
+   */
+  getConversation: protectedProcedure
+    .input(z.object({ conversationId: z.string().uuid().optional() }).optional())
+    .query(async ({ input, ctx }) => {
     if (!ctx.admin || !ctx.appUser) return { conversation: null };
     try {
-      const { data } = await (ctx.admin as any)
+      let query = (ctx.admin as any)
         .from("alfred_conversations")
         .select("id, messages")
-        .eq("user_id", ctx.appUser.id)
-        .eq("active", true)
-        .order("updated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .eq("user_id", ctx.appUser.id);
+      if (input?.conversationId) {
+        query = query.eq("id", input.conversationId);
+      } else {
+        query = query.eq("active", true).order("updated_at", { ascending: false });
+      }
+      const { data } = await query.limit(1).maybeSingle();
 
       if (!data) return { conversation: null };
       return {
@@ -446,6 +454,71 @@ export const alfredRouter = createTRPCRouter({
       return { conversation: null };
     }
   }),
+
+  /** Past conversations for the history dropdown, newest first. */
+  listConversations: protectedProcedure.query(async ({ ctx }) => {
+    if (!ctx.admin || !ctx.appUser) return { conversations: [] };
+    try {
+      const { data } = await (ctx.admin as any)
+        .from("alfred_conversations")
+        .select("id, title, updated_at, active")
+        .eq("user_id", ctx.appUser.id)
+        .order("updated_at", { ascending: false })
+        .limit(30);
+      return {
+        conversations: (data || []).map((c: any) => ({
+          id: c.id as string,
+          title: (c.title as string) || "Suhbat",
+          updatedAt: c.updated_at as string,
+          active: !!c.active,
+        })),
+      };
+    } catch (error) {
+      console.error("Error listing conversations:", error);
+      return { conversations: [] };
+    }
+  }),
+
+  /** Alfred's long-term memories, for the inspectable-memory view. */
+  listMemories: protectedProcedure.query(async ({ ctx }) => {
+    if (!ctx.admin) return { memories: [] };
+    try {
+      const { data } = await (ctx.admin as any)
+        .from("alfred_memories")
+        .select("id, content, category, created_at")
+        .eq("active", true)
+        .order("created_at", { ascending: false })
+        .limit(100);
+      return {
+        memories: (data || []).map((m: any) => ({
+          id: m.id as string,
+          content: m.content as string,
+          category: m.category as string,
+          createdAt: m.created_at as string,
+        })),
+      };
+    } catch (error) {
+      console.error("Error listing memories:", error);
+      return { memories: [] };
+    }
+  }),
+
+  /** Forget a memory (soft delete — an agent that learned wrong must be correctable). */
+  deleteMemory: protectedProcedure
+    .input(z.object({ memoryId: z.string().uuid() }))
+    .mutation(async ({ input, ctx }) => {
+      if (!ctx.admin) return { success: false };
+      try {
+        await (ctx.admin as any)
+          .from("alfred_memories")
+          .update({ active: false, updated_at: new Date().toISOString() })
+          .eq("id", input.memoryId);
+        return { success: true };
+      } catch (error) {
+        console.error("Error deleting memory:", error);
+        return { success: false };
+      }
+    }),
 
   /** Archive the current conversation so the next message starts a fresh one. */
   newConversation: protectedProcedure.mutation(async ({ ctx }) => {

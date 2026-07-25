@@ -661,6 +661,7 @@ export const tasksRouter = createTRPCRouter({
   updateStatus: protectedProcedure
     .input(z.object({ id: z.string().uuid(), status: statusEnum }))
     .mutation(async ({ ctx, input }) => {
+      console.log("📌 updateStatus mutation called", { taskId: input.id, newStatus: input.status });
       const { data: current } = await ctx.supabase
         .from("tasks")
         .select("*")
@@ -678,8 +679,10 @@ export const tasksRouter = createTRPCRouter({
       }
       const { error } = await ctx.supabase.from("tasks").update(patch).eq("id", input.id);
       if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      console.log("✅ Task status updated in DB", { taskId: input.id, newStatus: input.status });
 
       // Send completion notification
+      console.log("🔍 Checking if should send notification: status =", input.status, "is done?", input.status === "done");
       if (input.status === "done") {
         console.log("🔔 Sending notification for task:", current.title);
         const { notifyTaskCompletion } = await import("@/lib/task-notifications");

@@ -353,15 +353,21 @@ export async function notifyTaskCompletion(
 
     const caption = `${message}\n\n📌 Task: ${taskTitle}\n👤 Owner: @${ownerName || "unknown"}\n✅ Completed by: @${completedBy.name || "unknown"}\n🔗 Status: ${status}`;
 
+    console.log("🎙️ TTS Config check:", { isConfigured: isYandexTtsConfigured() });
+
     if (isYandexTtsConfigured()) {
       try {
+        console.log("🎙️ Generating voice message...");
         const audio = await textToSpeech(message);
+        console.log("🎙️ Voice generated, sending to Telegram...");
         await notifyTelegramVoice(groupId, audio, caption);
+        console.log("✅ Voice message sent!");
       } catch (ttsError) {
         console.error("❌ TTS failed, falling back to text:", ttsError);
         await notifyTelegram(groupId, caption);
       }
     } else {
+      console.log("⚠️ TTS not configured, sending text message");
       await notifyTelegram(groupId, caption);
     }
   } catch (error) {

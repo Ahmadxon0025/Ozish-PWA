@@ -139,8 +139,10 @@ export const integrationsRouter = createTRPCRouter({
       const db = ctx.admin ?? ctx.supabase;
       const { error } = await db
         .from("app_settings")
-        .update({ value: input.groupId })
-        .eq("key", "task_management_group_id");
+        .upsert(
+          { key: "task_management_group_id", value: input.groupId },
+          { onConflict: "key" }
+        );
 
       if (error) {
         throw new TRPCError({

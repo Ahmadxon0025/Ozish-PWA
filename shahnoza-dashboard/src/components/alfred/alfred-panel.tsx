@@ -282,11 +282,13 @@ function AssignTab() {
 
 function ChatTab() {
   const [message, setMessage] = useState("");
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<
     Array<{
       role: "user" | "alfred";
       content: string;
       proposal?: any;
+      messageId?: string;
     }>
   >([
     {
@@ -297,7 +299,9 @@ function ChatTab() {
   ]);
 
   const [isLoading, setIsLoading] = useState(false);
+  const [executingAction, setExecutingAction] = useState<string | null>(null);
   const alfredChat = api.alfred.chat.useMutation();
+  const executeActionMutation = api.alfred.executeAction.useMutation();
 
   const handleSend = async () => {
     if (!message.trim() || isLoading) return;
@@ -320,12 +324,15 @@ function ChatTab() {
       });
 
       if (response.success) {
+        // Generate a unique ID for this message
+        const messageId = `msg_${Date.now()}_${Math.random()}`;
         setMessages((prev) => [
           ...prev,
           {
             role: "alfred",
             content: response.response,
             proposal: response.proposal,
+            messageId,
           },
         ]);
       } else {
@@ -352,6 +359,51 @@ function ChatTab() {
     }
   };
 
+  const handleExecuteAction = async (
+    proposal: any,
+    messageId: string,
+    confirmed: boolean
+  ) => {
+    if (!confirmed || !conversationId || !proposal?.actions) return;
+
+    setExecutingAction(messageId);
+
+    try {
+      for (const action of proposal.actions) {
+        await executeActionMutation.mutateAsync({
+          conversationId,
+          actionId: action.id || `action_${Date.now()}`,
+          actionType: action.type,
+          data: action.data || {},
+        });
+      }
+
+      // Add success message
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "alfred",
+          content: `✅ ${proposal.actions.length} action(s) executed successfully!`,
+        },
+      ]);
+
+      toast({
+        title: "Actions executed",
+        description: `${proposal.actions.length} action(s) have been completed.`,
+        variant: "success",
+      });
+    } catch (error) {
+      console.error("Action execution error:", error);
+      toast({
+        title: "Execution failed",
+        description: error instanceof Error ? error.message : "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setExecutingAction(null);
+    }
+  };
+
   return (
     <div className="space-y-3 h-full flex flex-col">
       <div className="flex-1 space-y-3 overflow-y-auto pr-2">
@@ -373,9 +425,16 @@ function ChatTab() {
               </div>
             </div>
 
-            {msg.proposal && (
+            {msg.proposal && msg.messageId && (
               <div className="mt-2 ml-2">
-                <ProposalDisplay proposal={msg.proposal} />
+                <ProposalDisplay
+                  proposal={msg.proposal}
+                  messageId={msg.messageId!}
+                  isExecuting={executingAction === msg.messageId}
+                  onExecute={() =>
+                    handleExecuteAction(msg.proposal, msg.messageId!, true)
+                  }
+                />
               </div>
             )}
           </div>
@@ -418,20 +477,30 @@ function ChatTab() {
   );
 }
 
-function ProposalDisplay({ proposal }: { proposal: any }) {
+function ProposalDisplay({
+  proposal,
+  messageId,
+  isExecuting,
+  onExecute,
+}: {
+  proposal: any;
+  messageId: string;
+  isExecuting: boolean;
+  onExecute: () => void;
+}) {
   if (!proposal) return null;
 
   return (
-    <Card className="border-purple-600/50 bg-purple-950/20 p-3 text-xs">
-      <h4 className="font-semibold text-purple-300 mb-2">{proposal.title}</h4>
-      <p className="text-slate-300 mb-2">{proposal.description}</p>
+    <Card className="border-purple-600/50 bg-purple-950/20 p-3 text-xs space-y-2">
+      <h4 className="font-semibold text-purple-300">{proposal.title}</h4>
+      <p className="text-slate-300">{proposal.description}</p>
 
       {proposal.rationale && (
-        <p className="text-slate-400 mb-2">💡 {proposal.rationale}</p>
+        <p className="text-slate-400">💡 {proposal.rationale}</p>
       )}
 
       {proposal.risks && proposal.risks.length > 0 && (
-        <div className="mb-2">
+        <div>
           {proposal.risks.map((risk: string, i: number) => (
             <p key={i} className="text-red-400">
               ⚠️ {risk}
@@ -448,6 +517,42 @@ function ProposalDisplay({ proposal }: { proposal: any }) {
               • {alt}
             </p>
           ))}
+        </div>
+      )}
+
+      {proposal.actions && proposal.actions.length > 0 && (
+        <div className="flex gap-2 pt-2">
+          <Button
+            size="sm"
+            className="flex-1 bg-green-600 hover:bg-green-700 text-xs h-8"
+            onClick={onExecute}
+            disabled={isExecuting}
+          >
+            {isExecuting ? (
+              <>
+                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                Executing...
+              </>
+            ) : (
+              "✅ Go ahead"
+            )}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-xs h-8"
+            disabled={isExecuting}
+          >
+            🔄 Modify
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-xs h-8"
+            disabled={isExecuting}
+          >
+            ❌ Cancel
+          </Button>
         </div>
       )}
     </Card>

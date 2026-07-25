@@ -5,6 +5,7 @@ import { predictDeadline } from "@/lib/alfred/deadline-predictor";
 import { buildKnowledgeBase, getPersonalizedInsights, getRiskWarnings } from "@/lib/alfred/knowledge-base";
 import { getUserKnowledge } from "@/lib/alfred/learning-engine";
 import { AlfredChatService, type WorkspaceContext, type ConversationMessage } from "@/lib/alfred/chat-service";
+import { AlfredActionExecutor } from "@/lib/alfred/action-executor";
 
 export const alfredRouter = createTRPCRouter({
   getAnalysis: protectedProcedure.query(async ({ ctx }) => {
@@ -308,6 +309,54 @@ export const alfredRouter = createTRPCRouter({
           success: false,
           error: error instanceof Error ? error.message : "Unknown error",
           response: "Sorry, I encountered an error processing your message.",
+        };
+      }
+    }),
+
+  executeAction: protectedProcedure
+    .input(
+      z.object({
+        conversationId: z.string(),
+        actionId: z.string(),
+        actionType: z.enum(["assign", "update", "create", "notify"]),
+        data: z.record(z.any()),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const { data: user } = await ctx.supabase.auth.getUser();
+        if (!user.user) {
+          return {
+            success: false,
+            error: "Not authenticated",
+          };
+        }
+
+        // Check that conversation belongs to user
+        const { data: conversation } = await ctx.supabase
+          .from("alfred_conversations")
+          .select("id")
+          .eq("id", input.conversationId)
+          .eq("user_id", user.user.id)
+          .single();
+
+        if (!conversation) {
+          return {
+            success: false,
+            error: "Conversation not found",
+          };
+        }
+
+        // Execute action
+        const executor = new AlfredActionExecutor(ctx.supabase, user.user.id);
+        const result = await executor.execute(input);
+
+        return result;
+      } catch (error) {
+        console.error("Action execution error:", error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
         };
       }
     }),

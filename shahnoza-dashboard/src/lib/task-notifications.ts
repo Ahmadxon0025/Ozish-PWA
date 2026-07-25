@@ -42,7 +42,11 @@ export async function notifyTaskCompletion(
   dueDate: string | null,
   completedAt: string
 ) {
-  if (!ownerId) return;
+  console.log("🔔 notifyTaskCompletion called", { taskId, taskTitle, ownerId, dueDate });
+  if (!ownerId) {
+    console.log("⚠️  No owner ID, skipping notification");
+    return;
+  }
   try {
     const client = requireAdminClient();
 
@@ -54,11 +58,12 @@ export async function notifyTaskCompletion(
       .single();
 
     if (!settings?.value) {
-      console.log("task_management_group_id not configured");
+      console.log("❌ task_management_group_id not configured");
       return;
     }
 
     const groupId = settings.value;
+    console.log("✅ Found group ID:", groupId);
 
     // Get owner name
     const { data: owner } = await client
@@ -100,11 +105,12 @@ export async function notifyTaskCompletion(
 async function notifyTelegram(chatId: string, message: string) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) {
-    console.error("TELEGRAM_BOT_TOKEN not configured");
+    console.error("❌ TELEGRAM_BOT_TOKEN not configured");
     return;
   }
 
   try {
+    console.log("📤 Sending Telegram message to", chatId);
     const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -116,10 +122,12 @@ async function notifyTelegram(chatId: string, message: string) {
     });
 
     if (!response.ok) {
-      throw new Error(`Telegram API error: ${response.statusText}`);
+      const error = await response.text();
+      throw new Error(`Telegram API error: ${response.statusText} - ${error}`);
     }
+    console.log("✅ Telegram message sent successfully");
   } catch (error) {
-    console.error("Telegram send error:", error);
+    console.error("❌ Telegram send error:", error);
     throw error;
   }
 }

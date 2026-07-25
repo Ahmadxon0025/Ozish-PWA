@@ -330,6 +330,33 @@ export const alfredRouter = createTRPCRouter({
           );
         }
 
+        // Tier A/B task actions run automatically — reversible, so no
+        // approval click. Each execution is logged and returns an undo handle.
+        const executed: Array<{
+          logId: string | null;
+          success: boolean;
+          message: string;
+        }> = [];
+        if (response.proposal && ctx.appUser) {
+          const executor = new AlfredActionExecutor(
+            ctx.supabase,
+            ctx.appUser.id
+          );
+          for (const action of response.proposal.actions) {
+            const result = await executor.execute({
+              conversationId,
+              actionId: action.id,
+              actionType: action.type,
+              data: action.data ?? {},
+            });
+            executed.push({
+              logId: result.logId ?? null,
+              success: result.success,
+              message: result.message || result.error || "Bajarildi",
+            });
+          }
+        }
+
         return {
           success: true,
           response: response.message,
@@ -337,6 +364,7 @@ export const alfredRouter = createTRPCRouter({
           thinking: response.thinking,
           conversationId,
           learned,
+          executed,
         };
       } catch (error) {
         console.error("Chat error - Full details:", {
@@ -433,6 +461,93 @@ export const alfredRouter = createTRPCRouter({
     }
     return { success: true };
   }),
+
+  /**
+   * Undo a previously executed Alfred action using the state captured at
+   * execution time. Reversal runs under the caller's RLS client; the log row
+   * is marked cancelled so an action can only be undone once.
+   */
+  undoAction: protectedProcedure
+    .input(z.object({ actionLogId: z.string().uuid() }))
+    .mutation(async ({ input, ctx }) => {
+      if (!ctx.admin || !ctx.appUser) {
+        return { success: false, error: "Server not configured" };
+      }
+      try {
+        const { data: log } = await (ctx.admin as any)
+          .from("alfred_action_log")
+          .select("id, action_type, output_data, status, actor_id")
+          .eq("id", input.actionLogId)
+          .eq("actor_id", ctx.appUser.id)
+          .single();
+
+        if (!log) return { success: false, error: "Amal topilmadi" };
+        if (log.status !== "executed") {
+          return { success: false, error: "Bu amal allaqachon bekor qilingan" };
+        }
+
+        const db = ctx.supabase as any;
+        if (log.action_type === "create") {
+          const taskId = log.output_data?.taskId;
+          if (!taskId) {
+            return { success: false, error: "Bekor qilish ma'lumoti yo'q" };
+          }
+          const { error } = await db.from("tasks").delete().eq("id", taskId);
+          if (error) throw error;
+        } else if (
+          log.action_type === "assign" ||
+          log.action_type === "update"
+        ) {
+          const previous: Array<{ taskId: string; fields: Record<string, any> }> =
+            log.output_data?.previous ?? [];
+          if (previous.length === 0) {
+            return { success: false, error: "Bekor qilish ma'lumoti yo'q" };
+          }
+          for (const p of previous) {
+            const { error } = await db
+              .from("tasks")
+              .update(p.fields)
+              .eq("id", p.taskId);
+            if (error) throw error;
+
+            // Restoring the assignee also restores the primary join row
+            if ("assigned_to" in p.fields) {
+              try {
+                await db
+                  .from("task_assignees")
+                  .delete()
+                  .eq("task_id", p.taskId)
+                  .eq("is_primary", true);
+                if (p.fields.assigned_to) {
+                  await db.from("task_assignees").insert({
+                    task_id: p.taskId,
+                    user_id: p.fields.assigned_to,
+                    is_primary: true,
+                  });
+                }
+              } catch {
+                // join-table sync is best-effort
+              }
+            }
+          }
+        } else {
+          return { success: false, error: "Bu turdagi amal bekor qilinmaydi" };
+        }
+
+        await (ctx.admin as any)
+          .from("alfred_action_log")
+          .update({ status: "cancelled", error_message: "undone by user" })
+          .eq("id", log.id);
+
+        return { success: true };
+      } catch (error) {
+        console.error("Undo failed:", error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    }),
 
   executeAction: protectedProcedure
     .input(

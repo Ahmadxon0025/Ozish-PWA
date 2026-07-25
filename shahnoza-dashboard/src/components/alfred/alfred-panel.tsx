@@ -38,18 +38,22 @@ export function AlfredPanel({ onClose }: { onClose: () => void }) {
     Array<{
       role: "user" | "alfred";
       content: string;
-      proposal?: any;
       messageId?: string;
+      executed?: Array<{
+        logId: string | null;
+        success: boolean;
+        message: string;
+      }>;
     }>
   >([]);
 
   const [isLoading, setIsLoading] = useState(false);
-  const [executingAction, setExecutingAction] = useState<string | null>(null);
-  const [resolvedProposals, setResolvedProposals] = useState<
-    Record<string, "executed" | "dismissed">
-  >({});
+  const [undoingId, setUndoingId] = useState<string | null>(null);
+  const [undoneMessages, setUndoneMessages] = useState<Record<string, boolean>>(
+    {}
+  );
   const alfredChat = api.alfred.chat.useMutation();
-  const executeActionMutation = api.alfred.executeAction.useMutation();
+  const undoMutation = api.alfred.undoAction.useMutation();
   const newConversationMutation = api.alfred.newConversation.useMutation();
   const savedConversation = api.alfred.getConversation.useQuery(undefined, {
     staleTime: Infinity,
@@ -134,14 +138,26 @@ export function AlfredPanel({ onClose }: { onClose: () => void }) {
             description: `${response.learned} ta yangi ma'lumot xotiraga saqlandi`,
           });
         }
+        const executed =
+          response.executed && response.executed.length > 0
+            ? response.executed
+            : undefined;
+        if (executed) {
+          const ok = executed.filter((e) => e.success).length;
+          toast({
+            title: ok === executed.length ? "Alfred bajardi" : "Qisman bajarildi",
+            description: `${ok}/${executed.length} ta amal muvaffaqiyatli`,
+            variant: ok > 0 ? "success" : "destructive",
+          });
+        }
         const messageId = `msg_${Date.now()}_${Math.random()}`;
         setMessages((prev) => [
           ...prev,
           {
             role: "alfred",
             content: response.response,
-            proposal: response.proposal,
             messageId,
+            executed,
           },
         ]);
       } else {
@@ -168,58 +184,38 @@ export function AlfredPanel({ onClose }: { onClose: () => void }) {
     }
   };
 
-  const handleExecuteAction = async (proposal: any, messageId: string) => {
-    if (!conversationId || !proposal?.actions) return;
-
-    setExecutingAction(messageId);
-
+  const handleUndo = async (msg: {
+    messageId?: string;
+    executed?: Array<{ logId: string | null; success: boolean; message: string }>;
+  }) => {
+    if (!msg.messageId || !msg.executed) return;
+    setUndoingId(msg.messageId);
     try {
-      const results: Array<{ success: boolean; text: string }> = [];
-      for (const action of proposal.actions) {
-        const result: any = await executeActionMutation.mutateAsync({
-          conversationId,
-          actionId: action.id || `action_${Date.now()}`,
-          actionType: action.type,
-          data: action.data || {},
-        });
-        results.push({
-          success: !!result.success,
-          text: result.message || result.error || "Bajarildi",
-        });
+      let undone = 0;
+      for (const e of msg.executed) {
+        if (e.success && e.logId) {
+          const result = await undoMutation.mutateAsync({
+            actionLogId: e.logId,
+          });
+          if (result.success) undone++;
+        }
       }
-
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "alfred",
-          content: results
-            .map((r) => `${r.success ? "✅" : "❌"} ${r.text}`)
-            .join("\n"),
-        },
-      ]);
-      setResolvedProposals((prev) => ({ ...prev, [messageId]: "executed" }));
-
-      const okCount = results.filter((r) => r.success).length;
+      setUndoneMessages((prev) => ({ ...prev, [msg.messageId!]: true }));
       toast({
-        title:
-          okCount === results.length ? "Amallar bajarildi" : "Qisman bajarildi",
-        description: `${okCount}/${results.length} ta amal muvaffaqiyatli`,
-        variant: okCount > 0 ? "success" : "destructive",
+        title: "↩️ Bekor qilindi",
+        description: `${undone} ta amal orqaga qaytarildi`,
+        variant: "success",
       });
     } catch (error) {
-      console.error("Action execution error:", error);
+      console.error("Undo error:", error);
       toast({
-        title: "Bajarib bo'lmadi",
+        title: "Bekor qilib bo'lmadi",
         description: error instanceof Error ? error.message : "Unknown error",
         variant: "destructive",
       });
     } finally {
-      setExecutingAction(null);
+      setUndoingId(null);
     }
-  };
-
-  const handleDismissProposal = (messageId: string) => {
-    setResolvedProposals((prev) => ({ ...prev, [messageId]: "dismissed" }));
   };
 
   const isEmpty = messages.length === 0;
@@ -319,22 +315,44 @@ export function AlfredPanel({ onClose }: { onClose: () => void }) {
                     </div>
                   </div>
 
-                  {msg.proposal?.actions?.length > 0 &&
-                    msg.messageId &&
-                    !resolvedProposals[msg.messageId] && (
-                      <div className="ml-10 mt-2">
-                        <ProposalDisplay
-                          proposal={msg.proposal}
-                          isExecuting={executingAction === msg.messageId}
-                          onExecute={() =>
-                            handleExecuteAction(msg.proposal, msg.messageId!)
-                          }
-                          onDismiss={() =>
-                            handleDismissProposal(msg.messageId!)
-                          }
-                        />
-                      </div>
-                    )}
+                  {msg.executed && msg.executed.length > 0 && msg.messageId && (
+                    <div className="ml-10 mt-2">
+                      <Card className="border-purple-600/50 bg-purple-950/20 p-3 text-xs space-y-2">
+                        {msg.executed.map((e, j) => (
+                          <p
+                            key={j}
+                            className={
+                              e.success ? "text-slate-300" : "text-red-400"
+                            }
+                          >
+                            {e.success ? "✅" : "❌"} {e.message}
+                          </p>
+                        ))}
+                        {undoneMessages[msg.messageId] ? (
+                          <p className="text-slate-400">↩️ Bekor qilindi</p>
+                        ) : (
+                          msg.executed.some((e) => e.success && e.logId) && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 text-xs"
+                              onClick={() => handleUndo(msg)}
+                              disabled={undoingId === msg.messageId}
+                            >
+                              {undoingId === msg.messageId ? (
+                                <>
+                                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                  Bekor qilinmoqda...
+                                </>
+                              ) : (
+                                "↩️ Bekor qilish"
+                              )}
+                            </Button>
+                          )
+                        )}
+                      </Card>
+                    </div>
+                  )}
                 </div>
               ))}
 
@@ -383,66 +401,5 @@ export function AlfredPanel({ onClose }: { onClose: () => void }) {
         </div>
       </div>
     </>
-  );
-}
-
-function ProposalDisplay({
-  proposal,
-  isExecuting,
-  onExecute,
-  onDismiss,
-}: {
-  proposal: any;
-  isExecuting: boolean;
-  onExecute: () => void;
-  onDismiss: () => void;
-}) {
-  if (!proposal) return null;
-
-  return (
-    <Card className="border-purple-600/50 bg-purple-950/20 p-3 text-xs space-y-2">
-      <h4 className="font-semibold text-purple-300">{proposal.title}</h4>
-      {proposal.description && (
-        <p className="text-slate-300">{proposal.description}</p>
-      )}
-      {proposal.rationale && (
-        <p className="text-slate-400">💡 {proposal.rationale}</p>
-      )}
-
-      <div className="space-y-1">
-        {proposal.actions.map((action: any) => (
-          <p key={action.id} className="text-slate-300">
-            • {action.label}
-          </p>
-        ))}
-      </div>
-
-      <div className="flex gap-2 pt-2">
-        <Button
-          size="sm"
-          className="flex-1 bg-green-600 hover:bg-green-700 text-xs h-8"
-          onClick={onExecute}
-          disabled={isExecuting}
-        >
-          {isExecuting ? (
-            <>
-              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-              Bajarilmoqda...
-            </>
-          ) : (
-            "✅ Bajarish"
-          )}
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="text-xs h-8"
-          onClick={onDismiss}
-          disabled={isExecuting}
-        >
-          ❌ Bekor qilish
-        </Button>
-      </div>
-    </Card>
   );
 }

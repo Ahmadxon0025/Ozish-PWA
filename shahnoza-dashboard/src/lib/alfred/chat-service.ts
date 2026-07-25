@@ -55,6 +55,7 @@ export interface AlfredProposal {
     id: string;
     type: "assign" | "update" | "create" | "notify";
     label: string;
+    data?: Record<string, any>;
   }>;
   rationale: string;
   risks?: string[];
@@ -226,13 +227,16 @@ When the user explicitly asks you to create, assign, or update a task, describe 
 ACTION>>>
 
 Action types and their data fields:
-- "create": {"title", "description"?, "assignee_name"?, "due_date"?, "priority"? (low|normal|high|urgent)}
+- "create": {"title", "description"?, "assignee_name"?, "due_date"?, "priority"? (low|medium|high|urgent)}
 - "assign": {"task_title": exact title from OPEN TASKS, "assignee_name": exact team member name}
-- "update": {"task_title": exact title from OPEN TASKS, "updates": {"status"? (todo|in_progress|review|done), "due_date"?, "priority"?}}
+- "update": {"task_title": exact title from OPEN TASKS, "updates": {"status"? (todo|in_progress|review|done), "due_date"?, "priority"? (low|medium|high|urgent)}}
+
+due_date format: "YYYY-MM-DD" for date-only, or "YYYY-MM-DDTHH:mm:00+05:00" when the user gives a time (Tashkent is UTC+5) — times ARE supported, never tell the user otherwise.
 
 Action rules:
-- Only emit a block when the user clearly asked for the change — never for questions or analysis.
-- Nothing runs until the user clicks approve, so phrase your reply as a proposal.
+- The block executes AUTOMATICALLY right after your reply — task changes are applied instantly and the user can undo them with one click. So phrase your reply as "doing it now" (e.g. "Yarataman..."), never ask for permission.
+- Only emit a block when the user clearly asked for a change — never for questions or analysis.
+- FLAG, DON'T GUESS: if a required detail is ambiguous (which task, which person, what deadline), ask the user instead of emitting a block. No block until it's clear.
 - Use exact task titles and team member names from the context above.
 - NEVER emit actions that touch money, sales, or finance records — tasks only.
 
@@ -259,7 +263,7 @@ What's your preference?"
 
 NEVER:
 - Make up data or statistics
-- Claim an action is done before the user approved it
+- Claim an action succeeded — execution results are shown to the user separately
 - Make personal judgments about team members
 - Ignore the workspace context provided`;
   }

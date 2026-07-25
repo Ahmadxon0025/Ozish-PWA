@@ -1,7 +1,7 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 
 export interface ActionInput {
-  conversationId: string;
+  conversationId: string | null;
   actionId: string;
   actionType: "assign" | "update" | "create" | "notify";
   data: Record<string, any>;
@@ -12,6 +12,8 @@ export interface ActionResult {
   message: string;
   data?: Record<string, any>;
   error?: string;
+  /** alfred_action_log row id — the undo handle. */
+  logId?: string | null;
 }
 
 export class AlfredActionExecutor {
@@ -25,7 +27,7 @@ export class AlfredActionExecutor {
       const { data: logEntry } = await this.supabase
         .from("alfred_action_log")
         .insert({
-          conversation_id: conversationId,
+          conversation_id: conversationId || null,
           actor_id: this.userId,
           action_type: actionType,
           target_id: actionId,
@@ -70,7 +72,7 @@ export class AlfredActionExecutor {
           .eq("id", logEntry.id);
       }
 
-      return result;
+      return { ...result, logId: logEntry?.id ?? null };
     } catch (error) {
       console.error("Action execution error:", error);
       return {
@@ -164,6 +166,10 @@ export class AlfredActionExecutor {
         return { success: false, message: "Vazifa yoki mas'ul aniqlanmadi" };
       }
 
+      // tasks.assigned_to is a single UUID (the primary/DRI). Capture the
+      // prior value per task so the action can be undone.
+      const previous: Array<{ taskId: string; fields: Record<string, any> }> = [];
+
       for (const taskId of taskIds) {
         const { data: task } = await this.supabase
           .from("tasks")
@@ -171,30 +177,58 @@ export class AlfredActionExecutor {
           .eq("id", taskId)
           .single();
         if (!task) continue;
+        if (task.assigned_to === assigneeId) continue;
 
-        let assignedTo = task.assigned_to || [];
-        if (typeof assignedTo === "string") assignedTo = [assignedTo];
-        if (!Array.isArray(assignedTo)) assignedTo = [];
-        if (!assignedTo.includes(assigneeId)) assignedTo.push(assigneeId);
+        previous.push({
+          taskId,
+          fields: { assigned_to: task.assigned_to ?? null },
+        });
 
         const { error } = await this.supabase
           .from("tasks")
-          .update({ assigned_to: assignedTo })
+          .update({ assigned_to: assigneeId })
           .eq("id", taskId);
         if (error) throw error;
+
+        await this.syncPrimaryAssignee(taskId, assigneeId);
       }
 
       return {
         success: true,
         message: `${taskIds.length} ta vazifa ${assigneeLabel}ga biriktirildi`,
-        data: { taskCount: taskIds.length, assigneeId },
+        data: { taskCount: taskIds.length, assigneeId, previous },
       };
     } catch (error) {
+      const detail = error instanceof Error ? error.message : "Unknown error";
       return {
         success: false,
-        message: "Vazifani biriktirib bo'lmadi",
-        error: error instanceof Error ? error.message : "Unknown error",
+        message: `Vazifani biriktirib bo'lmadi: ${detail}`,
+        error: detail,
       };
+    }
+  }
+
+  /**
+   * Keep the task_assignees join table's primary row in sync with
+   * tasks.assigned_to (collaborator rows are left untouched). Best-effort.
+   */
+  private async syncPrimaryAssignee(
+    taskId: string,
+    assigneeId: string | null
+  ): Promise<void> {
+    try {
+      await this.supabase
+        .from("task_assignees")
+        .delete()
+        .eq("task_id", taskId)
+        .eq("is_primary", true);
+      if (assigneeId) {
+        await this.supabase
+          .from("task_assignees")
+          .insert({ task_id: taskId, user_id: assigneeId, is_primary: true });
+      }
+    } catch (error) {
+      console.warn("Primary assignee sync failed:", error);
     }
   }
 
@@ -231,6 +265,16 @@ export class AlfredActionExecutor {
         updates.completed_at = new Date().toISOString();
       }
 
+      // Capture prior values of exactly the fields we're changing (undo data)
+      const { data: before } = await this.supabase
+        .from("tasks")
+        .select(Object.keys(updates).join(", "))
+        .eq("id", taskId)
+        .single();
+      const previous = before
+        ? [{ taskId, fields: before as Record<string, any> }]
+        : [];
+
       const { error } = await this.supabase
         .from("tasks")
         .update(updates)
@@ -240,13 +284,14 @@ export class AlfredActionExecutor {
       return {
         success: true,
         message: `"${taskLabel}" yangilandi (${Object.keys(updates).join(", ")})`,
-        data: { taskId, updates },
+        data: { taskId, updates, previous },
       };
     } catch (error) {
+      const detail = error instanceof Error ? error.message : "Unknown error";
       return {
         success: false,
-        message: "Vazifani yangilab bo'lmadi",
-        error: error instanceof Error ? error.message : "Unknown error",
+        message: `Vazifani yangilab bo'lmadi: ${detail}`,
+        error: detail,
       };
     }
   }
@@ -266,6 +311,21 @@ export class AlfredActionExecutor {
         return { success: false, message: "Vazifa nomi ko'rsatilmagan" };
       }
 
+      // Idempotency guard: agents retry, users repeat themselves — never
+      // create a second open task with the same title.
+      const { data: dup } = await this.supabase
+        .from("tasks")
+        .select("id")
+        .ilike("title", title.trim())
+        .neq("status", "done")
+        .limit(1);
+      if (dup && dup.length > 0) {
+        return {
+          success: false,
+          message: `"${title}" nomli ochiq vazifa allaqachon mavjud — takror yaratilmadi`,
+        };
+      }
+
       let assigneeId = data.assignedTo ?? null;
       let assigneeLabel: string | null = null;
       if (data.assignee_name) {
@@ -274,25 +334,51 @@ export class AlfredActionExecutor {
         assigneeId = user.id;
         assigneeLabel = user.full_name;
       }
+      // Same default as the tasks router: unassigned work goes to the creator
+      const primaryId = assigneeId ?? this.userId;
 
-      const allowedPriorities = new Set(["low", "normal", "high", "urgent"]);
-      const insert: Record<string, any> = {
-        title,
-        description: data.description || "",
-        assigned_to: assigneeId ? [assigneeId] : [],
-        due_date: data.due_date ?? data.dueDate ?? null,
-        status: "todo",
+      // Map model synonyms onto the real enum (schema default is 'medium')
+      const priorityMap: Record<string, string> = {
+        low: "low",
+        normal: "medium",
+        medium: "medium",
+        high: "high",
+        urgent: "urgent",
       };
-      if (data.priority && allowedPriorities.has(data.priority)) {
-        insert.priority = data.priority;
-      }
+      const priority = priorityMap[data.priority ?? ""] ?? "medium";
 
       const { data: task, error } = await this.supabase
         .from("tasks")
-        .insert(insert)
+        .insert({
+          title,
+          description: data.description || null,
+          assigned_to: primaryId,
+          created_by: this.userId,
+          priority,
+          status: "todo",
+          due_date: data.due_date ?? data.dueDate ?? null,
+        })
         .select()
         .single();
       if (error) throw error;
+
+      await this.syncPrimaryAssignee(task.id, primaryId);
+
+      // Tier B courtesy: tell the assignee (Telegram DM / push), never fatal
+      try {
+        const { notifyTaskCreated } = await import("@/lib/notify/task-events");
+        await notifyTaskCreated({
+          taskId: task.id,
+          title: task.title,
+          assignedTo: primaryId,
+          createdBy: this.userId,
+          priority,
+          dueDate: task.due_date ?? null,
+          isSubtask: false,
+        });
+      } catch {
+        // notifications are best-effort
+      }
 
       return {
         success: true,
@@ -300,10 +386,11 @@ export class AlfredActionExecutor {
         data: { taskId: task?.id, title },
       };
     } catch (error) {
+      const detail = error instanceof Error ? error.message : "Unknown error";
       return {
         success: false,
-        message: "Vazifa yaratib bo'lmadi",
-        error: error instanceof Error ? error.message : "Unknown error",
+        message: `Vazifa yaratib bo'lmadi: ${detail}`,
+        error: detail,
       };
     }
   }

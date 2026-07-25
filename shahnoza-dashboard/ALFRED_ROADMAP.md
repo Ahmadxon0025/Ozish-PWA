@@ -12,11 +12,19 @@ dashboard (finance, sales, leads, tasks, treasury) on Next.js + Supabase.
    Supabase aggregates). The model selects, explains, and narrates — it does
    not do arithmetic. Anything it can't see in its context, it must say it
    can't see.
-2. **Writes are propose-then-approve, no exceptions.** Alfred emits a
-   structured action proposal; the user clicks approve; the executor runs it
-   under the requesting user's RLS-scoped client and logs to
-   `alfred_action_log`. Task-level writes only. Finance is read-only.
-   Delete does not exist as an action type.
+2. **Writes are tiered by reversibility, not by module.**
+   - *Tier A/B — free or cheap to undo (task create/assign/update):* run
+     automatically with a visible result card and a one-click undo; the
+     assignee gets notified. "Zero typing, not zero approval" — the undo IS
+     the approval.
+   - *Tier C — irreversible or externally visible (outbound messages,
+     anything financial):* always one explicit click. Alfred has no Tier C
+     tools yet; when they arrive they get a diff card, never auto-run.
+   - *Tier D — hard delete:* does not exist as a tool.
+   Every execution captures prior state for reversal and logs to
+   `alfred_action_log` under the requesting user's RLS-scoped client.
+   Undo rate per action type is the trust metric (high undo rate → demote
+   that tool back to click-to-approve).
 3. **Permissions are inherited, never granted.** Alfred's context is built
    through the *requesting user's* Supabase client, so row-level security
    already filters what it can see. An agent never sees more than the person
@@ -33,7 +41,7 @@ dashboard (finance, sales, leads, tasks, treasury) on Next.js + Supabase.
 | Persistent memory | `alfred_memories` + per-exchange extraction loop | ✅ shipped |
 | Conversation persistence | `alfred_conversations`, hydrated on open, "Yangi suhbat" | ✅ shipped |
 | Suggestion chips | Data-derived chips (overdue counts baked in) | ✅ shipped |
-| Propose-then-approve actions | Action block protocol → ProposalDisplay → executor | ✅ shipped |
+| Action layer (Tier A/B auto + undo) | Action block protocol → auto-execute → result card + undo, prior state captured in alfred_action_log | ✅ shipped |
 | Audit log | `alfred_action_log`, `ai_usage_log` | ✅ shipped |
 | Scheduled agents | Daily/evening Telegram crons + collection reminders (the "Creditor Watchdog" already existed) + Alfred morning brief | ✅ shipped |
 | Cost metering | `ai_usage_log` (tokens per feature per user) | ✅ shipped (no UI yet) |
@@ -58,7 +66,17 @@ dashboard (finance, sales, leads, tasks, treasury) on Next.js + Supabase.
    that shows the underlying rows (P&L → /finance, receivables → /payments).
 4. **Approval inbox** — a page listing pending/executed Alfred actions from
    `alfred_action_log` (the trust dashboard; watch approval rate per agent).
-5. **Streaming responses** — visible "work steps" while Alfred thinks
+5. **Autonomy dial** — per-action-type setting (suggest → draft → auto+undo
+   → silent), promoted automatically once undo rate stays near zero over
+   enough real invocations. The data for it already accrues in
+   alfred_action_log.
+6. **Multi-record diff screen** — for future batch actions ("rebalance
+   tasks"): table of before/after rows, approve selected/all, one reversal
+   handle. Design this before shipping any batch tool.
+7. **Agent as assignee** — Alfred as a system user who can be assigned a
+   task and works it (ClickUp's biggest adoption unlock; needs the
+   scheduled-agent runtime to act on assignment).
+8. **Streaming responses** — visible "work steps" while Alfred thinks
    (needs SSE alongside tRPC; cosmetic, do last).
 
 ## Metrics that matter

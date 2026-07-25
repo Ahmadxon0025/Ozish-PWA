@@ -283,50 +283,112 @@ function AssignTab() {
 function ChatTab() {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<
-    Array<{ role: "user" | "alfred"; content: string }>
+    Array<{
+      role: "user" | "alfred";
+      content: string;
+      proposal?: any;
+    }>
   >([
     {
       role: "alfred",
       content:
-        "Hello! I'm Alfred, your task management AI. I can help you assign tasks, predict deadlines, analyze team workload, and more. What would you like help with?",
+        "Hello! I'm Alfred, your task management AI. I can analyze team workload, make recommendations, and help organize your work. What would you like help with?",
     },
   ]);
 
-  const handleSend = () => {
-    if (!message.trim()) return;
+  const [isLoading, setIsLoading] = useState(false);
+  const alfredChat = api.alfred.chat.useMutation();
 
-    setMessages((prev) => [
-      ...prev,
-      { role: "user", content: message },
-      {
-        role: "alfred",
-        content: `I understand you want to: "${message}". This feature is coming soon!`,
-      },
-    ]);
+  const handleSend = async () => {
+    if (!message.trim() || isLoading) return;
+
+    const userMsg = message;
     setMessage("");
+
+    setMessages((prev) => [...prev, { role: "user", content: userMsg }]);
+    setIsLoading(true);
+
+    try {
+      const conversationHistory = messages.map((m) => ({
+        role: m.role as "user" | "assistant",
+        content: m.content,
+      }));
+
+      const response = await alfredChat.mutateAsync({
+        message: userMsg,
+        conversationHistory,
+      });
+
+      if (response.success) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "alfred",
+            content: response.response,
+            proposal: response.proposal,
+          },
+        ]);
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "alfred",
+            content: response.error || "Sorry, I encountered an error.",
+          },
+        ]);
+      }
+    } catch (error) {
+      console.error("Chat error:", error);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "alfred",
+          content:
+            "Sorry, I encountered an error. Please try again.",
+        },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <div className="space-y-3 h-full flex flex-col">
-      <div className="flex-1 space-y-3 overflow-y-auto">
+      <div className="flex-1 space-y-3 overflow-y-auto pr-2">
         {messages.map((msg, i) => (
-          <div
-            key={i}
-            className={`flex gap-2 ${
-              msg.role === "user" ? "justify-end" : "justify-start"
-            }`}
-          >
+          <div key={i}>
             <div
-              className={`max-w-xs rounded-lg px-3 py-2 text-sm ${
-                msg.role === "user"
-                  ? "bg-purple-600 text-white"
-                  : "bg-slate-800 text-slate-200"
+              className={`flex gap-2 ${
+                msg.role === "user" ? "justify-end" : "justify-start"
               }`}
             >
-              {msg.content}
+              <div
+                className={`max-w-xs rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
+                  msg.role === "user"
+                    ? "bg-purple-600 text-white"
+                    : "bg-slate-800 text-slate-200"
+                }`}
+              >
+                {msg.content}
+              </div>
             </div>
+
+            {msg.proposal && (
+              <div className="mt-2 ml-2">
+                <ProposalDisplay proposal={msg.proposal} />
+              </div>
+            )}
           </div>
         ))}
+
+        {isLoading && (
+          <div className="flex gap-2 justify-start">
+            <div className="bg-slate-800 text-slate-200 rounded-lg px-3 py-2 flex gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-sm">Alfred is thinking...</span>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="border-t border-slate-700 pt-3 flex gap-2">
@@ -335,18 +397,59 @@ function ChatTab() {
           placeholder="Ask Alfred..."
           value={message}
           onChange={(e) => setMessage(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSend()}
-          className="flex-1 rounded border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500"
+          onKeyDown={(e) => e.key === "Enter" && !isLoading && handleSend()}
+          className="flex-1 rounded border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 disabled:opacity-50"
+          disabled={isLoading}
         />
         <Button
           size="sm"
           onClick={handleSend}
-          disabled={!message.trim()}
+          disabled={!message.trim() || isLoading}
           className="bg-purple-600 hover:bg-purple-700"
         >
-          Send
+          {isLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            "Send"
+          )}
         </Button>
       </div>
     </div>
+  );
+}
+
+function ProposalDisplay({ proposal }: { proposal: any }) {
+  if (!proposal) return null;
+
+  return (
+    <Card className="border-purple-600/50 bg-purple-950/20 p-3 text-xs">
+      <h4 className="font-semibold text-purple-300 mb-2">{proposal.title}</h4>
+      <p className="text-slate-300 mb-2">{proposal.description}</p>
+
+      {proposal.rationale && (
+        <p className="text-slate-400 mb-2">💡 {proposal.rationale}</p>
+      )}
+
+      {proposal.risks && proposal.risks.length > 0 && (
+        <div className="mb-2">
+          {proposal.risks.map((risk: string, i: number) => (
+            <p key={i} className="text-red-400">
+              ⚠️ {risk}
+            </p>
+          ))}
+        </div>
+      )}
+
+      {proposal.alternatives && proposal.alternatives.length > 0 && (
+        <div className="text-slate-400">
+          <p className="font-semibold mb-1">🔄 Alternatives:</p>
+          {proposal.alternatives.map((alt: string, i: number) => (
+            <p key={i} className="ml-2">
+              • {alt}
+            </p>
+          ))}
+        </div>
+      )}
+    </Card>
   );
 }

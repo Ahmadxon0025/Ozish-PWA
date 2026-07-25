@@ -4,6 +4,7 @@ import { getSmartAssignment } from "@/lib/alfred/smart-assignment";
 import { predictDeadline } from "@/lib/alfred/deadline-predictor";
 import { buildKnowledgeBase, getPersonalizedInsights, getRiskWarnings } from "@/lib/alfred/knowledge-base";
 import { getUserKnowledge } from "@/lib/alfred/learning-engine";
+import { AlfredChatService, type WorkspaceContext, type ConversationMessage } from "@/lib/alfred/chat-service";
 
 export const alfredRouter = createTRPCRouter({
   getAnalysis: protectedProcedure.query(async ({ ctx }) => {
@@ -265,4 +266,155 @@ export const alfredRouter = createTRPCRouter({
         };
       }
     }),
+
+  chat: protectedProcedure
+    .input(
+      z.object({
+        message: z.string(),
+        conversationHistory: z
+          .array(
+            z.object({
+              role: z.enum(["user", "assistant"]),
+              content: z.string(),
+            })
+          )
+          .optional(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      try {
+        // Build workspace context
+        const context = await buildWorkspaceContextForChat(ctx.supabase);
+
+        // Initialize chat service
+        const chatService = new AlfredChatService();
+
+        // Process message
+        const response = await chatService.chat(
+          input.message,
+          context,
+          input.conversationHistory || []
+        );
+
+        return {
+          success: true,
+          response: response.message,
+          proposal: response.proposal,
+          thinking: response.thinking,
+        };
+      } catch (error) {
+        console.error("Chat error:", error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+          response: "Sorry, I encountered an error processing your message.",
+        };
+      }
+    }),
 });
+
+// Helper function to build workspace context for chat
+async function buildWorkspaceContextForChat(
+  supabase: any
+): Promise<WorkspaceContext> {
+  try {
+    // Get all users
+    const { data: users } = (await supabase
+      .from("users")
+      .select("id, full_name")) as any;
+
+    // Get all tasks
+    const { data: tasks } = (await supabase
+      .from("tasks")
+      .select("id, assigned_to, status")) as any;
+
+    if (!users || !tasks) {
+      return {
+        tasks: {
+          total: 0,
+          byStatus: {},
+          unassigned: 0,
+          overdue: 0,
+        },
+        users: [],
+        metrics: {
+          teamVelocity: 0,
+          completionRate: 0,
+          averageDelay: 0,
+        },
+      };
+    }
+
+    // Count tasks by status
+    const byStatus: Record<string, number> = {};
+    let unassignedCount = 0;
+    let overdueCount = 0;
+
+    tasks.forEach((task: any) => {
+      // Count by status
+      if (task.status) {
+        byStatus[task.status] = (byStatus[task.status] || 0) + 1;
+      }
+
+      // Count unassigned
+      if (!task.assigned_to) {
+        unassignedCount++;
+      }
+    });
+
+    // Count per user
+    const userTaskMap = new Map<string, number>();
+    tasks.forEach((task: any) => {
+      if (task.assigned_to) {
+        const assignee = Array.isArray(task.assigned_to)
+          ? task.assigned_to[0]
+          : task.assigned_to;
+        userTaskMap.set(assignee, (userTaskMap.get(assignee) || 0) + 1);
+      }
+    });
+
+    // Build user list
+    const userList = users.map((user: any) => ({
+      id: user.id,
+      name: user.full_name,
+      taskCount: userTaskMap.get(user.id) || 0,
+      isOverloaded: (userTaskMap.get(user.id) || 0) > 10,
+    }));
+
+    // Calculate metrics
+    const completedCount = byStatus["done"] || 0;
+    const completionRate =
+      tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0;
+
+    return {
+      tasks: {
+        total: tasks.length,
+        byStatus,
+        unassigned: unassignedCount,
+        overdue: overdueCount,
+      },
+      users: userList,
+      metrics: {
+        teamVelocity: tasks.length > 0 ? (tasks.length / 30).toFixed(1) as any : 0,
+        completionRate,
+        averageDelay: 3, // placeholder
+      },
+    };
+  } catch (error) {
+    console.error("Error building workspace context:", error);
+    return {
+      tasks: {
+        total: 0,
+        byStatus: {},
+        unassigned: 0,
+        overdue: 0,
+      },
+      users: [],
+      metrics: {
+        teamVelocity: 0,
+        completionRate: 0,
+        averageDelay: 0,
+      },
+    };
+  }
+}

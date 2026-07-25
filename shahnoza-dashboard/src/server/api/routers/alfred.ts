@@ -304,7 +304,12 @@ export const alfredRouter = createTRPCRouter({
           thinking: response.thinking,
         };
       } catch (error) {
-        console.error("Chat error:", error);
+        console.error("Chat error - Full details:", {
+          error: error,
+          message: error instanceof Error ? error.message : "Unknown error",
+          stack: error instanceof Error ? error.stack : undefined,
+          apiKeySet: !!process.env.ANTHROPIC_API_KEY,
+        });
         return {
           success: false,
           error: error instanceof Error ? error.message : "Unknown error",

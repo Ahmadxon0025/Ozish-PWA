@@ -48,8 +48,12 @@ export class AlfredChatService {
   private client: Anthropic;
 
   constructor(apiKey?: string) {
+    const key = apiKey || process.env.ANTHROPIC_API_KEY;
+    if (!key) {
+      console.error("ANTHROPIC_API_KEY is not set in environment variables");
+    }
     this.client = new Anthropic({
-      apiKey: apiKey || process.env.ANTHROPIC_API_KEY,
+      apiKey: key,
     });
   }
 

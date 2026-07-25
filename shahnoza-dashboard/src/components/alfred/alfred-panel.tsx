@@ -314,7 +314,7 @@ function ChatTab() {
 
     try {
       const conversationHistory = messages.map((m) => ({
-        role: m.role as "user" | "assistant",
+        role: (m.role === "alfred" ? "assistant" : "user") as "user" | "assistant",
         content: m.content,
       }));
 

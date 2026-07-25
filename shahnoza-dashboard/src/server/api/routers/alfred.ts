@@ -6,6 +6,7 @@ import { buildKnowledgeBase, getPersonalizedInsights, getRiskWarnings } from "@/
 import { getUserKnowledge } from "@/lib/alfred/learning-engine";
 import { AlfredChatService, type WorkspaceContext, type ConversationMessage } from "@/lib/alfred/chat-service";
 import { AlfredActionExecutor } from "@/lib/alfred/action-executor";
+import { buildBusinessSnapshot } from "@/lib/alfred/workspace-data";
 
 export const alfredRouter = createTRPCRouter({
   getAnalysis: protectedProcedure.query(async ({ ctx }) => {
@@ -285,8 +286,14 @@ export const alfredRouter = createTRPCRouter({
     )
     .mutation(async ({ input, ctx }) => {
       try {
-        // Build workspace context
+        // Build workspace context (tasks + deterministic business snapshot,
+        // both through the caller's client so RLS decides visibility)
         const context = await buildWorkspaceContextForChat(ctx.supabase);
+        try {
+          context.business = await buildBusinessSnapshot(ctx.supabase);
+        } catch (error) {
+          console.error("Business snapshot failed:", error);
+        }
 
         // Load long-term memories (best-effort — chat works without them)
         const memories = await loadMemories(ctx.admin);
@@ -345,6 +352,43 @@ export const alfredRouter = createTRPCRouter({
         };
       }
     }),
+
+  /** Data-derived suggestion chips for the empty-chat hero. */
+  getSuggestions: protectedProcedure.query(async ({ ctx }) => {
+    const suggestions: string[] = [];
+    try {
+      const today = new Date(Date.now() + 5 * 3600 * 1000)
+        .toISOString()
+        .slice(0, 10);
+      const db = ctx.supabase as any;
+      const [overdueTasks, duePayments] = await Promise.all([
+        db
+          .from("tasks")
+          .select("id", { count: "exact", head: true })
+          .neq("status", "done")
+          .lt("due_date", today),
+        db
+          .from("payments")
+          .select("id", { count: "exact", head: true })
+          .neq("status", "paid")
+          .not("due_date", "is", null)
+          .lte("due_date", today),
+      ]);
+
+      const overdue = overdueTasks.count ?? 0;
+      const due = duePayments.count ?? 0;
+      if (overdue > 0)
+        suggestions.push(`Qaysi vazifalar kechikmoqda? (${overdue} ta)`);
+      if (due > 0)
+        suggestions.push(`Kimlardan to'lov undirishimiz kerak? (${due} ta)`);
+    } catch (error) {
+      console.error("Suggestions failed:", error);
+    }
+
+    suggestions.push("Bu oy moliyaviy holat qanday?");
+    if (suggestions.length < 3) suggestions.push("Jamoa yuklamasi qanday?");
+    return { suggestions: suggestions.slice(0, 3) };
+  }),
 
   /** Latest active conversation for the signed-in user, for panel hydration. */
   getConversation: protectedProcedure.query(async ({ ctx }) => {

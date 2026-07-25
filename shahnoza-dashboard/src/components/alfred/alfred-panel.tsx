@@ -45,11 +45,18 @@ export function AlfredPanel({ onClose }: { onClose: () => void }) {
 
   const [isLoading, setIsLoading] = useState(false);
   const [executingAction, setExecutingAction] = useState<string | null>(null);
+  const [resolvedProposals, setResolvedProposals] = useState<
+    Record<string, "executed" | "dismissed">
+  >({});
   const alfredChat = api.alfred.chat.useMutation();
   const executeActionMutation = api.alfred.executeAction.useMutation();
   const newConversationMutation = api.alfred.newConversation.useMutation();
   const savedConversation = api.alfred.getConversation.useQuery(undefined, {
     staleTime: Infinity,
+    refetchOnWindowFocus: false,
+  });
+  const suggestionsQuery = api.alfred.getSuggestions.useQuery(undefined, {
+    staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
 
@@ -161,22 +168,23 @@ export function AlfredPanel({ onClose }: { onClose: () => void }) {
     }
   };
 
-  const handleExecuteAction = async (
-    proposal: any,
-    messageId: string,
-    confirmed: boolean
-  ) => {
-    if (!confirmed || !conversationId || !proposal?.actions) return;
+  const handleExecuteAction = async (proposal: any, messageId: string) => {
+    if (!conversationId || !proposal?.actions) return;
 
     setExecutingAction(messageId);
 
     try {
+      const results: Array<{ success: boolean; text: string }> = [];
       for (const action of proposal.actions) {
-        await executeActionMutation.mutateAsync({
+        const result: any = await executeActionMutation.mutateAsync({
           conversationId,
           actionId: action.id || `action_${Date.now()}`,
           actionType: action.type,
           data: action.data || {},
+        });
+        results.push({
+          success: !!result.success,
+          text: result.message || result.error || "Bajarildi",
         });
       }
 
@@ -184,25 +192,34 @@ export function AlfredPanel({ onClose }: { onClose: () => void }) {
         ...prev,
         {
           role: "alfred",
-          content: `✅ ${proposal.actions.length} action(s) executed successfully!`,
+          content: results
+            .map((r) => `${r.success ? "✅" : "❌"} ${r.text}`)
+            .join("\n"),
         },
       ]);
+      setResolvedProposals((prev) => ({ ...prev, [messageId]: "executed" }));
 
+      const okCount = results.filter((r) => r.success).length;
       toast({
-        title: "Actions executed",
-        description: `${proposal.actions.length} action(s) have been completed.`,
-        variant: "success",
+        title:
+          okCount === results.length ? "Amallar bajarildi" : "Qisman bajarildi",
+        description: `${okCount}/${results.length} ta amal muvaffaqiyatli`,
+        variant: okCount > 0 ? "success" : "destructive",
       });
     } catch (error) {
       console.error("Action execution error:", error);
       toast({
-        title: "Execution failed",
+        title: "Bajarib bo'lmadi",
         description: error instanceof Error ? error.message : "Unknown error",
         variant: "destructive",
       });
     } finally {
       setExecutingAction(null);
     }
+  };
+
+  const handleDismissProposal = (messageId: string) => {
+    setResolvedProposals((prev) => ({ ...prev, [messageId]: "dismissed" }));
   };
 
   const isEmpty = messages.length === 0;
@@ -259,7 +276,13 @@ export function AlfredPanel({ onClose }: { onClose: () => void }) {
                 javob beradi.
               </p>
               <div className="flex w-full max-w-sm flex-col gap-2">
-                {SUGGESTIONS.map(({ icon: Icon, label }) => (
+                {(suggestionsQuery.data?.suggestions?.length
+                  ? suggestionsQuery.data.suggestions.map((label, i) => ({
+                      icon: SUGGESTIONS[i % SUGGESTIONS.length].icon,
+                      label,
+                    }))
+                  : SUGGESTIONS
+                ).map(({ icon: Icon, label }) => (
                   <button
                     key={label}
                     onClick={() => handleSend(label)}
@@ -296,21 +319,22 @@ export function AlfredPanel({ onClose }: { onClose: () => void }) {
                     </div>
                   </div>
 
-                  {msg.proposal?.actions?.length > 0 && msg.messageId && (
-                    <div className="ml-10 mt-2">
-                      <ProposalDisplay
-                        proposal={msg.proposal}
-                        isExecuting={executingAction === msg.messageId}
-                        onExecute={() =>
-                          handleExecuteAction(
-                            msg.proposal,
-                            msg.messageId!,
-                            true
-                          )
-                        }
-                      />
-                    </div>
-                  )}
+                  {msg.proposal?.actions?.length > 0 &&
+                    msg.messageId &&
+                    !resolvedProposals[msg.messageId] && (
+                      <div className="ml-10 mt-2">
+                        <ProposalDisplay
+                          proposal={msg.proposal}
+                          isExecuting={executingAction === msg.messageId}
+                          onExecute={() =>
+                            handleExecuteAction(msg.proposal, msg.messageId!)
+                          }
+                          onDismiss={() =>
+                            handleDismissProposal(msg.messageId!)
+                          }
+                        />
+                      </div>
+                    )}
                 </div>
               ))}
 
@@ -366,78 +390,59 @@ function ProposalDisplay({
   proposal,
   isExecuting,
   onExecute,
+  onDismiss,
 }: {
   proposal: any;
   isExecuting: boolean;
   onExecute: () => void;
+  onDismiss: () => void;
 }) {
   if (!proposal) return null;
 
   return (
     <Card className="border-purple-600/50 bg-purple-950/20 p-3 text-xs space-y-2">
       <h4 className="font-semibold text-purple-300">{proposal.title}</h4>
-      <p className="text-slate-300">{proposal.description}</p>
-
+      {proposal.description && (
+        <p className="text-slate-300">{proposal.description}</p>
+      )}
       {proposal.rationale && (
         <p className="text-slate-400">💡 {proposal.rationale}</p>
       )}
 
-      {proposal.risks && proposal.risks.length > 0 && (
-        <div>
-          {proposal.risks.map((risk: string, i: number) => (
-            <p key={i} className="text-red-400">
-              ⚠️ {risk}
-            </p>
-          ))}
-        </div>
-      )}
+      <div className="space-y-1">
+        {proposal.actions.map((action: any) => (
+          <p key={action.id} className="text-slate-300">
+            • {action.label}
+          </p>
+        ))}
+      </div>
 
-      {proposal.alternatives && proposal.alternatives.length > 0 && (
-        <div className="text-slate-400">
-          <p className="font-semibold mb-1">🔄 Alternatives:</p>
-          {proposal.alternatives.map((alt: string, i: number) => (
-            <p key={i} className="ml-2">
-              • {alt}
-            </p>
-          ))}
-        </div>
-      )}
-
-      {proposal.actions && proposal.actions.length > 0 && (
-        <div className="flex gap-2 pt-2">
-          <Button
-            size="sm"
-            className="flex-1 bg-green-600 hover:bg-green-700 text-xs h-8"
-            onClick={onExecute}
-            disabled={isExecuting}
-          >
-            {isExecuting ? (
-              <>
-                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                Executing...
-              </>
-            ) : (
-              "✅ Go ahead"
-            )}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="text-xs h-8"
-            disabled={isExecuting}
-          >
-            🔄 Modify
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="text-xs h-8"
-            disabled={isExecuting}
-          >
-            ❌ Cancel
-          </Button>
-        </div>
-      )}
+      <div className="flex gap-2 pt-2">
+        <Button
+          size="sm"
+          className="flex-1 bg-green-600 hover:bg-green-700 text-xs h-8"
+          onClick={onExecute}
+          disabled={isExecuting}
+        >
+          {isExecuting ? (
+            <>
+              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+              Bajarilmoqda...
+            </>
+          ) : (
+            "✅ Bajarish"
+          )}
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="text-xs h-8"
+          onClick={onDismiss}
+          disabled={isExecuting}
+        >
+          ❌ Bekor qilish
+        </Button>
+      </div>
     </Card>
   );
 }

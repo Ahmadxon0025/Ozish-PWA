@@ -75,6 +75,24 @@ export async function GET(request: NextRequest) {
     // non-fatal
   }
 
+  // Alfred morning brief — AI-narrated synthesis of cash, receivables, and
+  // overdue tasks, informed by Alfred's long-term memory. Numbers are
+  // computed deterministically; the model only narrates. Non-fatal.
+  let brief = false;
+  if (isAiConfigured()) {
+    try {
+      const { buildAlfredBrief } = await import("@/lib/ai/alfred-brief");
+      const text = await buildAlfredBrief();
+      if (text) {
+        const { sendMessage, tasksChatId } = await import("@/lib/telegram/bot");
+        await sendMessage(tasksChatId(), `🎩 *ALFRED ERTALABKI BRIF*\n\n${text}`);
+        brief = true;
+      }
+    } catch {
+      // non-fatal
+    }
+  }
+
   // Weekly AI summary on Mondays (04:00 UTC = 09:00 Tashkent) — folded into the
   // daily cron to stay within the Hobby-plan 2-cron limit. Aggregates only.
   let weekly = false;
@@ -92,5 +110,5 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, sent, reminders, collection, weekly });
+  return NextResponse.json({ ok: true, sent, reminders, collection, brief, weekly });
 }

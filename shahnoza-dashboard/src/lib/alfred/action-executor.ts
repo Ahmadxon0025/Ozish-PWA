@@ -81,97 +81,171 @@ export class AlfredActionExecutor {
     }
   }
 
+  /** Find a team member by (partial) name. Errors are returned, not thrown. */
+  private async resolveUserByName(
+    name: string
+  ): Promise<{ id: string; full_name: string } | { error: string }> {
+    const { data: users } = await this.supabase
+      .from("users")
+      .select("id, full_name")
+      .ilike("full_name", `%${name.trim()}%`)
+      .limit(5);
+
+    if (!users || users.length === 0) {
+      return { error: `"${name}" ismli foydalanuvchi topilmadi` };
+    }
+    if (users.length === 1) return users[0];
+
+    const exact = users.find(
+      (u: any) =>
+        (u.full_name ?? "").trim().toLowerCase() === name.trim().toLowerCase()
+    );
+    if (exact) return exact;
+    return {
+      error: `"${name}" bo'yicha bir nechta foydalanuvchi topildi: ${users
+        .map((u: any) => u.full_name)
+        .join(", ")}. Aniqroq ism kerak.`,
+    };
+  }
+
+  /** Find an open task by (partial) title. Errors are returned, not thrown. */
+  private async resolveTaskByTitle(
+    title: string
+  ): Promise<{ id: string; title: string; assigned_to: any } | { error: string }> {
+    const { data: tasks } = await this.supabase
+      .from("tasks")
+      .select("id, title, assigned_to, status")
+      .ilike("title", `%${title.trim()}%`)
+      .neq("status", "done")
+      .limit(5);
+
+    if (!tasks || tasks.length === 0) {
+      return { error: `"${title}" nomli ochiq vazifa topilmadi` };
+    }
+    if (tasks.length === 1) return tasks[0];
+
+    const exact = tasks.find(
+      (t: any) =>
+        (t.title ?? "").trim().toLowerCase() === title.trim().toLowerCase()
+    );
+    if (exact) return exact;
+    return {
+      error: `"${title}" bo'yicha bir nechta vazifa topildi: ${tasks
+        .map((t: any) => `"${t.title}"`)
+        .join(", ")}. Aniqroq nom kerak.`,
+    };
+  }
+
   private async executeAssign(data: {
-    taskIds: string[];
-    assigneeId: string;
+    task_title?: string;
+    assignee_name?: string;
+    taskIds?: string[];
+    assigneeId?: string;
   }): Promise<ActionResult> {
     try {
-      const { taskIds, assigneeId } = data;
+      // Resolve by name (how the model proposes) or accept raw ids
+      let taskIds = data.taskIds ?? [];
+      let assigneeId = data.assigneeId ?? "";
+      let assigneeLabel = assigneeId;
 
-      if (!taskIds || !assigneeId) {
-        return {
-          success: false,
-          message: "Missing task IDs or assignee ID",
-        };
+      if (data.task_title) {
+        const task = await this.resolveTaskByTitle(data.task_title);
+        if ("error" in task) return { success: false, message: task.error };
+        taskIds = [task.id];
+      }
+      if (data.assignee_name) {
+        const user = await this.resolveUserByName(data.assignee_name);
+        if ("error" in user) return { success: false, message: user.error };
+        assigneeId = user.id;
+        assigneeLabel = user.full_name;
       }
 
-      // For each task, update the assigned_to field
+      if (taskIds.length === 0 || !assigneeId) {
+        return { success: false, message: "Vazifa yoki mas'ul aniqlanmadi" };
+      }
+
       for (const taskId of taskIds) {
         const { data: task } = await this.supabase
           .from("tasks")
           .select("assigned_to")
           .eq("id", taskId)
           .single();
-
-        if (!task) {
-          console.warn(`Task ${taskId} not found`);
-          continue;
-        }
+        if (!task) continue;
 
         let assignedTo = task.assigned_to || [];
-        if (typeof assignedTo === "string") {
-          assignedTo = [assignedTo];
-        }
-        if (!Array.isArray(assignedTo)) {
-          assignedTo = [];
-        }
+        if (typeof assignedTo === "string") assignedTo = [assignedTo];
+        if (!Array.isArray(assignedTo)) assignedTo = [];
+        if (!assignedTo.includes(assigneeId)) assignedTo.push(assigneeId);
 
-        if (!assignedTo.includes(assigneeId)) {
-          assignedTo.push(assigneeId);
-        }
-
-        await this.supabase
+        const { error } = await this.supabase
           .from("tasks")
           .update({ assigned_to: assignedTo })
           .eq("id", taskId);
+        if (error) throw error;
       }
 
       return {
         success: true,
-        message: `Assigned ${taskIds.length} task(s) to user ${assigneeId}`,
+        message: `${taskIds.length} ta vazifa ${assigneeLabel}ga biriktirildi`,
         data: { taskCount: taskIds.length, assigneeId },
       };
     } catch (error) {
       return {
         success: false,
-        message: "Failed to assign tasks",
+        message: "Vazifani biriktirib bo'lmadi",
         error: error instanceof Error ? error.message : "Unknown error",
       };
     }
   }
 
   private async executeUpdate(data: {
-    taskId: string;
+    task_title?: string;
+    taskId?: string;
     updates: Record<string, any>;
   }): Promise<ActionResult> {
     try {
-      const { taskId, updates } = data;
+      let taskId = data.taskId ?? "";
+      let taskLabel = taskId;
 
-      if (!taskId || !updates) {
-        return {
-          success: false,
-          message: "Missing task ID or updates",
-        };
+      if (data.task_title) {
+        const task = await this.resolveTaskByTitle(data.task_title);
+        if ("error" in task) return { success: false, message: task.error };
+        taskId = task.id;
+        taskLabel = task.title;
+      }
+
+      if (!taskId || !data.updates) {
+        return { success: false, message: "Vazifa yoki o'zgarish aniqlanmadi" };
+      }
+
+      // Whitelist the fields the model may change
+      const allowed = ["status", "due_date", "priority"];
+      const updates: Record<string, any> = {};
+      for (const key of allowed) {
+        if (data.updates[key] !== undefined) updates[key] = data.updates[key];
+      }
+      if (Object.keys(updates).length === 0) {
+        return { success: false, message: "Ruxsat etilgan o'zgarish yo'q" };
+      }
+      if (updates.status === "done") {
+        updates.completed_at = new Date().toISOString();
       }
 
       const { error } = await this.supabase
         .from("tasks")
         .update(updates)
         .eq("id", taskId);
-
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
       return {
         success: true,
-        message: `Updated task ${taskId}`,
+        message: `"${taskLabel}" yangilandi (${Object.keys(updates).join(", ")})`,
         data: { taskId, updates },
       };
     } catch (error) {
       return {
         success: false,
-        message: "Failed to update task",
+        message: "Vazifani yangilab bo'lmadi",
         error: error instanceof Error ? error.message : "Unknown error",
       };
     }
@@ -180,44 +254,55 @@ export class AlfredActionExecutor {
   private async executeCreate(data: {
     title: string;
     description?: string;
+    assignee_name?: string;
     assignedTo?: string;
+    due_date?: string;
     dueDate?: string;
+    priority?: string;
   }): Promise<ActionResult> {
     try {
-      const { title, description, assignedTo, dueDate } = data;
-
+      const title = data.title;
       if (!title) {
-        return {
-          success: false,
-          message: "Missing task title",
-        };
+        return { success: false, message: "Vazifa nomi ko'rsatilmagan" };
+      }
+
+      let assigneeId = data.assignedTo ?? null;
+      let assigneeLabel: string | null = null;
+      if (data.assignee_name) {
+        const user = await this.resolveUserByName(data.assignee_name);
+        if ("error" in user) return { success: false, message: user.error };
+        assigneeId = user.id;
+        assigneeLabel = user.full_name;
+      }
+
+      const allowedPriorities = new Set(["low", "normal", "high", "urgent"]);
+      const insert: Record<string, any> = {
+        title,
+        description: data.description || "",
+        assigned_to: assigneeId ? [assigneeId] : [],
+        due_date: data.due_date ?? data.dueDate ?? null,
+        status: "todo",
+      };
+      if (data.priority && allowedPriorities.has(data.priority)) {
+        insert.priority = data.priority;
       }
 
       const { data: task, error } = await this.supabase
         .from("tasks")
-        .insert({
-          title,
-          description: description || "",
-          assigned_to: assignedTo ? [assignedTo] : [],
-          due_date: dueDate,
-          status: "todo",
-        })
+        .insert(insert)
         .select()
         .single();
-
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
       return {
         success: true,
-        message: `Created task: ${title}`,
+        message: `Vazifa yaratildi: "${title}"${assigneeLabel ? ` → ${assigneeLabel}` : ""}`,
         data: { taskId: task?.id, title },
       };
     } catch (error) {
       return {
         success: false,
-        message: "Failed to create task",
+        message: "Vazifa yaratib bo'lmadi",
         error: error instanceof Error ? error.message : "Unknown error",
       };
     }

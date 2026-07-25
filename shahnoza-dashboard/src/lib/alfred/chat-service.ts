@@ -1,4 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
+import {
+  renderBusinessSnapshot,
+  type BusinessSnapshot,
+} from "./workspace-data";
 
 export interface TaskSummary {
   title: string;
@@ -24,6 +28,8 @@ export interface WorkspaceContext {
   taskList: TaskSummary[];
   /** Long-term learnings loaded from alfred_memories, newest first. */
   memories?: MemoryEntry[];
+  /** Deterministic finance/sales snapshot, RLS-filtered per requesting user. */
+  business?: BusinessSnapshot;
   users: Array<{
     id: string;
     name: string;
@@ -113,14 +119,12 @@ export class AlfredChatService {
         throw new Error("Model returned no text content");
       }
 
-      // Only surface a proposal card when there are executable actions —
-      // otherwise it just duplicates the message text.
-      const proposal = this.parseProposal(fullText);
+      // Pull the structured action block (if any) out of the reply
+      const { proposal, cleanedText } = this.parseActionBlock(fullText);
 
       return {
-        message: fullText,
-        proposal:
-          proposal && proposal.actions.length > 0 ? proposal : undefined,
+        message: cleanedText,
+        proposal: proposal || undefined,
       };
     } catch (error) {
       console.error("Alfred chat error:", error);
@@ -139,6 +143,10 @@ export class AlfredChatService {
           `${u.name} (${u.taskCount} tasks${u.isOverloaded ? " - OVERLOADED" : ""})`
       )
       .join(", ");
+
+    const businessLines = context.business
+      ? renderBusinessSnapshot(context.business)
+      : "(no business data loaded)";
 
     const memoryLines =
       context.memories && context.memories.length > 0
@@ -188,6 +196,9 @@ Team Metrics:
 OPEN TASKS (most recent first):
 ${taskLines}
 
+BUSINESS SNAPSHOT (all figures computed deterministically by the app — this is your ONLY source of numbers):
+${businessLines}
+
 LEARNED MEMORY (long-term knowledge accumulated from past conversations — treat as reliable context):
 ${memoryLines}
 
@@ -201,6 +212,29 @@ IMPORTANT RULES:
 7. BE HONEST: Say if something isn't possible
 8. ANSWER in the same language the user writes in (Uzbek or English)
 9. ANSWER whatever is asked using the workspace data above — cite real task titles, assignees, and due dates
+
+NUMBERS — NON-NEGOTIABLE:
+- Every figure you state must appear verbatim in the BUSINESS SNAPSHOT or task data above. Quote it; never compute, extrapolate, or estimate a number yourself.
+- If a section says "(not visible to this user)", say you don't have access to that data — do not guess.
+- If the user asks for a number that isn't in your context, say exactly which data you'd need.
+
+ACTIONS — how you get things done:
+When the user explicitly asks you to create, assign, or update a task, describe what you'll do in your reply, then append EXACTLY ONE action block at the very end of your message, in this format:
+
+<<<ACTION
+{"title":"Short proposal title","description":"One line describing what will happen","rationale":"Why this makes sense","actions":[{"id":"a1","type":"create","label":"Vazifa yaratish","data":{"title":"...","description":"...","assignee_name":"...","due_date":"YYYY-MM-DD","priority":"normal"}}]}
+ACTION>>>
+
+Action types and their data fields:
+- "create": {"title", "description"?, "assignee_name"?, "due_date"?, "priority"? (low|normal|high|urgent)}
+- "assign": {"task_title": exact title from OPEN TASKS, "assignee_name": exact team member name}
+- "update": {"task_title": exact title from OPEN TASKS, "updates": {"status"? (todo|in_progress|review|done), "due_date"?, "priority"?}}
+
+Action rules:
+- Only emit a block when the user clearly asked for the change — never for questions or analysis.
+- Nothing runs until the user clicks approve, so phrase your reply as a proposal.
+- Use exact task titles and team member names from the context above.
+- NEVER emit actions that touch money, sales, or finance records — tasks only.
 
 RESPONSE STYLE:
 - Start with direct answer or analysis
@@ -225,7 +259,7 @@ What's your preference?"
 
 NEVER:
 - Make up data or statistics
-- Promise to execute actions (just analyze/suggest)
+- Claim an action is done before the user approved it
 - Make personal judgments about team members
 - Ignore the workspace context provided`;
   }
@@ -310,40 +344,52 @@ Respond with [] if nothing new is worth remembering.`,
     }
   }
 
-  private parseProposal(text: string): AlfredProposal | null {
-    // Look for proposal markers in the response
-    const hasProposalKeywords = /suggest|recommend|propose|should|could|option|alternative/i.test(
-      text
-    );
-
-    if (!hasProposalKeywords) {
-      return null;
+  /**
+   * Extract the <<<ACTION ... ACTION>>> block the model appends when the user
+   * asked for a change. Returns the proposal (or null) plus the message text
+   * with the block stripped, so raw JSON never reaches the UI.
+   */
+  private parseActionBlock(text: string): {
+    proposal: AlfredProposal | null;
+    cleanedText: string;
+  } {
+    const match = text.match(/<<<ACTION\s*([\s\S]*?)\s*ACTION>>>/);
+    if (!match) {
+      return { proposal: null, cleanedText: text };
     }
 
-    // Extract sections
-    const titleMatch = text.match(/^[📊🎯💡]?\s*([^:\n]+)(?:\n|:)/);
-    const title = titleMatch ? titleMatch[1].trim() : "Analysis & Recommendation";
+    const cleanedText = text.replace(match[0], "").trim();
 
-    // Simple parsing of risks and alternatives
-    const risks: string[] = [];
-    const riskMatches = text.match(/⚠️\s*([^⚠️\n]+)/g) || [];
-    riskMatches.forEach((match) => {
-      risks.push(match.replace("⚠️", "").trim());
-    });
+    try {
+      const parsed = JSON.parse(match[1]);
+      const allowedTypes = new Set(["assign", "update", "create", "notify"]);
+      const actions = (Array.isArray(parsed.actions) ? parsed.actions : [])
+        .filter((a: any) => a && allowedTypes.has(a.type))
+        .map((a: any, i: number) => ({
+          id: typeof a.id === "string" ? a.id : `a${i + 1}`,
+          type: a.type,
+          label: typeof a.label === "string" ? a.label : a.type,
+          data: a.data && typeof a.data === "object" ? a.data : {},
+        }));
 
-    const alternatives: string[] = [];
-    const altMatches = text.match(/🔄\s*Alternative[^:]*:\s*([^🔄⚠️\n]+)/g) || [];
-    altMatches.forEach((match) => {
-      alternatives.push(match.replace("🔄", "").replace(/Alternative[^:]*:/, "").trim());
-    });
+      if (actions.length === 0) {
+        return { proposal: null, cleanedText };
+      }
 
-    return {
-      title,
-      description: text.substring(0, 200),
-      actions: [],
-      rationale: "Based on current team workload and capacity",
-      risks: risks.length > 0 ? risks : undefined,
-      alternatives: alternatives.length > 0 ? alternatives : undefined,
-    };
+      return {
+        proposal: {
+          title: typeof parsed.title === "string" ? parsed.title : "Taklif",
+          description:
+            typeof parsed.description === "string" ? parsed.description : "",
+          actions,
+          rationale:
+            typeof parsed.rationale === "string" ? parsed.rationale : "",
+        },
+        cleanedText,
+      };
+    } catch (error) {
+      console.error("Action block parse failed:", error);
+      return { proposal: null, cleanedText };
+    }
   }
 }

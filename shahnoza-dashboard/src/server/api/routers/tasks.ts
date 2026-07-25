@@ -617,6 +617,13 @@ export const tasksRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      // Get current task for deadline change detection
+      const { data: currentTask } = await ctx.supabase
+        .from("tasks")
+        .select("title, due_date, status, assigned_to, created_by")
+        .eq("id", input.id)
+        .maybeSingle();
+
       const patch: Database["public"]["Tables"]["tasks"]["Update"] = {};
       if (input.title !== undefined) patch.title = input.title;
       if (input.description !== undefined) patch.description = input.description;
@@ -631,6 +638,59 @@ export const tasksRouter = createTRPCRouter({
       if (input.spaceId !== undefined) patch.space_id = input.spaceId;
       const { error } = await ctx.supabase.from("tasks").update(patch).eq("id", input.id);
       if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+
+      // Notify about deadline changes (if task is not done and deadline changed)
+      if (input.dueDate !== undefined && currentTask?.status !== "done") {
+        const oldDate = currentTask?.due_date;
+        const newDate = input.dueDate;
+        if (oldDate !== newDate && oldDate && newDate) {
+          const oldTime = new Date(oldDate).getTime();
+          const newTime = new Date(newDate).getTime();
+
+          try {
+            const { notifyDeadlineMissed, notifyDeadlineExtended, notifyDeadlineShortened } =
+              await import("@/lib/task-notifications");
+
+            if (newTime < oldTime) {
+              // Deadline moved earlier
+              const now = new Date().getTime();
+              if (now > newTime) {
+                // New deadline already passed = missed deadline
+                notifyDeadlineMissed(
+                  input.id,
+                  currentTask.title,
+                  { id: ctx.appUser.id, name: ctx.appUser.full_name || "User" },
+                  currentTask.assigned_to ?? currentTask.created_by,
+                  oldDate,
+                  newDate
+                ).catch((err) => console.error("❌ Missed deadline notification error:", err));
+              } else {
+                // Deadline shortened but not yet passed
+                notifyDeadlineShortened(
+                  input.id,
+                  currentTask.title,
+                  { id: ctx.appUser.id, name: ctx.appUser.full_name || "User" },
+                  currentTask.assigned_to ?? currentTask.created_by,
+                  oldDate,
+                  newDate
+                ).catch((err) => console.error("❌ Deadline shortened notification error:", err));
+              }
+            } else if (newTime > oldTime) {
+              // Deadline extended
+              notifyDeadlineExtended(
+                input.id,
+                currentTask.title,
+                { id: ctx.appUser.id, name: ctx.appUser.full_name || "User" },
+                currentTask.assigned_to ?? currentTask.created_by,
+                oldDate,
+                newDate
+              ).catch((err) => console.error("❌ Deadline extended notification error:", err));
+            }
+          } catch (err) {
+            console.error("❌ Error importing notification functions:", err);
+          }
+        }
+      }
 
       // Keep the assignee rows in sync when the owner or collaborators change.
       if (input.collaboratorIds !== undefined || input.assignedTo !== undefined) {

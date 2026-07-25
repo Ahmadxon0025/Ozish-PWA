@@ -60,6 +60,10 @@ export const env = {
   VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY ?? "",
   // "mailto:you@example.com" — required by the push services as a contact.
   VAPID_SUBJECT: process.env.VAPID_SUBJECT ?? "mailto:admin@shahnoza.app",
+  // Yandex SpeechKit for TTS (text-to-speech). Enables voice notifications for
+  // task completion and deadline changes. Features no-op without both.
+  YANDEX_API_KEY: process.env.YANDEX_API_KEY ?? "",
+  YANDEX_FOLDER_ID: process.env.YANDEX_FOLDER_ID ?? "",
 } as const;
 
 export const isSupabaseConfigured = () =>
@@ -80,3 +84,6 @@ export const isTranscribeConfigured = () => Boolean(env.OPENAI_API_KEY);
 
 export const isPushConfigured = () =>
   Boolean(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY);
+
+export const isYandexTtsConfigured = () =>
+  Boolean(env.YANDEX_API_KEY && env.YANDEX_FOLDER_ID);

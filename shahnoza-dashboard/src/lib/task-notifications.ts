@@ -1,4 +1,6 @@
 import { requireAdminClient } from "@/lib/supabase/admin";
+import { isYandexTtsConfigured } from "@/lib/env";
+import { textToSpeech } from "@/lib/yandex-tts";
 
 const ON_TIME_MESSAGES = [
   "Afarin [NAME]! Vazifani muddatida tugattingiz. Professionalligi uchun tashakkur. Shuningdek davom eting! 🎯",
@@ -122,8 +124,20 @@ export async function notifyDeadlineMissed(
       .replace("[OLD_DATE]", formatDate(oldDueDate))
       .replace("[NEW_DATE]", formatDate(newDueDate));
 
-    const tgMessage = `${message}\n\n📌 Task: ${taskTitle}\n👤 Owner: @${ownerName}\n⚠️ Reason: Deadline moved earlier after passing`;
-    await notifyTelegram(settings.value, tgMessage);
+    const caption = `${message}\n\n📌 Task: ${taskTitle}\n👤 Owner: @${ownerName}\n⚠️ Reason: Deadline moved earlier after passing`;
+
+    // Try voice message if TTS is configured
+    if (isYandexTtsConfigured()) {
+      try {
+        const audio = await textToSpeech(message);
+        await notifyTelegramVoice(settings.value, audio, caption);
+      } catch (ttsError) {
+        console.error("❌ TTS failed, falling back to text:", ttsError);
+        await notifyTelegram(settings.value, caption);
+      }
+    } else {
+      await notifyTelegram(settings.value, caption);
+    }
   } catch (error) {
     console.error("❌ Missed deadline notification error:", error);
   }
@@ -164,8 +178,19 @@ export async function notifyDeadlineExtended(
       .replace("[NEW_DATE]", formatDate(newDueDate))
       .replace("[DAYS_EXTENDED]", daysExtended.toString());
 
-    const tgMessage = `${message}\n\n📌 Task: ${taskTitle}\n👤 Owner: @${ownerName}\n✨ Extra time: +${daysExtended} days`;
-    await notifyTelegram(settings.value, tgMessage);
+    const caption = `${message}\n\n📌 Task: ${taskTitle}\n👤 Owner: @${ownerName}\n✨ Extra time: +${daysExtended} days`;
+
+    if (isYandexTtsConfigured()) {
+      try {
+        const audio = await textToSpeech(message);
+        await notifyTelegramVoice(settings.value, audio, caption);
+      } catch (ttsError) {
+        console.error("❌ TTS failed, falling back to text:", ttsError);
+        await notifyTelegram(settings.value, caption);
+      }
+    } else {
+      await notifyTelegram(settings.value, caption);
+    }
   } catch (error) {
     console.error("❌ Deadline extended notification error:", error);
   }
@@ -206,8 +231,19 @@ export async function notifyDeadlineShortened(
       .replace("[NEW_DATE]", formatDate(newDueDate))
       .replace("[DAYS_SHORTENED]", daysShortenend.toString());
 
-    const tgMessage = `${message}\n\n📌 Task: ${taskTitle}\n👤 Owner: @${ownerName}\n⏱️ Deadline moved: -${daysShortenend} days`;
-    await notifyTelegram(settings.value, tgMessage);
+    const caption = `${message}\n\n📌 Task: ${taskTitle}\n👤 Owner: @${ownerName}\n⏱️ Deadline moved: -${daysShortenend} days`;
+
+    if (isYandexTtsConfigured()) {
+      try {
+        const audio = await textToSpeech(message);
+        await notifyTelegramVoice(settings.value, audio, caption);
+      } catch (ttsError) {
+        console.error("❌ TTS failed, falling back to text:", ttsError);
+        await notifyTelegram(settings.value, caption);
+      }
+    } else {
+      await notifyTelegram(settings.value, caption);
+    }
   } catch (error) {
     console.error("❌ Deadline shortened notification error:", error);
   }
@@ -250,8 +286,19 @@ export async function notifyFinishedVeryLate(
       .replace("[NAME]", completedBy.name || "Friend")
       .replace("[DAYS_LATE]", daysLate.toString());
 
-    const tgMessage = `${message}\n\n📌 Task: ${taskTitle}\n👤 Owner: @${ownerName}\n✅ Completed by: @${completedBy.name || "unknown"}\n⏳ Days late: ${daysLate}`;
-    await notifyTelegram(settings.value, tgMessage);
+    const caption = `${message}\n\n📌 Task: ${taskTitle}\n👤 Owner: @${ownerName}\n✅ Completed by: @${completedBy.name || "unknown"}\n⏳ Days late: ${daysLate}`;
+
+    if (isYandexTtsConfigured()) {
+      try {
+        const audio = await textToSpeech(message);
+        await notifyTelegramVoice(settings.value, audio, caption);
+      } catch (ttsError) {
+        console.error("❌ TTS failed, falling back to text:", ttsError);
+        await notifyTelegram(settings.value, caption);
+      }
+    } else {
+      await notifyTelegram(settings.value, caption);
+    }
   } catch (error) {
     console.error("❌ Finished very late notification error:", error);
   }
@@ -304,9 +351,19 @@ export async function notifyTaskCompletion(
     const template = getRandomMessage(messageList);
     const message = template.replace("[NAME]", completedBy.name || "Friend");
 
-    const tgMessage = `${message}\n\n📌 Task: ${taskTitle}\n👤 Owner: @${ownerName || "unknown"}\n✅ Completed by: @${completedBy.name || "unknown"}\n🔗 Status: ${status}`;
+    const caption = `${message}\n\n📌 Task: ${taskTitle}\n👤 Owner: @${ownerName || "unknown"}\n✅ Completed by: @${completedBy.name || "unknown"}\n🔗 Status: ${status}`;
 
-    await notifyTelegram(groupId, tgMessage);
+    if (isYandexTtsConfigured()) {
+      try {
+        const audio = await textToSpeech(message);
+        await notifyTelegramVoice(groupId, audio, caption);
+      } catch (ttsError) {
+        console.error("❌ TTS failed, falling back to text:", ttsError);
+        await notifyTelegram(groupId, caption);
+      }
+    } else {
+      await notifyTelegram(groupId, caption);
+    }
   } catch (error) {
     console.error("❌ Task notification error:", error);
   }
@@ -334,6 +391,33 @@ async function notifyTelegram(chatId: string, message: string) {
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(`Telegram API error: ${response.statusText} - ${errorText}`);
+  }
+
+  return await response.json();
+}
+
+async function notifyTelegramVoice(chatId: string, audioBuffer: Buffer, caption: string) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) {
+    throw new Error("TELEGRAM_BOT_TOKEN not set");
+  }
+
+  const url = `https://api.telegram.org/bot${token}/sendVoice`;
+
+  const formData = new FormData();
+  formData.append("chat_id", chatId);
+  formData.append("voice", new Blob([audioBuffer], { type: "audio/ogg" }), "voice.ogg");
+  formData.append("caption", caption);
+  formData.append("parse_mode", "HTML");
+
+  const response = await fetch(url, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Telegram Voice API error: ${response.statusText} - ${errorText}`);
   }
 
   return await response.json();

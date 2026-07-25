@@ -682,18 +682,31 @@ export const tasksRouter = createTRPCRouter({
       console.log("✅ Task status updated in DB", { taskId: input.id, newStatus: input.status });
 
       // Send completion notification
-      console.log("🔍 Checking if should send notification: status =", input.status, "is done?", input.status === "done");
-      if (input.status === "done") {
-        console.log("🔔 Sending notification for task:", current.title);
-        const { notifyTaskCompletion } = await import("@/lib/task-notifications");
-        notifyTaskCompletion(
-          input.id,
-          current.title,
-          { id: ctx.appUser.id, name: ctx.appUser.full_name || "User" },
-          current.assigned_to ?? current.created_by,
-          current.due_date,
-          now
-        ).catch((err) => console.error("❌ Notification error:", err));
+      const statusStr = String(input.status);
+      const isDone = statusStr === "done";
+      console.error(`🔥 DEBUG: input.status="${input.status}" type=${typeof input.status} isDone=${isDone}`);
+
+      if (isDone) {
+        console.error("🚀 NOTIFICATION CODE REACHED - marking task:", current.title);
+        try {
+          const { notifyTaskCompletion } = await import("@/lib/task-notifications");
+          console.error("✅ Imported notifyTaskCompletion");
+
+          const result = await notifyTaskCompletion(
+            input.id,
+            current.title,
+            { id: ctx.appUser.id, name: ctx.appUser.full_name || "User" },
+            current.assigned_to ?? current.created_by,
+            current.due_date,
+            now
+          );
+          console.error("✅ notifyTaskCompletion completed, result:", result);
+        } catch (notifErr) {
+          console.error("❌ Notification function threw error:", notifErr);
+          throw notifErr;
+        }
+      } else {
+        console.error(`🔥 NOT SENDING NOTIFICATION - status is "${input.status}", not "done"`);
       }
 
       // Recurring task completed → spawn the next occurrence (carry assignees).

@@ -4,6 +4,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { BottomNav } from "@/components/layout/bottom-nav";
 import { QuickAdd } from "@/components/layout/quick-add";
+import { AlfredButton } from "@/components/alfred/alfred-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { SessionUser } from "@/components/layout/user-menu";
 
@@ -55,6 +56,7 @@ export default async function DashboardLayout({
         <main className="flex-1 overflow-y-auto px-4 py-5 pb-28 lg:px-6 lg:pb-6">{children}</main>
         <BottomNav role={appUser.role} />
         <QuickAdd />
+        <AlfredButton />
       </div>
     </div>
   );

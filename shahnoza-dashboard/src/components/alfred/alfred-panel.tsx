@@ -9,6 +9,7 @@ import {
   Users,
   ClipboardList,
   TrendingUp,
+  Plus,
 } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { Button } from "@/components/ui/button";
@@ -46,9 +47,38 @@ export function AlfredPanel({ onClose }: { onClose: () => void }) {
   const [executingAction, setExecutingAction] = useState<string | null>(null);
   const alfredChat = api.alfred.chat.useMutation();
   const executeActionMutation = api.alfred.executeAction.useMutation();
+  const newConversationMutation = api.alfred.newConversation.useMutation();
+  const savedConversation = api.alfred.getConversation.useQuery(undefined, {
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+  });
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const hydratedRef = useRef(false);
+
+  // Restore the saved conversation once, when the panel opens
+  useEffect(() => {
+    if (hydratedRef.current) return;
+    const conv = savedConversation.data?.conversation;
+    if (!conv || conv.messages.length === 0) return;
+    hydratedRef.current = true;
+    setConversationId(conv.id);
+    setMessages(
+      conv.messages.map((m) => ({
+        role: m.role === "assistant" ? ("alfred" as const) : ("user" as const),
+        content: m.content,
+      }))
+    );
+  }, [savedConversation.data]);
+
+  const handleNewChat = () => {
+    hydratedRef.current = true; // never re-hydrate the archived conversation
+    setMessages([]);
+    setConversationId(null);
+    newConversationMutation.mutate();
+    inputRef.current?.focus();
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -83,10 +113,20 @@ export function AlfredPanel({ onClose }: { onClose: () => void }) {
 
       const response = await alfredChat.mutateAsync({
         message: userMsg,
+        conversationId: conversationId ?? undefined,
         conversationHistory,
       });
 
       if (response.success) {
+        if (response.conversationId) {
+          setConversationId(response.conversationId);
+        }
+        if (response.learned && response.learned > 0) {
+          toast({
+            title: "🧠 Alfred esladi",
+            description: `${response.learned} ta yangi ma'lumot xotiraga saqlandi`,
+          });
+        }
         const messageId = `msg_${Date.now()}_${Math.random()}`;
         setMessages((prev) => [
           ...prev,
@@ -186,12 +226,22 @@ export function AlfredPanel({ onClose }: { onClose: () => void }) {
             <h2 className="font-semibold text-white">Alfred</h2>
             <span className="text-xs text-slate-400">Smart Assistant</span>
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleNewChat}
+              title="Yangi suhbat"
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+            >
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Yangi suhbat</span>
+            </button>
+            <button
+              onClick={onClose}
+              className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         {/* Messages / hero */}

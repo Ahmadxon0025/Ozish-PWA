@@ -272,6 +272,7 @@ export const alfredRouter = createTRPCRouter({
     .input(
       z.object({
         message: z.string(),
+        conversationId: z.string().uuid().optional(),
         conversationHistory: z
           .array(
             z.object({
@@ -287,6 +288,10 @@ export const alfredRouter = createTRPCRouter({
         // Build workspace context
         const context = await buildWorkspaceContextForChat(ctx.supabase);
 
+        // Load long-term memories (best-effort — chat works without them)
+        const memories = await loadMemories(ctx.admin);
+        context.memories = memories;
+
         // Initialize chat service
         const chatService = new AlfredChatService();
 
@@ -297,11 +302,34 @@ export const alfredRouter = createTRPCRouter({
           input.conversationHistory || []
         );
 
+        // Persist the exchange and extract new learnings (both best-effort)
+        let conversationId: string | null = input.conversationId ?? null;
+        let learned = 0;
+        if (ctx.admin && ctx.appUser) {
+          conversationId = await persistConversation(
+            ctx.admin,
+            ctx.appUser.id,
+            conversationId,
+            input.message,
+            response.message
+          );
+          learned = await extractAndSaveMemories(
+            chatService,
+            ctx.admin,
+            ctx.appUser.id,
+            input.message,
+            response.message,
+            memories
+          );
+        }
+
         return {
           success: true,
           response: response.message,
           proposal: response.proposal,
           thinking: response.thinking,
+          conversationId,
+          learned,
         };
       } catch (error) {
         console.error("Chat error - Full details:", {
@@ -317,6 +345,50 @@ export const alfredRouter = createTRPCRouter({
         };
       }
     }),
+
+  /** Latest active conversation for the signed-in user, for panel hydration. */
+  getConversation: protectedProcedure.query(async ({ ctx }) => {
+    if (!ctx.admin || !ctx.appUser) return { conversation: null };
+    try {
+      const { data } = await (ctx.admin as any)
+        .from("alfred_conversations")
+        .select("id, messages")
+        .eq("user_id", ctx.appUser.id)
+        .eq("active", true)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!data) return { conversation: null };
+      return {
+        conversation: {
+          id: data.id as string,
+          messages: ((data.messages as any[]) || []).slice(-60).map((m) => ({
+            role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
+            content: String(m.content ?? ""),
+          })),
+        },
+      };
+    } catch (error) {
+      console.error("Error loading conversation:", error);
+      return { conversation: null };
+    }
+  }),
+
+  /** Archive the current conversation so the next message starts a fresh one. */
+  newConversation: protectedProcedure.mutation(async ({ ctx }) => {
+    if (!ctx.admin || !ctx.appUser) return { success: true };
+    try {
+      await (ctx.admin as any)
+        .from("alfred_conversations")
+        .update({ active: false })
+        .eq("user_id", ctx.appUser.id)
+        .eq("active", true);
+    } catch (error) {
+      console.error("Error archiving conversation:", error);
+    }
+    return { success: true };
+  }),
 
   executeAction: protectedProcedure
     .input(
@@ -337,12 +409,15 @@ export const alfredRouter = createTRPCRouter({
           };
         }
 
-        // Check that conversation belongs to user
-        const { data: conversation } = await ctx.supabase
+        // Check that conversation belongs to user (server-side, admin client)
+        if (!ctx.admin || !ctx.appUser) {
+          return { success: false, error: "Server not configured" };
+        }
+        const { data: conversation } = await (ctx.admin as any)
           .from("alfred_conversations")
           .select("id")
           .eq("id", input.conversationId)
-          .eq("user_id", user.user.id)
+          .eq("user_id", ctx.appUser.id)
           .single();
 
         if (!conversation) {
@@ -366,6 +441,141 @@ export const alfredRouter = createTRPCRouter({
       }
     }),
 });
+
+/** Load active long-term memories, newest first. Returns [] on any failure. */
+async function loadMemories(
+  admin: any
+): Promise<Array<{ content: string; category: string }>> {
+  if (!admin) return [];
+  try {
+    const { data, error } = await admin
+      .from("alfred_memories")
+      .select("content, category")
+      .eq("active", true)
+      .order("created_at", { ascending: false })
+      .limit(40);
+    if (error) {
+      console.error("Memory load failed:", error.message);
+      return [];
+    }
+    return data || [];
+  } catch (error) {
+    console.error("Memory load failed:", error);
+    return [];
+  }
+}
+
+/**
+ * Append one user/assistant exchange to the active conversation, creating it
+ * if needed. Returns the conversation id (or null if persistence failed).
+ */
+async function persistConversation(
+  admin: any,
+  userId: string,
+  conversationId: string | null,
+  userMessage: string,
+  assistantMessage: string
+): Promise<string | null> {
+  try {
+    const now = new Date().toISOString();
+    const newMessages = [
+      { role: "user", content: userMessage, ts: now },
+      { role: "assistant", content: assistantMessage, ts: now },
+    ];
+
+    if (conversationId) {
+      const { data: conv } = await admin
+        .from("alfred_conversations")
+        .select("id, messages")
+        .eq("id", conversationId)
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (conv) {
+        const messages = [...((conv.messages as any[]) || []), ...newMessages].slice(-100);
+        await admin
+          .from("alfred_conversations")
+          .update({ messages, updated_at: now })
+          .eq("id", conversationId);
+        return conversationId;
+      }
+    }
+
+    const { data: created, error } = await admin
+      .from("alfred_conversations")
+      .insert({
+        user_id: userId,
+        title: userMessage.slice(0, 80),
+        messages: newMessages,
+        active: true,
+      })
+      .select("id")
+      .single();
+
+    if (error) {
+      console.error("Conversation create failed:", error.message);
+      return null;
+    }
+    return created?.id ?? null;
+  } catch (error) {
+    console.error("Conversation persist failed:", error);
+    return conversationId;
+  }
+}
+
+/**
+ * Run memory extraction over the exchange and store any genuinely new facts.
+ * Returns how many memories were saved. Never throws.
+ */
+async function extractAndSaveMemories(
+  chatService: AlfredChatService,
+  admin: any,
+  userId: string,
+  userMessage: string,
+  assistantMessage: string,
+  knownMemories: Array<{ content: string; category: string }>
+): Promise<number> {
+  try {
+    const extracted = await chatService.extractMemories(
+      userMessage,
+      assistantMessage,
+      knownMemories.map((m) => m.content)
+    );
+    if (extracted.length === 0) return 0;
+
+    // Dedupe against everything currently stored, not just the injected slice
+    const { data: existing } = await admin
+      .from("alfred_memories")
+      .select("content")
+      .eq("active", true)
+      .limit(200);
+    const seen = new Set(
+      ((existing as any[]) || []).map((m) => String(m.content).trim().toLowerCase())
+    );
+
+    const fresh = extracted.filter(
+      (m) => !seen.has(m.content.trim().toLowerCase())
+    );
+    if (fresh.length === 0) return 0;
+
+    const { error } = await admin.from("alfred_memories").insert(
+      fresh.map((m) => ({
+        content: m.content,
+        category: m.category,
+        source: "chat",
+        created_by: userId,
+      }))
+    );
+    if (error) {
+      console.error("Memory save failed:", error.message);
+      return 0;
+    }
+    return fresh.length;
+  } catch (error) {
+    console.error("Memory extraction failed:", error);
+    return 0;
+  }
+}
 
 // Helper function to build workspace context for chat
 async function buildWorkspaceContextForChat(

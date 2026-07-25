@@ -1,5 +1,14 @@
 import Anthropic from "@anthropic-ai/sdk";
 
+export interface TaskSummary {
+  title: string;
+  status: string;
+  assignees: string;
+  dueDate: string | null;
+  priority: string | null;
+  isOverdue: boolean;
+}
+
 export interface WorkspaceContext {
   tasks: {
     total: number;
@@ -7,6 +16,7 @@ export interface WorkspaceContext {
     unassigned: number;
     overdue: number;
   };
+  taskList: TaskSummary[];
   users: Array<{
     id: string;
     name: string;
@@ -95,12 +105,14 @@ export class AlfredChatService {
         throw new Error("Model returned no text content");
       }
 
-      // Parse response for proposals
+      // Only surface a proposal card when there are executable actions —
+      // otherwise it just duplicates the message text.
       const proposal = this.parseProposal(fullText);
 
       return {
         message: fullText,
-        proposal: proposal || undefined,
+        proposal:
+          proposal && proposal.actions.length > 0 ? proposal : undefined,
       };
     } catch (error) {
       console.error("Alfred chat error:", error);
@@ -119,6 +131,16 @@ export class AlfredChatService {
           `${u.name} (${u.taskCount} tasks${u.isOverloaded ? " - OVERLOADED" : ""})`
       )
       .join(", ");
+
+    const taskLines =
+      context.taskList.length > 0
+        ? context.taskList
+            .map(
+              (t) =>
+                `- "${t.title}" [${t.status}${t.priority ? `, ${t.priority}` : ""}] → ${t.assignees}${t.dueDate ? `, due ${t.dueDate}` : ""}${t.isOverdue ? " ⚠️ OVERDUE" : ""}`
+            )
+            .join("\n")
+        : "(no open tasks)";
 
     return `You are Alfred, Ozish PWA's intelligent task management assistant.
 
@@ -148,6 +170,9 @@ Team Metrics:
   Completion Rate: ${context.metrics.completionRate}%
   Average Delay: ${context.metrics.averageDelay} days
 
+OPEN TASKS (most recent first):
+${taskLines}
+
 IMPORTANT RULES:
 1. ALWAYS be helpful and professional
 2. SHOW reasoning: "Why?" behind recommendations
@@ -156,6 +181,8 @@ IMPORTANT RULES:
 5. SUGGEST alternatives: "Or we could..."
 6. USE TEAM NAMES naturally (Uzbek names are OK)
 7. BE HONEST: Say if something isn't possible
+8. ANSWER in the same language the user writes in (Uzbek or English)
+9. ANSWER whatever is asked using the workspace data above — cite real task titles, assignees, and due dates
 
 RESPONSE STYLE:
 - Start with direct answer or analysis

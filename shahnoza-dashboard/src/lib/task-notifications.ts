@@ -412,7 +412,7 @@ async function notifyTelegramVoice(chatId: string, audioBuffer: Buffer, caption:
 
   const formData = new FormData();
   formData.append("chat_id", chatId);
-  formData.append("voice", new Blob([audioBuffer], { type: "audio/ogg" }), "voice.ogg");
+  formData.append("voice", new Blob([new Uint8Array(audioBuffer)], { type: "audio/ogg" }), "voice.ogg");
   formData.append("caption", caption);
   formData.append("parse_mode", "HTML");
 

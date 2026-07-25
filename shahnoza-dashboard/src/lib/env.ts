@@ -85,5 +85,15 @@ export const isTranscribeConfigured = () => Boolean(env.OPENAI_API_KEY);
 export const isPushConfigured = () =>
   Boolean(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY);
 
-export const isYandexTtsConfigured = () =>
-  Boolean(env.YANDEX_API_KEY && env.YANDEX_FOLDER_ID);
+export const isYandexTtsConfigured = () => {
+  const configured = Boolean(env.YANDEX_API_KEY && env.YANDEX_FOLDER_ID);
+  if (typeof window === "undefined") {
+    // Only log on server
+    console.log("🔍 isYandexTtsConfigured() check:", {
+      hasApiKey: !!env.YANDEX_API_KEY,
+      hasFolderId: !!env.YANDEX_FOLDER_ID,
+      configured,
+    });
+  }
+  return configured;
+};

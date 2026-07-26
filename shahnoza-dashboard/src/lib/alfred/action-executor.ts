@@ -19,7 +19,7 @@ export interface ActionResult {
 }
 
 export class AlfredActionExecutor {
-  constructor(private supabase: SupabaseClient, private userId: string) {}
+  constructor(private supabase: SupabaseClient, private authId: string) {}
 
   async execute(input: ActionInput): Promise<ActionResult> {
     const { conversationId, actionId, actionType, data } = input;
@@ -28,7 +28,7 @@ export class AlfredActionExecutor {
       // Log action with detailed diagnostics
       const logPayload = {
         conversation_id: conversationId || null,
-        actor_id: this.userId,
+        actor_id: this.authId,
         action_type: actionType,
         target_id: actionId,
         input_data: data,

@@ -11,6 +11,9 @@ import {
   Copy,
   Trash2,
   KeyRound,
+  Pencil,
+  Check,
+  X,
 } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { PageHeader } from "@/components/layout/page-header";
@@ -159,7 +162,7 @@ export default function UsersPage() {
                               {initials(u.full_name)}
                             </AvatarFallback>
                           </Avatar>
-                          <span className="font-medium">{u.full_name}</span>
+                          <EditableName user={u} />
                         </div>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
@@ -210,7 +213,7 @@ export default function UsersPage() {
                       <AvatarFallback>{initials(u.full_name)}</AvatarFallback>
                     </Avatar>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium">{u.full_name}</p>
+                      <EditableName user={u} className="max-w-full" />
                       <p className="truncate text-sm text-muted-foreground">
                         {u.email}
                       </p>
@@ -387,6 +390,118 @@ function SetPasswordButton({
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/** Inline-edit a user's display name. Click the name to edit; Enter or the
+ *  check saves, Escape or the cross cancels. Super-admin only (page-gated). */
+function EditableName({
+  user,
+  className,
+}: {
+  user: UserItem;
+  className?: string;
+}) {
+  const utils = api.useUtils();
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(user.full_name);
+
+  const update = api.users.update.useMutation({
+    onSuccess: () => {
+      void utils.users.list.invalidate();
+      toast({ title: "Ism yangilandi", variant: "success" });
+      setEditing(false);
+    },
+    onError: (err) =>
+      toast({
+        title: "Xatolik",
+        description: err.message || "Ismni o'zgartirib bo'lmadi.",
+        variant: "destructive",
+      }),
+  });
+
+  function save() {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      toast({
+        title: "Ism bo'sh bo'lishi mumkin emas",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (trimmed === user.full_name) {
+      setEditing(false);
+      return;
+    }
+    update.mutate({ id: user.id, fullName: trimmed });
+  }
+
+  function cancel() {
+    setName(user.full_name);
+    setEditing(false);
+  }
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-1.5">
+        <Input
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              save();
+            }
+            if (e.key === "Escape") cancel();
+          }}
+          className="h-8 w-[170px]"
+          placeholder="Ism familiya"
+          disabled={update.isPending}
+        />
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="h-8 w-8 shrink-0"
+          onClick={save}
+          disabled={update.isPending}
+          title="Saqlash"
+        >
+          {update.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Check className="h-4 w-4" />
+          )}
+        </Button>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="h-8 w-8 shrink-0"
+          onClick={cancel}
+          disabled={update.isPending}
+          title="Bekor qilish"
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        setName(user.full_name);
+        setEditing(true);
+      }}
+      className={`group flex items-center gap-1.5 text-left font-medium transition-colors hover:text-primary ${className ?? ""}`}
+      title="Ismni tahrirlash"
+    >
+      <span className="truncate">{user.full_name}</span>
+      <Pencil className="h-3.5 w-3.5 shrink-0 opacity-40 transition-opacity group-hover:opacity-100" />
+    </button>
   );
 }
 

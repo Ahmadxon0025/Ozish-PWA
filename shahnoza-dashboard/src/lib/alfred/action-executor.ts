@@ -486,6 +486,8 @@ export class AlfredActionExecutor {
     paid_to?: string;
     currency?: string;
     expense_date?: string;
+    account_id?: string;
+    category_id?: string;
   }): Promise<ActionResult> {
     try {
       const amount = Number(data.amount);
@@ -499,6 +501,44 @@ export class AlfredActionExecutor {
           success: false,
           message: "Xarajat: miqdori va tavsifi majburiy",
         };
+      }
+
+      // If no account specified, pick one matching the currency
+      let account_id = data.account_id;
+      if (!account_id) {
+        const { data: accounts } = await this.supabase
+          .from("accounts")
+          .select("id")
+          .eq("currency", currency === "uzs" ? "UZS" : "USD")
+          .order("sort_order", { ascending: true })
+          .limit(1);
+
+        if (accounts && accounts.length > 0) {
+          account_id = accounts[0].id;
+        } else {
+          // Fallback: pick any account
+          const { data: anyAccounts } = await this.supabase
+            .from("accounts")
+            .select("id")
+            .order("sort_order", { ascending: true })
+            .limit(1);
+          if (anyAccounts && anyAccounts.length > 0) {
+            account_id = anyAccounts[0].id;
+          }
+        }
+      }
+
+      // If no category specified, pick the first one or a default "Other"
+      let category_id = data.category_id;
+      if (!category_id) {
+        const { data: categories } = await this.supabase
+          .from("expense_categories")
+          .select("id")
+          .order("display_order", { ascending: true })
+          .limit(1);
+        if (categories && categories.length > 0) {
+          category_id = categories[0].id;
+        }
       }
 
       // Convert to USD if in UZS. Use a reasonable exchange rate (e.g., 12,800 UZS = 1 USD).
@@ -516,6 +556,8 @@ export class AlfredActionExecutor {
           currency,
           expense_date,
           created_by: this.userId,
+          account_id: account_id || null,
+          category_id: category_id || null,
         })
         .select()
         .single();
@@ -563,7 +605,7 @@ export class AlfredActionExecutor {
       }
 
       // Find the expense to update: by description match or most recent
-      let query = this.supabase.from("expenses").select("id, description, amount, amount_usd, currency, paid_to, expense_date");
+      let query = this.supabase.from("expenses").select("id, description, amount, amount_usd, currency, paid_to, expense_date, account_id");
 
       if (matchDesc) {
         query = query.ilike("description", `%${matchDesc}%`);
@@ -599,6 +641,18 @@ export class AlfredActionExecutor {
         updates.amount = currency === "uzs" ? new_amount : null;
         updates.amount_usd = currency === "uzs" ? Number((new_amount / 12800).toFixed(2)) : new_amount;
         updates.currency = currency;
+      }
+      // Link to account if orphaned
+      if (!expense.account_id) {
+        const { data: accounts } = await this.supabase
+          .from("accounts")
+          .select("id")
+          .eq("currency", expense.currency === "uzs" ? "UZS" : "USD")
+          .order("sort_order", { ascending: true })
+          .limit(1);
+        if (accounts && accounts.length > 0) {
+          updates.account_id = accounts[0].id;
+        }
       }
 
       const { error } = await this.supabase
@@ -636,7 +690,7 @@ export class AlfredActionExecutor {
       // Find the expense to delete: by description match or most recent
       let query = this.supabase
         .from("expenses")
-        .select("id, description, amount, amount_usd, currency, paid_to, expense_date, created_at");
+        .select("id, description, amount, amount_usd, currency, paid_to, expense_date, created_at, account_id");
 
       if (matchDesc) {
         query = query.ilike("description", `%${matchDesc}%`);
@@ -664,6 +718,7 @@ export class AlfredActionExecutor {
         amount_usd: expense.amount_usd,
         paid_to: expense.paid_to,
         expense_date: expense.expense_date,
+        account_id: expense.account_id,
       };
 
       // Delete the expense

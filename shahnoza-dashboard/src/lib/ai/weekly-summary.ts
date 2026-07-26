@@ -2,6 +2,7 @@ import "server-only";
 import { requireAdminClient } from "@/lib/supabase/admin";
 import { getCurrentRate } from "@/lib/business/exchange-rate";
 import { round2 } from "@/lib/business/currency";
+import { getAccountBalances } from "@/lib/business/aggregates";
 import { callText } from "./claude";
 
 const OPEN = ["backlog", "todo", "in_progress", "review"];
@@ -28,7 +29,7 @@ export async function buildWeeklySummary(): Promise<string | null> {
     { data: refunded },
     { data: expenses },
     { data: accounts },
-    { data: txns },
+    txns,
     rate,
   ] = await Promise.all([
     db.from("users").select("id, full_name").eq("is_active", true),
@@ -51,7 +52,7 @@ export async function buildWeeklySummary(): Promise<string | null> {
       .gte("expense_date", monthFrom.slice(0, 10))
       .lt("expense_date", nowISO.slice(0, 10)),
     db.from("accounts").select("id, currency"),
-    db.from("account_transactions").select("account_id, direction, amount"),
+    getAccountBalances(db),
     getCurrentRate(db),
   ]);
 
@@ -96,12 +97,7 @@ export async function buildWeeklySummary(): Promise<string | null> {
   const commissions = round2(gross * 0.12);
   const netProfit = round2(gross - refunds - opex - commissions);
 
-  const bal = new Map<string, number>();
-  for (const t of txns ?? []) {
-    if (!t.account_id) continue;
-    const d = (t.direction === "in" ? 1 : -1) * Number(t.amount ?? 0);
-    bal.set(t.account_id, (bal.get(t.account_id) ?? 0) + d);
-  }
+  const bal = txns; // getAccountBalances → Map<accountId, balance>
   let kassaUsd = 0;
   for (const a of accounts ?? []) {
     const b = bal.get(a.id) ?? 0;

@@ -8,6 +8,7 @@ import { computePnl } from "@/lib/business/pnl";
 import { computeCommissions } from "@/lib/business/commission";
 import { getCurrentRate } from "@/lib/business/exchange-rate";
 import { round2 } from "@/lib/business/currency";
+import { getAccountBalances } from "@/lib/business/aggregates";
 import { sum, groupBy } from "./_helpers";
 
 const AD_CATEGORIES = [
@@ -171,7 +172,7 @@ export const dashboardRouter = createTRPCRouter({
         .lt("expense_date", month.to.slice(0, 10)),
       ctx.supabase.from("expense_categories").select("id, name"),
       ctx.supabase.from("accounts").select("id, currency"),
-      ctx.supabase.from("account_transactions").select("account_id, direction, amount"),
+      getAccountBalances(ctx.supabase),
       getCurrentRate(ctx.supabase),
       ctx.supabase
         .from("sales")
@@ -219,13 +220,8 @@ export const dashboardRouter = createTRPCRouter({
     });
     const totalExpenses = pnl.totalCostsUsd;
 
-    // Cash (kassa) = Σ account balances converted to USD.
-    const balByAccount = new Map<string, number>();
-    for (const t of txnRes.data ?? []) {
-      if (!t.account_id) continue;
-      const delta = (t.direction === "in" ? 1 : -1) * Number(t.amount ?? 0);
-      balByAccount.set(t.account_id, (balByAccount.get(t.account_id) ?? 0) + delta);
-    }
+    // Cash (kassa) = Σ account balances converted to USD (summed in the DB).
+    const balByAccount = txnRes; // getAccountBalances → Map<accountId, balance>
     let kassaUsd = 0;
     for (const a of accRes.data ?? []) {
       const bal = balByAccount.get(a.id) ?? 0;

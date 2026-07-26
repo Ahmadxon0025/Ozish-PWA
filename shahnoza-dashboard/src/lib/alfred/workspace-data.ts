@@ -1,6 +1,7 @@
 import { computePnl, type PnlResult } from "@/lib/business/pnl";
 import { commissionForSale } from "@/lib/business/commission";
 import { getCurrentRate } from "@/lib/business/exchange-rate";
+import { getAccountBalances } from "@/lib/business/aggregates";
 import { monthRange } from "@/lib/dates";
 
 /**
@@ -142,20 +143,13 @@ export async function buildBusinessSnapshot(
   }
 
   // Account balances (in = +, out = -), per account in its own currency.
+  // Summed in the database so it stays correct at any transaction count.
   try {
-    const [accountsRes, txRes] = await Promise.all([
+    const [accountsRes, balances] = await Promise.all([
       supabase.from("accounts").select("id, name, currency"),
-      supabase
-        .from("account_transactions")
-        .select("account_id, direction, amount"),
+      getAccountBalances(supabase),
     ]);
-    if (!accountsRes.error && !txRes.error && accountsRes.data) {
-      const balances = new Map<string, number>();
-      for (const t of txRes.data || []) {
-        const delta =
-          t.direction === "in" ? Number(t.amount ?? 0) : -Number(t.amount ?? 0);
-        balances.set(t.account_id, (balances.get(t.account_id) ?? 0) + delta);
-      }
+    if (!accountsRes.error && accountsRes.data) {
       snapshot.accounts = accountsRes.data.map((a: any) => ({
         name: a.name,
         currency: a.currency,

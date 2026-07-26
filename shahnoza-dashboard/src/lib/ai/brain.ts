@@ -9,6 +9,7 @@ import { monthRange, todayRange, yesterdayRange } from "@/lib/dates";
 import { computeCommissions } from "@/lib/business/commission";
 import { getCurrentRate } from "@/lib/business/exchange-rate";
 import { round2 } from "@/lib/business/currency";
+import { getAccountBalances } from "@/lib/business/aggregates";
 import { notifyTaskCreated } from "@/lib/notify/task-events";
 
 type Db = SupabaseClient<Database>;
@@ -163,7 +164,7 @@ async function getUpcomingTasks(db: Db, personName?: string) {
 
 async function getFinanceSummary(db: Db, period: string) {
   const r = rangeFor(period === "today" || period === "yesterday" ? "month" : period);
-  const [{ data: sales }, { data: expenses }, { data: accs }, { data: txns }, rate] =
+  const [{ data: sales }, { data: expenses }, { data: accs }, txns, rate] =
     await Promise.all([
       db
         .from("sales")
@@ -176,7 +177,7 @@ async function getFinanceSummary(db: Db, period: string) {
         .gte("expense_date", r.from.slice(0, 10))
         .lt("expense_date", r.to.slice(0, 10)),
       db.from("accounts").select("id, currency"),
-      db.from("account_transactions").select("account_id, direction, amount"),
+      getAccountBalances(db),
       getCurrentRate(db),
     ]);
   const srows = sales ?? [];
@@ -198,15 +199,8 @@ async function getFinanceSummary(db: Db, period: string) {
     ),
   );
   const netUsd = round2(revenueUsd - expensesUsd - commissions);
-  // Kassa (cash) balance across accounts, in USD.
-  const bal = new Map<string, number>();
-  for (const t of txns ?? []) {
-    if (!t.account_id) continue;
-    bal.set(
-      t.account_id,
-      (bal.get(t.account_id) ?? 0) + (t.direction === "in" ? 1 : -1) * Number(t.amount ?? 0),
-    );
-  }
+  // Kassa (cash) balance across accounts, in USD (summed in the DB).
+  const bal = txns; // getAccountBalances → Map<accountId, balance>
   let kassaUsd = 0;
   for (const a of accs ?? []) {
     const b = bal.get(a.id) ?? 0;

@@ -11,8 +11,9 @@ import {
 import { getCurrentRate } from "@/lib/business/exchange-rate";
 import { round2 } from "@/lib/business/currency";
 import { deleteRelatedEntries } from "@/lib/business/account-posting";
+import { getAccountBalances } from "@/lib/business/aggregates";
 import { requireAdminClient } from "@/lib/supabase/admin";
-import { groupBy, sum } from "./_helpers";
+import { sum } from "./_helpers";
 
 // Finance roles can read; managers (+super admin) can move money.
 const financeProcedure = roleProcedure("super_admin", "owner", "sales_manager");
@@ -32,29 +33,18 @@ export const accountsRouter = createTRPCRouter({
 
   /** All accounts with live balances (native currency + USD equivalent). */
   list: ownerProcedure.query(async ({ ctx }) => {
-    const [{ data: accounts }, { data: txns }, rate] = await Promise.all([
+    const [{ data: accounts }, balances, rate] = await Promise.all([
       ctx.supabase
         .from("accounts")
         .select("*")
         .order("sort_order", { ascending: true }),
-      ctx.supabase
-        .from("account_transactions")
-        .select("account_id, direction, amount"),
+      // Summed in the database — correct and fast at any number of transactions.
+      getAccountBalances(ctx.supabase),
       getCurrentRate(ctx.supabase),
     ]);
 
-    const byAccount = groupBy(txns ?? [], (t) => t.account_id);
     const items = (accounts ?? []).map((a) => {
-      const rows = byAccount.get(a.id) ?? [];
-      const inflow = sum(
-        rows.filter((r) => r.direction === "in"),
-        (r) => r.amount,
-      );
-      const outflow = sum(
-        rows.filter((r) => r.direction === "out"),
-        (r) => r.amount,
-      );
-      const balance = round2(inflow - outflow);
+      const balance = round2(balances.get(a.id) ?? 0);
       return {
         ...a,
         balance, // in the account's own currency

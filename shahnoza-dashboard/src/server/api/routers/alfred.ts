@@ -31,6 +31,10 @@ function pageInfo(path?: string | null) {
   return PAGE_MAP.find((p) => path.startsWith(p.prefix)) ?? null;
 }
 
+/** Facts that change over time and must never be stored (same as migration 0036). */
+const VOLATILE_MEMORY =
+  /(\d+\s*(ta|bitim)\b)|overloaded|hozircha|bugungi|shu\s+(hafta|oy)da|balans|qoldiq|velocity|vazifa\/kun|kechikish\s+\d|\d+\s*so'?m/i;
+
 export const alfredRouter = createTRPCRouter({
   getAnalysis: protectedProcedure.query(async ({ ctx }) => {
     try {
@@ -340,10 +344,10 @@ export const alfredRouter = createTRPCRouter({
           (name, toolInput) => executeDataTool(ctx.supabase, name, toolInput)
         );
 
-        // Persist the exchange; extract memory CANDIDATES but never save
-        // without the user's click (consent-first, ClickUp Preferences style)
+        // Persist the exchange. Memory extraction is a SEPARATE call
+        // (extractMemory) the client fires after the answer renders, so it
+        // never adds to this response's latency.
         let conversationId: string | null = input.conversationId ?? null;
-        let memoryCandidates: Array<{ content: string; category: string }> = [];
         if (ctx.admin && ctx.appUser) {
           conversationId = await persistConversation(
             ctx.admin,
@@ -352,20 +356,6 @@ export const alfredRouter = createTRPCRouter({
             input.message,
             response.message
           );
-          try {
-            const known = new Set(
-              memories.map((m) => m.content.trim().toLowerCase())
-            );
-            memoryCandidates = (
-              await chatService.extractMemories(
-                input.message,
-                response.message,
-                memories.map((m) => m.content)
-              )
-            ).filter((m) => !known.has(m.content.trim().toLowerCase()));
-          } catch (error) {
-            console.error("Memory extraction failed:", error);
-          }
         }
 
         // Tier A/B task actions run automatically — reversible, so no
@@ -402,7 +392,6 @@ export const alfredRouter = createTRPCRouter({
           thinking: response.thinking,
           followUps: response.followUps,
           conversationId,
-          memoryCandidates,
           executed,
         };
       } catch (error) {
@@ -548,6 +537,41 @@ export const alfredRouter = createTRPCRouter({
     }
   }),
 
+  /**
+   * Off-path memory extraction: the client calls this AFTER the answer is
+   * shown, so it adds nothing to the chat response latency. Returns candidate
+   * facts (already deduped against stored memory) for the consent card —
+   * nothing is saved here.
+   */
+  extractMemory: protectedProcedure
+    .input(
+      z.object({
+        userMessage: z.string(),
+        assistantMessage: z.string(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      if (!ctx.admin) return { candidates: [] };
+      try {
+        const memories = await loadMemories(ctx.admin);
+        const known = new Set(
+          memories.map((m) => m.content.trim().toLowerCase())
+        );
+        const chatService = new AlfredChatService();
+        const candidates = (
+          await chatService.extractMemories(
+            input.userMessage,
+            input.assistantMessage,
+            memories.map((m) => m.content)
+          )
+        ).filter((m) => !known.has(m.content.trim().toLowerCase()));
+        return { candidates };
+      } catch (error) {
+        console.error("Memory extraction failed:", error);
+        return { candidates: [] };
+      }
+    }),
+
   /** Save memory candidates the user explicitly approved (consent-first). */
   saveMemories: protectedProcedure
     .input(
@@ -577,7 +601,9 @@ export const alfredRouter = createTRPCRouter({
           )
         );
         const fresh = input.memories.filter(
-          (m) => !seen.has(m.content.trim().toLowerCase())
+          (m) =>
+            !seen.has(m.content.trim().toLowerCase()) &&
+            !VOLATILE_MEMORY.test(m.content)
         );
         if (fresh.length === 0) return { saved: 0 };
         const { error } = await (ctx.admin as any).from("alfred_memories").insert(
@@ -847,19 +873,32 @@ async function persistConversation(
       }
     }
 
-    // Semantic title (haiku, best-effort) instead of the raw first message
-    let title = userMessage.slice(0, 80);
+    // Semantic title (haiku, best-effort). Falls back to a trimmed first
+    // message; strictly validates the model output so conversational replies
+    // ("Men sizning suhbatingizdan...") never leak in as titles.
+    const fallbackTitle = userMessage.trim().split(/\s+/).slice(0, 8).join(" ").slice(0, 80);
+    let title = fallbackTitle || "Suhbat";
     try {
       const { callText } = await import("@/lib/ai/claude");
       const generated = await callText({
         feature: "alfred_title",
         system:
-          "Suhbatning birinchi xabaridan 3-6 so'zlik qisqa sarlavha yoz, xabar tilida. FAQAT sarlavhani qaytar — qo'shtirnoqsiz, izohsiz.",
+          "Berilgan xabar uchun 2-5 so'zlik MAVZU sarlavhasi yoz (masalan 'Kechikkan vazifalar', 'Iyul P&L'). Xabar tilida. FAQAT sarlavha — gap emas, izoh emas, qo'shtirnoqsiz, o'zing haqingda yozma.",
         user: userMessage.slice(0, 300),
-        maxTokens: 40,
+        maxTokens: 24,
       });
-      const clean = generated.trim().replace(/^["'«]|["'»]$/g, "").slice(0, 80);
-      if (clean) title = clean;
+      const clean = generated
+        .trim()
+        .split("\n")[0]
+        .replace(/^["'«»\s]+|["'«».\s]+$/g, "")
+        .slice(0, 60);
+      const wordCount = clean.split(/\s+/).length;
+      const looksLikeSentence =
+        /^(men|sen|siz|bu suhbat|mana|quyida|assalom|salom)\b/i.test(clean) ||
+        /\b(xabar|sarlavha|suhbat)\b/i.test(clean) ||
+        wordCount > 8 ||
+        clean.length < 2;
+      if (clean && !looksLikeSentence) title = clean;
     } catch {
       // title generation is cosmetic — never block the chat
     }
@@ -964,6 +1003,7 @@ async function buildWorkspaceContextForChat(
       .filter((t: any) => t.status !== "done")
       .slice(0, 60)
       .map((t: any) => ({
+        id: t.id,
         title: t.title ?? "Untitled",
         status: t.status ?? "unknown",
         assignees: assigneeNames(t.assigned_to),

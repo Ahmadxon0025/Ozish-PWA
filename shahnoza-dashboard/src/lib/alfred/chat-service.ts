@@ -9,6 +9,7 @@ import { ALFRED_DATA_TOOLS } from "./data-tools";
 export type ToolExecutor = (name: string, input: any) => Promise<any>;
 
 export interface TaskSummary {
+  id?: string;
   title: string;
   status: string;
   assignees: string;
@@ -213,7 +214,7 @@ export class AlfredChatService {
         ? context.taskList
             .map(
               (t) =>
-                `- "${t.title}" [${t.status}${t.priority ? `, ${t.priority}` : ""}] → ${t.assignees}${t.dueDate ? `, due ${t.dueDate}` : ""}${t.isOverdue ? " ⚠️ OVERDUE" : ""}`
+                `- "${t.title}"${t.id ? ` (id: ${t.id})` : ""} [${t.status}${t.priority ? `, ${t.priority}` : ""}] → ${t.assignees}${t.dueDate ? `, due ${t.dueDate}` : ""}${t.isOverdue ? " ⚠️ OVERDUE" : ""}`
             )
             .join("\n")
         : "(no open tasks)";
@@ -227,7 +228,9 @@ CURRENT USER: ${context.currentUserName ?? "(unknown)"} — this is the person y
         : ""
     }
 
-FORMATTING: Reply in Markdown — **bold** for key figures and titles, "-" bullets, short paragraphs. When you list a specific task you found via search_tasks (its result includes an id), render its title as a link: [Vazifa nomi](/tasks/<id>). For sales point to [Sotuvlar ro'yxati](/sales/list), leads to [Leadlar](/leads), P&L to [P&L](/finance/pnl) when it helps the user jump there.
+FORMATTING: Reply in Markdown — **bold** for key figures and titles, "-" bullets, short paragraphs. Link a task ONLY when you have its real id (from an "(id: ...)" in OPEN TASKS or a search_tasks result): [Vazifa nomi](/tasks/<real-id>). If you do NOT have the id, write the task name as plain **bold** text — NEVER emit "[name](/tasks/)" with an empty or missing id. For sales point to [Sotuvlar ro'yxati](/sales/list), leads to [Leadlar](/leads), P&L to [P&L](/finance/pnl) when it helps the user jump there.
+
+MEMORY: You do NOT save or recall long-term memory yourself. NEVER claim to remember, save, note, or accept a fact ("yodda saqladim", "eslab qoldim", "eslab qolaman", "qabul qildim", "esimda") — a separate system asks the user for permission and stores it. If the user tells you to remember something, acknowledge you'll SUGGEST it for saving (e.g. "Buni eslab qolishni taklif qilaman") — never assert that it is saved.
 
 YOUR ROLE:
 - Analyze team workload and task assignments
@@ -369,11 +372,13 @@ NEVER:
           : "(none)";
 
       const response = await this.client.messages.create({
-        model: "claude-sonnet-5",
+        model: "claude-haiku-4-5",
         max_tokens: 600,
         system: `You maintain the long-term memory of Alfred, a team task-management assistant.
 
 From the conversation exchange the user sends you, extract durable facts worth remembering for FUTURE conversations: team member strengths/preferences, working styles, business rules, recurring patterns, decisions, important context about the company.
+
+If the user EXPLICITLY asks to remember something ("esda tut", "yodda saqla", "remember", "eslab qol"), extract that fact — it is high-priority, unless it is volatile (see below).
 
 NEVER extract volatile facts — anything that will be different next week: task counts ("26 ta vazifa"), workload states ("OVERLOADED"), account balances, current statuses, this week's numbers. Those live in the database and change daily; storing them makes future answers wrong. Only store facts that stay true: preferences, rules, relationships, skills, recurring patterns.
 

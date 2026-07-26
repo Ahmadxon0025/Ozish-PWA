@@ -151,15 +151,30 @@ function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
         </strong>
       );
     } else {
-      nodes.push(
-        <a
-          key={`${keyPrefix}l${i++}`}
-          href={m[3]}
-          className="text-purple-300 underline underline-offset-2 hover:text-purple-200"
-        >
-          {m[2]}
-        </a>
-      );
+      // Guard: a link whose path has no id (e.g. "/tasks/" or "/leads/")
+      // renders as plain bold text — never a dead link.
+      const href = m[3];
+      const deadLink = /^\/[a-z-]+\/?$/i.test(href) || href.endsWith("/");
+      if (deadLink) {
+        nodes.push(
+          <strong
+            key={`${keyPrefix}b${i++}`}
+            className="font-semibold text-white"
+          >
+            {m[2]}
+          </strong>
+        );
+      } else {
+        nodes.push(
+          <a
+            key={`${keyPrefix}l${i++}`}
+            href={href}
+            className="text-purple-300 underline underline-offset-2 hover:text-purple-200"
+          >
+            {m[2]}
+          </a>
+        );
+      }
     }
     last = m.index + m[0].length;
   }
@@ -227,6 +242,7 @@ export function AlfredPanel({
   const [headlineIdx, setHeadlineIdx] = useState(0);
 
   const alfredChat = api.alfred.chat.useMutation();
+  const extractMemoryMutation = api.alfred.extractMemory.useMutation();
   const undoMutation = api.alfred.undoAction.useMutation();
   const newConversationMutation = api.alfred.newConversation.useMutation();
   const deleteMemoryMutation = api.alfred.deleteMemory.useMutation();
@@ -430,12 +446,31 @@ export function AlfredPanel({
             messageId,
             executed,
             followUps: response.followUps ?? undefined,
-            memoryCandidates:
-              response.memoryCandidates && response.memoryCandidates.length > 0
-                ? response.memoryCandidates
-                : undefined,
           },
         ]);
+
+        // Memory extraction runs AFTER the answer is shown (off the response
+        // latency path). If it finds new durable facts, attach them to this
+        // message so the "Buni eslab qolaymi?" consent card appears.
+        extractMemoryMutation
+          .mutateAsync({
+            userMessage: userMsg,
+            assistantMessage: response.response,
+          })
+          .then((res) => {
+            if (res.candidates && res.candidates.length > 0) {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.messageId === messageId
+                    ? { ...m, memoryCandidates: res.candidates }
+                    : m
+                )
+              );
+            }
+          })
+          .catch(() => {
+            /* memory is best-effort */
+          });
       } else {
         setMessages([
           ...withUser,
@@ -611,7 +646,7 @@ export function AlfredPanel({
             <h2 className="font-semibold text-white">Alfred</h2>
             <span className="text-xs text-slate-400">Smart Assistant</span>
           </div>
-          <div className="relative flex items-center gap-1">
+          <div className="relative z-[75] flex items-center gap-1">
             <button
               onClick={() => {
                 setShowHistory((v) => {
@@ -624,7 +659,7 @@ export function AlfredPanel({
                 });
               }}
               title="Suhbatlar tarixi"
-              className={`rounded-lg p-2 transition-colors hover:bg-slate-800 hover:text-white ${
+              className={`relative z-[20] rounded-lg p-2 transition-colors hover:bg-slate-800 hover:text-white ${
                 showHistory ? "bg-slate-800 text-white" : "text-slate-400"
               }`}
             >
@@ -636,7 +671,7 @@ export function AlfredPanel({
                 setShowMemories((v) => !v);
               }}
               title="Alfred xotirasi"
-              className={`rounded-lg p-2 transition-colors hover:bg-slate-800 hover:text-white ${
+              className={`relative z-[20] rounded-lg p-2 transition-colors hover:bg-slate-800 hover:text-white ${
                 showMemories ? "bg-slate-800 text-white" : "text-slate-400"
               }`}
             >
@@ -645,7 +680,7 @@ export function AlfredPanel({
             <button
               onClick={handleNewChat}
               title="Yangi suhbat"
-              className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+              className="relative z-[20] flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
             >
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">Yangi suhbat</span>
@@ -653,7 +688,7 @@ export function AlfredPanel({
             {variant === "overlay" && (
               <button
                 onClick={onClose}
-                className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+                className="relative z-[20] rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -663,10 +698,10 @@ export function AlfredPanel({
             {showHistory && (
               <>
                 <div
-                  className="fixed inset-0 z-[65]"
+                  className="fixed inset-0 z-[10]"
                   onClick={() => setShowHistory(false)}
                 />
-                <div className="absolute right-0 top-full z-[70] mt-2 max-h-96 w-80 overflow-y-auto rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-xl">
+                <div className="absolute right-0 top-full z-[30] mt-2 max-h-96 w-80 overflow-y-auto rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-xl">
                   <div className="mb-1 flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5">
                     <Search className="h-3.5 w-3.5 shrink-0 text-slate-500" />
                     <input
@@ -972,7 +1007,7 @@ export function AlfredPanel({
                                   className="fixed inset-0 z-[65]"
                                   onClick={() => setShowRetryMenu(false)}
                                 />
-                                <div className="absolute left-0 top-full z-[70] mt-1 w-64 rounded-xl border border-slate-700 bg-slate-900 p-1.5 shadow-xl">
+                                <div className="absolute bottom-full left-0 z-[70] mb-1 w-64 rounded-xl border border-slate-700 bg-slate-900 p-1.5 shadow-xl">
                                   <button
                                     onClick={() => handleRetry("again")}
                                     className="block w-full rounded-lg px-2.5 py-2 text-left text-xs text-slate-300 hover:bg-slate-800 hover:text-white"

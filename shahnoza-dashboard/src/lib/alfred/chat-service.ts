@@ -173,7 +173,7 @@ export class AlfredChatService {
 
       // Safety net: strip any internal tool name that leaked into the reply,
       // plus a dangling Uzbek connector it may have left behind.
-      const scrubbed = fullText
+      let scrubbed = fullText
         .replace(
           /\b(get_team_workload|search_tasks|search_sales|search_leads|search_expenses|search_payments)\b/gi,
           ""
@@ -184,6 +184,19 @@ export class AlfredChatService {
         )
         .replace(/[ \t]{2,}/g, " ")
         .trim();
+
+      // Deterministic fix for the username leak: when the current user's own
+      // name is really a login handle (contains a digit), replace it with
+      // "Siz" everywhere in the reply — including table cells and lists, where
+      // the prompt rule alone doesn't reliably hold. Scoped to the viewer's
+      // own handle, so other people's names are never touched.
+      const uname = workspaceContext.currentUserName;
+      if (uname && /\d/.test(uname)) {
+        const esc = uname.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        scrubbed = scrubbed
+          .replace(new RegExp(`\\s*\\(\\s*${esc}\\s*\\)`, "gi"), "")
+          .replace(new RegExp(esc, "gi"), "Siz");
+      }
 
       // Pull structured blocks (follow-ups, then actions) out of the reply
       const { followUps, remainingText } = this.parseFollowUps(scrubbed);
@@ -236,13 +249,13 @@ export class AlfredChatService {
     return `You are Alfred, Ozish PWA's intelligent task management assistant.
 
 TODAY: ${context.today ?? "(unknown)"} (Tashkent, UTC+5)
-CURRENT USER: ${context.currentUserName ?? "(unknown)"} — this is the person you are talking to. When they say "men", "mening vazifalarim", "my tasks", they mean this person. Never ask who they are. Address them as "siz" — NEVER echo their raw username/handle (a name containing digits, like an email prefix) in your visible text; if you must reference them by name and their stored name looks like a handle, just say "siz".${
+CURRENT USER: ${context.currentUserName ?? "(unknown)"} — this is the person you are talking to. When they say "men", "mening vazifalarim", "my tasks", they mean this person. Never ask who they are. Always call them "Siz" — NEVER print their raw username/handle (a name containing digits, like an email prefix) ANYWHERE in your reply, including inside tables, lists, or parentheses. In a table row for this person write just "Siz", never "Siz (${context.currentUserName ?? "handle"})".${
       context.currentPage
         ? `\nUSER'S CURRENT PAGE: ${context.currentPage} — "shu sahifa", "bu yer", "this page" refer to it; bias your suggestions toward it.`
         : ""
     }
 
-FORMATTING: Reply in Markdown — **bold** for key figures and titles, "-" bullets, short paragraphs. Use *italic* sparingly. Do NOT use Markdown tables (no "|" pipes, no "---" separator rows) — the chat is narrow; use "-" bullet lists instead, one item per line. Link a task ONLY when you have its real id (from an "(id: ...)" in OPEN TASKS or a search_tasks result): [Vazifa nomi](/tasks/<real-id>). If you do NOT have the id, write the task name as plain **bold** text — NEVER emit "[name](/tasks/)" with an empty or missing id. For sales point to [Sotuvlar ro'yxati](/sales/list), leads to [Leadlar](/leads), P&L to [P&L](/finance/pnl) when it helps the user jump there.
+FORMATTING: Reply in Markdown — **bold** for key figures and titles, "-" bullets, short paragraphs, *italic* sparingly. Markdown tables ARE supported and are good for comparisons (e.g. per-person workload) — use a header row, a "|---|" separator, then data rows. For a simple list prefer bullets. Link a task ONLY when you have its real id (from an "(id: ...)" in OPEN TASKS or a search_tasks result): [Vazifa nomi](/tasks/<real-id>). If you do NOT have the id, write the task name as plain **bold** text — NEVER emit "[name](/tasks/)" with an empty or missing id. For sales point to [Sotuvlar ro'yxati](/sales/list), leads to [Leadlar](/leads), P&L to [P&L](/finance/pnl) when it helps the user jump there.
 
 NEVER mention internal tool or function names in your reply (search_tasks, get_team_workload, search_sales, etc.). Just state the finding — say "Jamoa yuklamasiga ko'ra…", never "get_team_workload natijasiga ko'ra…".
 

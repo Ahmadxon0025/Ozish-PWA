@@ -196,56 +196,108 @@ function isTableSeparator(line: string): boolean {
   return /^\s*\|?[\s:|-]+\|?\s*$/.test(line) && line.includes("-");
 }
 
-/** A pipe table row. Rendered as " · "-joined cells (tables overflow a chat bubble). */
+/** A pipe table row (leading pipe, or ≥2 pipes anywhere — covers both styles). */
 function isTableRow(line: string): boolean {
   const t = line.trim();
-  return t.startsWith("|") && (line.match(/\|/g)?.length ?? 0) >= 2;
+  if (isTableSeparator(line)) return false;
+  return t.startsWith("|") || (line.match(/\|/g)?.length ?? 0) >= 2;
 }
 
-function tableRowCells(line: string): string {
+function tableCells(line: string): string[] {
   return line
     .split("|")
     .map((c) => c.trim())
-    .filter((c, idx, arr) => !(c === "" && (idx === 0 || idx === arr.length - 1)))
-    .join(" · ");
+    .filter((c, idx, arr) => !(c === "" && (idx === 0 || idx === arr.length - 1)));
+}
+
+/** Render a contiguous run of pipe rows as a real, horizontally-scrollable table. */
+function MarkdownTable({ rows, keyId }: { rows: string[]; keyId: string }) {
+  // First non-separator row is the header; separator rows are dropped.
+  const dataRows = rows.filter((r) => !isTableSeparator(r)).map(tableCells);
+  if (dataRows.length === 0) return null;
+  const [head, ...body] = dataRows;
+  return (
+    <div className="my-1 overflow-x-auto">
+      <table className="w-full border-collapse text-xs">
+        <thead>
+          <tr>
+            {head.map((c, j) => (
+              <th
+                key={j}
+                className="border-b border-slate-700 px-2 py-1 text-left font-semibold text-white"
+              >
+                {renderInline(c, `${keyId}h${j}`)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {body.map((r, ri) => (
+            <tr key={ri}>
+              {r.map((c, ci) => (
+                <td
+                  key={ci}
+                  className="border-b border-slate-800 px-2 py-1 text-slate-300"
+                >
+                  {renderInline(c, `${keyId}r${ri}c${ci}`)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 function MarkdownText({ text }: { text: string }) {
   const lines = text.split("\n");
-  return (
-    <div className="space-y-1">
-      {lines.map((line, i) => {
-        // Markdown tables overflow a narrow chat bubble — drop the separator
-        // row and render each row as " · "-joined cells.
-        if (isTableSeparator(line)) return null;
-        if (isTableRow(line)) {
-          return (
-            <p key={i} className="text-slate-300">
-              {renderInline(tableRowCells(line), `t${i}`)}
-            </p>
-          );
-        }
-        const header = line.match(/^#{1,4}\s+(.*)/);
-        if (header) {
-          return (
-            <p key={i} className="pt-1 font-semibold text-white">
-              {renderInline(header[1], `h${i}`)}
-            </p>
-          );
-        }
-        const bullet = line.match(/^\s*[-•*]\s+(.*)/);
-        if (bullet) {
-          return (
-            <p key={i} className="pl-3">
-              •&nbsp;{renderInline(bullet[1], `u${i}`)}
-            </p>
-          );
-        }
-        if (line.trim() === "") return <div key={i} className="h-1.5" />;
-        return <p key={i}>{renderInline(line, `p${i}`)}</p>;
-      })}
-    </div>
-  );
+  const blocks: React.ReactNode[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Group a contiguous run of table rows into one real <table>.
+    if (isTableRow(line) || isTableSeparator(line)) {
+      const rows: string[] = [];
+      while (
+        i < lines.length &&
+        (isTableRow(lines[i]) || isTableSeparator(lines[i]))
+      ) {
+        rows.push(lines[i]);
+        i++;
+      }
+      i--; // step back; the for-loop will advance
+      blocks.push(<MarkdownTable key={`tbl${i}`} rows={rows} keyId={`tbl${i}`} />);
+      continue;
+    }
+
+    const header = line.match(/^#{1,4}\s+(.*)/);
+    if (header) {
+      blocks.push(
+        <p key={i} className="pt-1 font-semibold text-white">
+          {renderInline(header[1], `h${i}`)}
+        </p>
+      );
+      continue;
+    }
+    const bullet = line.match(/^\s*[-•*]\s+(.*)/);
+    if (bullet) {
+      blocks.push(
+        <p key={i} className="pl-3">
+          •&nbsp;{renderInline(bullet[1], `u${i}`)}
+        </p>
+      );
+      continue;
+    }
+    if (line.trim() === "") {
+      blocks.push(<div key={i} className="h-1.5" />);
+      continue;
+    }
+    blocks.push(<p key={i}>{renderInline(line, `p${i}`)}</p>);
+  }
+
+  return <div className="space-y-1">{blocks}</div>;
 }
 
 /* ------------------------------------------------------------------ */

@@ -1230,8 +1230,7 @@ export function AlfredPanel({
                 onKeyDown={(e) =>
                   e.key === "Enter" && !isLoading && handleSend()
                 }
-                className="min-w-0 flex-1 bg-transparent py-1.5 text-sm text-white placeholder-slate-500 outline-none disabled:opacity-50"
-                disabled={isLoading}
+                className="min-w-0 flex-1 bg-transparent py-1.5 text-sm text-white placeholder-slate-500 outline-none"
                 autoFocus
               />
               <button

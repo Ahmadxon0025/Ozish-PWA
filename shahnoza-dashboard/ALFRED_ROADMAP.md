@@ -51,6 +51,22 @@ dashboard (finance, sales, leads, tasks, treasury) on Next.js + Supabase.
 | Follow-up chips | Model-generated FOLLOWUPS block → 2-3 next-action chips | ✅ shipped |
 | Answer action bar | Copy + retry (regenerate replaces last exchange) | ✅ shipped |
 | Inspectable memory | Memory pane: view + delete learned facts | ✅ shipped |
+| Consent-first memory | Candidates shown as "Eslab qolaymi?" card; nothing stored without a click; volatile facts (counts, states, balances) refused by prompt + code filter | ✅ shipped |
+| Markdown answers + record links | Lightweight renderer (bold/bullets/headers/links); tasks found via search_tasks link to /tasks/<id> | ✅ shipped |
+| Page-context awareness | Panel sends the current route; prompt carries the page label; composer shows a 📍 chip; page-scoped suggestion prepended | ✅ shipped |
+| Thinking trace | Rotating status steps while waiting (streaming still on the roadmap) | ✅ shipped |
+| Retry modes + 👍/👎 | Regenerate / simpler / deeper; feedback logged to ai_usage_log (feature=alfred_feedback) | ✅ shipped |
+| AI chat titles + history UX | Haiku-generated titles, search box, Bugun/Kecha grouping | ✅ shipped |
+
+## Next tranche (from the reviewers' install lists)
+
+1. Selection-based writing (Improve/Shorten/Translate toolbar + /write) — the
+   highest-frequency ClickUp surface, still absent
+2. AI fields (start with the sales list's empty IZOH column)
+3. Dashboard AI narrative card on Boshqaruv paneli
+4. Parameter form cards (period/person pickers instead of prose filters)
+5. True streaming responses (SSE) to replace the rotating trace
+6. Record chips with status badge + avatar (links shipped; chips next)
 
 ## Deliberately skipped (big-company problems)
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import {
   X,
   Sparkles,
@@ -16,6 +17,10 @@ import {
   RefreshCw,
   Trash2,
   ArrowLeft,
+  ThumbsUp,
+  ThumbsDown,
+  Search,
+  MapPin,
 } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { Button } from "@/components/ui/button";
@@ -26,6 +31,14 @@ const SUGGESTIONS = [
   { icon: Users, label: "Jamoa yuklamasi qanday?" },
   { icon: ClipboardList, label: "Qaysi vazifalar kechikmoqda?" },
   { icon: TrendingUp, label: "Bu hafta nimaga e'tibor qaratish kerak?" },
+];
+
+/** While Alfred works, cycle a reasoning trace instead of a frozen label. */
+const THINKING_STEPS = [
+  "So'rovingizni o'qiyapman…",
+  "Ma'lumotlar bazasini tekshiryapman…",
+  "Raqamlarni solishtiryapman…",
+  "Javobni tayyorlayapman…",
 ];
 
 /**
@@ -84,6 +97,16 @@ const INTENT_PILLS: Array<{ emoji: string; label: string; prompts: string[] }> =
     ],
   },
   {
+    emoji: "🗓",
+    label: "Muddat",
+    prompts: [
+      "Bugun qanday muddatlar bor?",
+      "Shu haftadagi barcha muddatlarni ko'rsat",
+      "Shu vazifaning muddatini surish kerak: ",
+      "Kelasi hafta rejasini tuzib ber",
+    ],
+  },
+  {
     emoji: "💰",
     label: "Moliya",
     prompts: [
@@ -100,12 +123,79 @@ type ChatMessage = {
   content: string;
   messageId?: string;
   followUps?: string[];
+  memoryCandidates?: Array<{ content: string; category: string }>;
   executed?: Array<{
     logId: string | null;
     success: boolean;
     message: string;
   }>;
 };
+
+/* ------------------------------------------------------------------ */
+/* Lightweight Markdown renderer: bold, bullets, headers, internal    */
+/* links. No external dependency; covers what the model emits.        */
+/* ------------------------------------------------------------------ */
+
+function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
+  const nodes: React.ReactNode[] = [];
+  const regex = /\*\*(.+?)\*\*|\[([^\]]+)\]\((\/[^)\s]+)\)/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  let i = 0;
+  while ((m = regex.exec(text))) {
+    if (m.index > last) nodes.push(text.slice(last, m.index));
+    if (m[1] !== undefined) {
+      nodes.push(
+        <strong key={`${keyPrefix}b${i++}`} className="font-semibold text-white">
+          {m[1]}
+        </strong>
+      );
+    } else {
+      nodes.push(
+        <a
+          key={`${keyPrefix}l${i++}`}
+          href={m[3]}
+          className="text-purple-300 underline underline-offset-2 hover:text-purple-200"
+        >
+          {m[2]}
+        </a>
+      );
+    }
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) nodes.push(text.slice(last));
+  return nodes;
+}
+
+function MarkdownText({ text }: { text: string }) {
+  const lines = text.split("\n");
+  return (
+    <div className="space-y-1">
+      {lines.map((line, i) => {
+        const header = line.match(/^#{1,4}\s+(.*)/);
+        if (header) {
+          return (
+            <p key={i} className="pt-1 font-semibold text-white">
+              {renderInline(header[1], `h${i}`)}
+            </p>
+          );
+        }
+        const bullet = line.match(/^\s*[-•*]\s+(.*)/);
+        if (bullet) {
+          return (
+            <p key={i} className="pl-3">
+              •&nbsp;{renderInline(bullet[1], `u${i}`)}
+            </p>
+          );
+        }
+        if (line.trim() === "") return <div key={i} className="h-1.5" />;
+        return <p key={i}>{renderInline(line, `p${i}`)}</p>;
+      })}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 
 export function AlfredPanel({
   onClose,
@@ -114,24 +204,34 @@ export function AlfredPanel({
   onClose?: () => void;
   variant?: "overlay" | "page";
 }) {
+  const pathname = usePathname();
   const [message, setMessage] = useState("");
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   const [isLoading, setIsLoading] = useState(false);
+  const [thinkingStep, setThinkingStep] = useState(0);
   const [undoingId, setUndoingId] = useState<string | null>(null);
   const [undoneMessages, setUndoneMessages] = useState<Record<string, boolean>>(
     {}
   );
+  const [memoryResolved, setMemoryResolved] = useState<Record<string, boolean>>(
+    {}
+  );
+  const [ratings, setRatings] = useState<Record<string, "up" | "down">>({});
   const [showHistory, setShowHistory] = useState(false);
   const [showMemories, setShowMemories] = useState(false);
+  const [showRetryMenu, setShowRetryMenu] = useState(false);
   const [openPill, setOpenPill] = useState<string | null>(null);
+  const [historySearch, setHistorySearch] = useState("");
   const [headlineIdx, setHeadlineIdx] = useState(0);
 
   const alfredChat = api.alfred.chat.useMutation();
   const undoMutation = api.alfred.undoAction.useMutation();
   const newConversationMutation = api.alfred.newConversation.useMutation();
   const deleteMemoryMutation = api.alfred.deleteMemory.useMutation();
+  const saveMemoriesMutation = api.alfred.saveMemories.useMutation();
+  const rateAnswerMutation = api.alfred.rateAnswer.useMutation();
   const utils = api.useUtils();
 
   const me = api.users.me.useQuery(undefined, { staleTime: Infinity });
@@ -139,10 +239,10 @@ export function AlfredPanel({
     staleTime: Infinity,
     refetchOnWindowFocus: false,
   });
-  const suggestionsQuery = api.alfred.getSuggestions.useQuery(undefined, {
-    staleTime: 60_000,
-    refetchOnWindowFocus: false,
-  });
+  const suggestionsQuery = api.alfred.getSuggestions.useQuery(
+    { page: pathname ?? undefined },
+    { staleTime: 60_000, refetchOnWindowFocus: false }
+  );
   const conversationsQuery = api.alfred.listConversations.useQuery(undefined, {
     enabled: showHistory,
     refetchOnWindowFocus: false,
@@ -155,12 +255,19 @@ export function AlfredPanel({
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const hydratedRef = useRef(false);
+  const popoverOpenRef = useRef(false);
+  popoverOpenRef.current = !!(openPill || showHistory || showRetryMenu);
 
-  const firstName = me.data?.full_name?.trim().split(/\s+/)[0];
+  const pageLabel = suggestionsQuery.data?.pageLabel ?? null;
+
+  // Personalized headline — only when the stored name looks like a real name,
+  // never the raw login handle (digits = handle, e.g. an email prefix)
+  const rawFirst = me.data?.full_name?.trim().split(/\s+/)[0];
+  const firstName = rawFirst && !/\d/.test(rawFirst) ? rawFirst : null;
   const headlines = useMemo(
     () => [
       "Jamoangizning aqlli yordamchisi",
-      ...(firstName ? [`${firstName}ning AI yordamchisi`] : []),
+      firstName ? `${firstName}ning AI yordamchisi` : "Sizning AI yordamchingiz",
       "Nimadan boshlaymiz?",
       "Alfred — sizning qo'lingizda",
     ],
@@ -171,6 +278,19 @@ export function AlfredPanel({
     const t = setInterval(() => setHeadlineIdx((i) => i + 1), 3500);
     return () => clearInterval(t);
   }, []);
+
+  // Rotating thinking trace while waiting
+  useEffect(() => {
+    if (!isLoading) {
+      setThinkingStep(0);
+      return;
+    }
+    const t = setInterval(
+      () => setThinkingStep((s) => Math.min(s + 1, THINKING_STEPS.length - 1)),
+      4000
+    );
+    return () => clearInterval(t);
+  }, [isLoading]);
 
   // Restore the saved conversation once, when the panel opens
   useEffect(() => {
@@ -187,18 +307,24 @@ export function AlfredPanel({
     );
   }, [savedConversation.data]);
 
+  const closeAllPopovers = () => {
+    setOpenPill(null);
+    setShowHistory(false);
+    setShowRetryMenu(false);
+  };
+
   const handleNewChat = () => {
     hydratedRef.current = true; // never re-hydrate the archived conversation
     setMessages([]);
     setConversationId(null);
     setShowMemories(false);
-    setShowHistory(false);
+    closeAllPopovers();
     newConversationMutation.mutate();
     inputRef.current?.focus();
   };
 
   const openConversation = async (id: string) => {
-    setShowHistory(false);
+    closeAllPopovers();
     try {
       const res = await utils.alfred.getConversation.fetch({
         conversationId: id,
@@ -220,7 +346,7 @@ export function AlfredPanel({
   };
 
   const injectPrompt = (prompt: string) => {
-    setOpenPill(null);
+    closeAllPopovers();
     setMessage(prompt);
     setTimeout(() => {
       const el = inputRef.current;
@@ -231,10 +357,17 @@ export function AlfredPanel({
     }, 0);
   };
 
+  // Escape: close any open popover first; only then close the panel
   useEffect(() => {
-    if (variant !== "overlay" || !onClose) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      if (popoverOpenRef.current) {
+        setOpenPill(null);
+        setShowHistory(false);
+        setShowRetryMenu(false);
+        return;
+      }
+      if (variant === "overlay" && onClose) onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -254,6 +387,7 @@ export function AlfredPanel({
     ];
     setMessages(withUser);
     setIsLoading(true);
+    closeAllPopovers();
 
     try {
       const conversationHistory = base.map((m) => ({
@@ -266,18 +400,13 @@ export function AlfredPanel({
       const response = await alfredChat.mutateAsync({
         message: userMsg,
         conversationId: conversationId ?? undefined,
+        page: pathname ?? undefined,
         conversationHistory,
       });
 
       if (response.success) {
         if (response.conversationId) {
           setConversationId(response.conversationId);
-        }
-        if (response.learned && response.learned > 0) {
-          toast({
-            title: "🧠 Alfred esladi",
-            description: `${response.learned} ta yangi ma'lumot xotiraga saqlandi`,
-          });
         }
         const executed =
           response.executed && response.executed.length > 0
@@ -301,6 +430,10 @@ export function AlfredPanel({
             messageId,
             executed,
             followUps: response.followUps ?? undefined,
+            memoryCandidates:
+              response.memoryCandidates && response.memoryCandidates.length > 0
+                ? response.memoryCandidates
+                : undefined,
           },
         ]);
       } else {
@@ -334,11 +467,18 @@ export function AlfredPanel({
     await runSend(userMsg, messages);
   };
 
-  const handleRetry = () => {
+  /** Three retry modes: as-is, simpler, deeper. All replace the last exchange. */
+  const handleRetry = (mode: "again" | "simpler" | "deeper") => {
     if (isLoading) return;
+    setShowRetryMenu(false);
     const lastUserIdx = messages.map((m) => m.role).lastIndexOf("user");
     if (lastUserIdx === -1) return;
-    const content = messages[lastUserIdx].content;
+    let content = messages[lastUserIdx].content;
+    if (mode === "simpler") {
+      content += " — soddaroq va qisqaroq tushuntirib ber";
+    } else if (mode === "deeper") {
+      content += " — ma'lumotlar bazasini chuqurroq tekshirib, batafsil javob ber";
+    }
     runSend(content, messages.slice(0, lastUserIdx));
   };
 
@@ -349,6 +489,32 @@ export function AlfredPanel({
     } catch {
       // clipboard unavailable
     }
+  };
+
+  const handleRate = (messageId: string, helpful: boolean) => {
+    setRatings((prev) => ({ ...prev, [messageId]: helpful ? "up" : "down" }));
+    rateAnswerMutation.mutate({ helpful });
+  };
+
+  const handleSaveMemories = async (msg: ChatMessage) => {
+    if (!msg.messageId || !msg.memoryCandidates) return;
+    try {
+      const res = await saveMemoriesMutation.mutateAsync({
+        memories: msg.memoryCandidates as any,
+      });
+      setMemoryResolved((prev) => ({ ...prev, [msg.messageId!]: true }));
+      toast({
+        title: "🧠 Xotiraga saqlandi",
+        description: `${res.saved} ta ma'lumot eslab qolindi`,
+        variant: "success",
+      });
+    } catch {
+      toast({ title: "Saqlab bo'lmadi", variant: "destructive" });
+    }
+  };
+
+  const handleDismissMemories = (messageId: string) => {
+    setMemoryResolved((prev) => ({ ...prev, [messageId]: true }));
   };
 
   const handleDeleteMemory = async (memoryId: string) => {
@@ -392,15 +558,38 @@ export function AlfredPanel({
     }
   };
 
+  // History grouping: Bugun / Kecha / date
+  const groupedConversations = useMemo(() => {
+    const list = (conversationsQuery.data?.conversations ?? []).filter(
+      (c: any) =>
+        !historySearch.trim() ||
+        c.title.toLowerCase().includes(historySearch.trim().toLowerCase())
+    );
+    const today = new Date(Date.now() + 5 * 3600 * 1000).toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() + 5 * 3600 * 1000 - 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    const groups: Array<{ label: string; items: any[] }> = [];
+    for (const c of list) {
+      const day = new Date(c.updatedAt).toISOString().slice(0, 10);
+      const label =
+        day === today ? "Bugun" : day === yesterday ? "Kecha" : day;
+      const g = groups.find((x) => x.label === label);
+      if (g) g.items.push(c);
+      else groups.push({ label, items: [c] });
+    }
+    return groups;
+  }, [conversationsQuery.data, historySearch]);
+
   const isEmpty = messages.length === 0;
   const lastIndex = messages.length - 1;
 
   return (
     <>
-      {/* Backdrop (overlay mode only) */}
+      {/* Backdrop (overlay mode only) — above page FABs */}
       {variant === "overlay" && (
         <div
-          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px]"
+          className="fixed inset-0 z-[55] bg-black/40 backdrop-blur-[2px]"
           onClick={onClose}
         />
       )}
@@ -409,7 +598,7 @@ export function AlfredPanel({
       <div
         className={
           variant === "overlay"
-            ? "fixed right-0 top-0 z-50 flex h-full w-full flex-col border-l border-slate-800 bg-slate-950 shadow-2xl duration-300 animate-in slide-in-from-right sm:w-[85vw] md:w-[55vw] lg:w-1/2"
+            ? "fixed right-0 top-0 z-[60] flex h-full w-full flex-col border-l border-slate-800 bg-slate-950 shadow-2xl duration-300 animate-in slide-in-from-right sm:w-[85vw] md:w-[55vw] lg:w-1/2"
             : "relative flex h-full w-full flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-950"
         }
       >
@@ -425,8 +614,14 @@ export function AlfredPanel({
           <div className="relative flex items-center gap-1">
             <button
               onClick={() => {
-                setShowHistory((v) => !v);
-                setShowMemories(false);
+                setShowHistory((v) => {
+                  if (!v) {
+                    setOpenPill(null);
+                    setShowRetryMenu(false);
+                    setShowMemories(false);
+                  }
+                  return !v;
+                });
               }}
               title="Suhbatlar tarixi"
               className={`rounded-lg p-2 transition-colors hover:bg-slate-800 hover:text-white ${
@@ -437,8 +632,8 @@ export function AlfredPanel({
             </button>
             <button
               onClick={() => {
+                closeAllPopovers();
                 setShowMemories((v) => !v);
-                setShowHistory(false);
               }}
               title="Alfred xotirasi"
               className={`rounded-lg p-2 transition-colors hover:bg-slate-800 hover:text-white ${
@@ -466,48 +661,65 @@ export function AlfredPanel({
 
             {/* History dropdown */}
             {showHistory && (
-              <div className="absolute right-0 top-full z-10 mt-2 max-h-96 w-72 overflow-y-auto rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-xl">
-                <p className="px-2 pb-2 pt-1 text-xs font-medium text-slate-400">
-                  Suhbatlar tarixi
-                </p>
-                {conversationsQuery.isLoading && (
-                  <div className="flex justify-center py-4">
-                    <Loader2 className="h-4 w-4 animate-spin text-purple-400" />
+              <>
+                <div
+                  className="fixed inset-0 z-[65]"
+                  onClick={() => setShowHistory(false)}
+                />
+                <div className="absolute right-0 top-full z-[70] mt-2 max-h-96 w-80 overflow-y-auto rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-xl">
+                  <div className="mb-1 flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5">
+                    <Search className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                    <input
+                      value={historySearch}
+                      onChange={(e) => setHistorySearch(e.target.value)}
+                      placeholder="Suhbatlarni qidirish…"
+                      className="min-w-0 flex-1 bg-transparent text-xs text-white placeholder-slate-500 outline-none"
+                    />
                   </div>
-                )}
-                {conversationsQuery.data?.conversations.length === 0 && (
-                  <p className="px-2 py-3 text-xs text-slate-500">
-                    Hali suhbatlar yo'q
-                  </p>
-                )}
-                {conversationsQuery.data?.conversations.map((c: any) => (
-                  <button
-                    key={c.id}
-                    onClick={() => openConversation(c.id)}
-                    className="block w-full rounded-lg px-2 py-2 text-left transition-colors hover:bg-slate-800"
-                  >
-                    <span className="block truncate text-sm text-slate-200">
-                      {c.title}
-                      {c.active && (
-                        <span className="ml-1.5 text-[10px] text-purple-400">
-                          • joriy
-                        </span>
-                      )}
-                    </span>
-                    <span className="text-[11px] text-slate-500">
-                      {new Date(c.updatedAt).toLocaleDateString()}
-                    </span>
-                  </button>
-                ))}
-              </div>
+                  {conversationsQuery.isLoading && (
+                    <div className="flex justify-center py-4">
+                      <Loader2 className="h-4 w-4 animate-spin text-purple-400" />
+                    </div>
+                  )}
+                  {groupedConversations.length === 0 &&
+                    !conversationsQuery.isLoading && (
+                      <p className="px-2 py-3 text-xs text-slate-500">
+                        Suhbat topilmadi
+                      </p>
+                    )}
+                  {groupedConversations.map((g) => (
+                    <div key={g.label}>
+                      <p className="px-2 pb-1 pt-2 text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                        {g.label}
+                      </p>
+                      {g.items.map((c: any) => (
+                        <button
+                          key={c.id}
+                          onClick={() => openConversation(c.id)}
+                          className="block w-full rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-slate-800"
+                        >
+                          <span className="block truncate text-sm text-slate-200">
+                            {c.title}
+                            {c.active && (
+                              <span className="ml-1.5 text-[10px] text-purple-400">
+                                • joriy
+                              </span>
+                            )}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         </div>
 
         {/* Body */}
         {showMemories ? (
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
-            <div className="mb-3 flex items-center gap-2">
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 sm:px-6">
+            <div className="sticky top-0 z-10 -mx-4 mb-3 flex items-center gap-2 bg-slate-950 px-4 py-3 sm:-mx-6 sm:px-6">
               <button
                 onClick={() => setShowMemories(false)}
                 className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white"
@@ -519,8 +731,9 @@ export function AlfredPanel({
               </h3>
             </div>
             <p className="mb-4 text-xs text-slate-400">
-              Alfred suhbatlardan o'zi o'rgangan bilimlar. Noto'g'ri
-              o'rganilganini o'chirib tashlang — keyingi javoblarda ishlatilmaydi.
+              Alfred siz tasdiqlagan bilimlarni shu yerda saqlaydi. Noto'g'ri
+              yoki eskirganini o'chirib tashlang — keyingi javoblarda
+              ishlatilmaydi.
             </p>
             {memoriesQuery.isLoading && (
               <div className="flex justify-center py-8">
@@ -529,8 +742,8 @@ export function AlfredPanel({
             )}
             {memoriesQuery.data?.memories.length === 0 && (
               <p className="py-6 text-center text-sm text-slate-500">
-                Xotira hozircha bo'sh — Alfred bilan suhbatlashganingizda o'zi
-                o'rganib boradi.
+                Xotira hozircha bo'sh — Alfred taklif qilganda "Eslab qol"
+                tugmasini bossangiz, shu yerda paydo bo'ladi.
               </p>
             )}
             <div className="space-y-2">
@@ -578,12 +791,14 @@ export function AlfredPanel({
                 </p>
                 <div className="flex w-full max-w-sm flex-col gap-2">
                   {(suggestionsQuery.data?.suggestions?.length
-                    ? suggestionsQuery.data.suggestions.map((label, i) => ({
-                        icon: SUGGESTIONS[i % SUGGESTIONS.length].icon,
-                        label,
-                      }))
+                    ? suggestionsQuery.data.suggestions.map(
+                        (label: string, i: number) => ({
+                          icon: SUGGESTIONS[i % SUGGESTIONS.length].icon,
+                          label,
+                        })
+                      )
                     : SUGGESTIONS
-                  ).map(({ icon: Icon, label }) => (
+                  ).map(({ icon: Icon, label }: any) => (
                     <button
                       key={label}
                       onClick={() => handleSend(label)}
@@ -610,13 +825,17 @@ export function AlfredPanel({
                         </div>
                       )}
                       <div
-                        className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+                        className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
                           msg.role === "user"
-                            ? "bg-purple-600 text-white"
+                            ? "whitespace-pre-wrap bg-purple-600 text-white"
                             : "bg-slate-800/80 text-slate-200"
                         }`}
                       >
-                        {msg.content}
+                        {msg.role === "alfred" ? (
+                          <MarkdownText text={msg.content} />
+                        ) : (
+                          msg.content
+                        )}
                       </div>
                     </div>
 
@@ -639,7 +858,9 @@ export function AlfredPanel({
                             {undoneMessages[msg.messageId] ? (
                               <p className="text-slate-400">↩️ Bekor qilindi</p>
                             ) : (
-                              msg.executed.some((e) => e.success && e.logId) && (
+                              msg.executed.some(
+                                (e) => e.success && e.logId
+                              ) && (
                                 <Button
                                   size="sm"
                                   variant="ghost"
@@ -662,9 +883,47 @@ export function AlfredPanel({
                         </div>
                       )}
 
-                    {/* Copy / retry action bar on Alfred messages */}
-                    {msg.role === "alfred" && !isLoading && (
-                      <div className="ml-10 mt-1 flex items-center gap-1">
+                    {/* Memory consent card — nothing is stored until "Eslab qol" */}
+                    {msg.memoryCandidates &&
+                      msg.messageId &&
+                      !memoryResolved[msg.messageId] && (
+                        <div className="ml-10 mt-2">
+                          <Card className="border-slate-700 bg-slate-900 p-3 text-xs space-y-2">
+                            <p className="font-medium text-slate-300">
+                              🧠 Buni eslab qolaymi?
+                            </p>
+                            {msg.memoryCandidates.map((c, j) => (
+                              <p key={j} className="text-slate-400">
+                                • [{c.category}] {c.content}
+                              </p>
+                            ))}
+                            <div className="flex gap-2 pt-1">
+                              <Button
+                                size="sm"
+                                className="h-7 bg-purple-600 text-xs hover:bg-purple-700"
+                                onClick={() => handleSaveMemories(msg)}
+                                disabled={saveMemoriesMutation.isPending}
+                              >
+                                Eslab qol
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 text-xs"
+                                onClick={() =>
+                                  handleDismissMemories(msg.messageId!)
+                                }
+                              >
+                                Yo'q
+                              </Button>
+                            </div>
+                          </Card>
+                        </div>
+                      )}
+
+                    {/* Copy / rate / retry action bar on Alfred messages */}
+                    {msg.role === "alfred" && !isLoading && msg.messageId && (
+                      <div className="relative ml-10 mt-1 flex items-center gap-1">
                         <button
                           onClick={() => handleCopy(msg.content)}
                           title="Nusxalash"
@@ -672,14 +931,70 @@ export function AlfredPanel({
                         >
                           <Copy className="h-3.5 w-3.5" />
                         </button>
+                        <button
+                          onClick={() => handleRate(msg.messageId!, true)}
+                          title="Foydali"
+                          className={`rounded p-1 transition-colors hover:bg-slate-800 ${
+                            ratings[msg.messageId] === "up"
+                              ? "text-green-400"
+                              : "text-slate-500 hover:text-slate-300"
+                          }`}
+                        >
+                          <ThumbsUp className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleRate(msg.messageId!, false)}
+                          title="Foydasiz"
+                          className={`rounded p-1 transition-colors hover:bg-slate-800 ${
+                            ratings[msg.messageId] === "down"
+                              ? "text-red-400"
+                              : "text-slate-500 hover:text-slate-300"
+                          }`}
+                        >
+                          <ThumbsDown className="h-3.5 w-3.5" />
+                        </button>
                         {i === lastIndex && (
-                          <button
-                            onClick={handleRetry}
-                            title="Qayta urinish"
-                            className="rounded p-1 text-slate-500 transition-colors hover:bg-slate-800 hover:text-slate-300"
-                          >
-                            <RefreshCw className="h-3.5 w-3.5" />
-                          </button>
+                          <>
+                            <button
+                              onClick={() => setShowRetryMenu((v) => !v)}
+                              title="Qayta urinish"
+                              className={`rounded p-1 transition-colors hover:bg-slate-800 ${
+                                showRetryMenu
+                                  ? "bg-slate-800 text-slate-300"
+                                  : "text-slate-500 hover:text-slate-300"
+                              }`}
+                            >
+                              <RefreshCw className="h-3.5 w-3.5" />
+                            </button>
+                            {showRetryMenu && (
+                              <>
+                                <div
+                                  className="fixed inset-0 z-[65]"
+                                  onClick={() => setShowRetryMenu(false)}
+                                />
+                                <div className="absolute left-0 top-full z-[70] mt-1 w-64 rounded-xl border border-slate-700 bg-slate-900 p-1.5 shadow-xl">
+                                  <button
+                                    onClick={() => handleRetry("again")}
+                                    className="block w-full rounded-lg px-2.5 py-2 text-left text-xs text-slate-300 hover:bg-slate-800 hover:text-white"
+                                  >
+                                    🔄 Xuddi shu savol bilan qayta
+                                  </button>
+                                  <button
+                                    onClick={() => handleRetry("simpler")}
+                                    className="block w-full rounded-lg px-2.5 py-2 text-left text-xs text-slate-300 hover:bg-slate-800 hover:text-white"
+                                  >
+                                    ✂️ Soddaroq tushuntirsin
+                                  </button>
+                                  <button
+                                    onClick={() => handleRetry("deeper")}
+                                    className="block w-full rounded-lg px-2.5 py-2 text-left text-xs text-slate-300 hover:bg-slate-800 hover:text-white"
+                                  >
+                                    🔎 Chuqurroq tekshirsin
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </>
                         )}
                       </div>
                     )}
@@ -712,7 +1027,12 @@ export function AlfredPanel({
                     </div>
                     <div className="flex items-center gap-2 rounded-2xl bg-slate-800/80 px-4 py-2.5 text-slate-300">
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      <span className="text-sm">Alfred o'ylayapti...</span>
+                      <span
+                        key={thinkingStep}
+                        className="text-sm duration-300 animate-in fade-in"
+                      >
+                        {THINKING_STEPS[thinkingStep]}
+                      </span>
                     </div>
                   </div>
                 )}
@@ -721,9 +1041,7 @@ export function AlfredPanel({
           </div>
         )}
 
-        {/* Intent pills (empty state only). The prompt menu renders ABOVE the
-            row in normal flow — an absolutely-positioned menu inside the
-            overflow-x scroll row gets clipped and looks like a dead click. */}
+        {/* Intent pills (empty state only) — wraps, never clips */}
         {!showMemories && isEmpty && (
           <div className="px-4 pb-1 sm:px-6">
             {openPill &&
@@ -744,13 +1062,15 @@ export function AlfredPanel({
                   </div>
                 );
               })()}
-            <div className="flex gap-2 overflow-x-auto pb-1">
+            <div className="flex flex-wrap gap-2 pb-1">
               {INTENT_PILLS.map((pill) => (
                 <button
                   key={pill.label}
-                  onClick={() =>
-                    setOpenPill(openPill === pill.label ? null : pill.label)
-                  }
+                  onClick={() => {
+                    setShowHistory(false);
+                    setShowRetryMenu(false);
+                    setOpenPill(openPill === pill.label ? null : pill.label);
+                  }}
                   className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs transition-colors ${
                     openPill === pill.label
                       ? "border-purple-500/60 bg-slate-800 text-white"
@@ -770,6 +1090,12 @@ export function AlfredPanel({
           <div className="px-4 pb-5 pt-2 sm:px-6">
             <div className="flex items-center gap-2 rounded-2xl border border-slate-700 bg-slate-900 py-1.5 pl-4 pr-1.5 shadow-lg transition-colors focus-within:border-purple-500/60">
               <Sparkles className="h-5 w-5 shrink-0 text-purple-400" />
+              {pageLabel && (
+                <span className="flex shrink-0 items-center gap-1 rounded-full bg-purple-500/15 px-2 py-0.5 text-[11px] text-purple-300">
+                  <MapPin className="h-3 w-3" />
+                  {pageLabel}
+                </span>
+              )}
               <input
                 ref={inputRef}
                 type="text"

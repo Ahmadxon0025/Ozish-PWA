@@ -38,6 +38,8 @@ export interface WorkspaceContext {
   currentUserName?: string;
   /** Today's date (Tashkent), YYYY-MM-DD. */
   today?: string;
+  /** Human label of the dashboard page the user opened Alfred from. */
+  currentPage?: string;
   users: Array<{
     id: string;
     name: string;
@@ -219,7 +221,13 @@ export class AlfredChatService {
     return `You are Alfred, Ozish PWA's intelligent task management assistant.
 
 TODAY: ${context.today ?? "(unknown)"} (Tashkent, UTC+5)
-CURRENT USER: ${context.currentUserName ?? "(unknown)"} — this is the person you are talking to. When they say "men", "mening vazifalarim", "my tasks", they mean ${context.currentUserName ?? "this user"}. Never ask who they are.
+CURRENT USER: ${context.currentUserName ?? "(unknown)"} — this is the person you are talking to. When they say "men", "mening vazifalarim", "my tasks", they mean this person. Never ask who they are. Address them as "siz" — NEVER echo their raw username/handle (a name containing digits, like an email prefix) in your visible text; if you must reference them by name and their stored name looks like a handle, just say "siz".${
+      context.currentPage
+        ? `\nUSER'S CURRENT PAGE: ${context.currentPage} — "shu sahifa", "bu yer", "this page" refer to it; bias your suggestions toward it.`
+        : ""
+    }
+
+FORMATTING: Reply in Markdown — **bold** for key figures and titles, "-" bullets, short paragraphs. When you list a specific task you found via search_tasks (its result includes an id), render its title as a link: [Vazifa nomi](/tasks/<id>). For sales point to [Sotuvlar ro'yxati](/sales/list), leads to [Leadlar](/leads), P&L to [P&L](/finance/pnl) when it helps the user jump there.
 
 YOUR ROLE:
 - Analyze team workload and task assignments
@@ -367,7 +375,9 @@ NEVER:
 
 From the conversation exchange the user sends you, extract durable facts worth remembering for FUTURE conversations: team member strengths/preferences, working styles, business rules, recurring patterns, decisions, important context about the company.
 
-Do NOT extract: greetings, one-off task statuses, anything already visible in the live task list, or anything in the ALREADY KNOWN list below.
+NEVER extract volatile facts — anything that will be different next week: task counts ("26 ta vazifa"), workload states ("OVERLOADED"), account balances, current statuses, this week's numbers. Those live in the database and change daily; storing them makes future answers wrong. Only store facts that stay true: preferences, rules, relationships, skills, recurring patterns.
+
+Also do NOT extract: greetings, one-off task statuses, anything already visible in the live task list, or anything in the ALREADY KNOWN list below.
 
 Write each memory in the language it was expressed in (Uzbek is fine). Keep each under 200 characters.
 
@@ -404,16 +414,24 @@ Respond with [] if nothing new is worth remembering.`,
         "general",
       ]);
 
+      // Code-level backstop for the volatile-fact rule: refuse anything that
+      // smells like a live metric, whatever the model decided.
+      const volatile =
+        /(\d+\s*ta\b)|overloaded|hozircha|bugungi|shu\s+(hafta|oy)da|balans|qoldiq/i;
+
       return parsed
         .filter(
           (m: any) =>
-            m && typeof m.content === "string" && m.content.trim().length > 0
+            m &&
+            typeof m.content === "string" &&
+            m.content.trim().length > 0 &&
+            !volatile.test(m.content)
         )
         .map((m: any) => ({
           content: String(m.content).trim().slice(0, 500),
           category: allowedCategories.has(m.category) ? m.category : "general",
         }))
-        .slice(0, 5);
+        .slice(0, 3);
     } catch (error) {
       console.error("Memory extraction error:", error);
       return [];

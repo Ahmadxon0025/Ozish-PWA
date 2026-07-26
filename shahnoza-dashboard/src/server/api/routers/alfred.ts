@@ -9,6 +9,28 @@ import { AlfredActionExecutor } from "@/lib/alfred/action-executor";
 import { buildBusinessSnapshot } from "@/lib/alfred/workspace-data";
 import { executeDataTool } from "@/lib/alfred/data-tools";
 
+/** Dashboard route → human label + page-scoped suggestion (longest prefix wins). */
+const PAGE_MAP: Array<{ prefix: string; label: string; suggestion: string }> = [
+  { prefix: "/sales/list", label: "Sotuvlar ro'yxati", suggestion: "Sotuvlar ro'yxatini xulosalab ber" },
+  { prefix: "/sales/team", label: "Sotuv jamoasi", suggestion: "Sotuvchilar samaradorligini solishtir" },
+  { prefix: "/sales/goals", label: "Maqsadlar", suggestion: "Sotuv maqsadlariga yetyapmizmi?" },
+  { prefix: "/sales/calls", label: "Qo'ng'iroq tahlili", suggestion: "Qo'ng'iroqlar sifati qanday?" },
+  { prefix: "/sales", label: "Sotuv sharhi", suggestion: "Sotuv sharhini xulosalab ber" },
+  { prefix: "/leads", label: "Leadlar", suggestion: "Leadlar holatini xulosalab ber" },
+  { prefix: "/marketing", label: "Marketing tahlili", suggestion: "Lead manbalarini tahlil qil" },
+  { prefix: "/finance/pnl", label: "P&L (Foyda)", suggestion: "Bu oy P&L ni tushuntirib ber" },
+  { prefix: "/finance/cashflow", label: "Pul oqimi", suggestion: "Pul oqimini xulosalab ber" },
+  { prefix: "/finance/accounts", label: "Hisoblar (Kassa)", suggestion: "Hisoblardagi pulni ko'rsat" },
+  { prefix: "/finance", label: "Moliya", suggestion: "Moliyaviy holatni xulosalab ber" },
+  { prefix: "/tasks", label: "Vazifalar", suggestion: "Vazifalar holatini xulosalab ber" },
+  { prefix: "/dashboard", label: "Boshqaruv paneli", suggestion: "Bugungi holatni xulosalab ber" },
+];
+
+function pageInfo(path?: string | null) {
+  if (!path || path === "/brain") return null;
+  return PAGE_MAP.find((p) => path.startsWith(p.prefix)) ?? null;
+}
+
 export const alfredRouter = createTRPCRouter({
   getAnalysis: protectedProcedure.query(async ({ ctx }) => {
     try {
@@ -275,6 +297,7 @@ export const alfredRouter = createTRPCRouter({
       z.object({
         message: z.string(),
         conversationId: z.string().uuid().optional(),
+        page: z.string().max(200).optional(),
         conversationHistory: z
           .array(
             z.object({
@@ -291,6 +314,7 @@ export const alfredRouter = createTRPCRouter({
         // both through the caller's client so RLS decides visibility)
         const context = await buildWorkspaceContextForChat(ctx.supabase);
         context.currentUserName = ctx.appUser?.full_name ?? undefined;
+        context.currentPage = pageInfo(input.page)?.label ?? undefined;
         context.today = new Date(Date.now() + 5 * 3600 * 1000)
           .toISOString()
           .slice(0, 10);
@@ -316,9 +340,10 @@ export const alfredRouter = createTRPCRouter({
           (name, toolInput) => executeDataTool(ctx.supabase, name, toolInput)
         );
 
-        // Persist the exchange and extract new learnings (both best-effort)
+        // Persist the exchange; extract memory CANDIDATES but never save
+        // without the user's click (consent-first, ClickUp Preferences style)
         let conversationId: string | null = input.conversationId ?? null;
-        let learned = 0;
+        let memoryCandidates: Array<{ content: string; category: string }> = [];
         if (ctx.admin && ctx.appUser) {
           conversationId = await persistConversation(
             ctx.admin,
@@ -327,14 +352,20 @@ export const alfredRouter = createTRPCRouter({
             input.message,
             response.message
           );
-          learned = await extractAndSaveMemories(
-            chatService,
-            ctx.admin,
-            ctx.appUser.id,
-            input.message,
-            response.message,
-            memories
-          );
+          try {
+            const known = new Set(
+              memories.map((m) => m.content.trim().toLowerCase())
+            );
+            memoryCandidates = (
+              await chatService.extractMemories(
+                input.message,
+                response.message,
+                memories.map((m) => m.content)
+              )
+            ).filter((m) => !known.has(m.content.trim().toLowerCase()));
+          } catch (error) {
+            console.error("Memory extraction failed:", error);
+          }
         }
 
         // Tier A/B task actions run automatically — reversible, so no
@@ -371,7 +402,7 @@ export const alfredRouter = createTRPCRouter({
           thinking: response.thinking,
           followUps: response.followUps,
           conversationId,
-          learned,
+          memoryCandidates,
           executed,
         };
       } catch (error) {
@@ -390,8 +421,12 @@ export const alfredRouter = createTRPCRouter({
     }),
 
   /** Data-derived suggestion chips for the empty-chat hero. */
-  getSuggestions: protectedProcedure.query(async ({ ctx }) => {
+  getSuggestions: protectedProcedure
+    .input(z.object({ page: z.string().max(200).optional() }).optional())
+    .query(async ({ input, ctx }) => {
     const suggestions: string[] = [];
+    const scoped = pageInfo(input?.page);
+    if (scoped) suggestions.push(scoped.suggestion);
     try {
       const today = new Date(Date.now() + 5 * 3600 * 1000)
         .toISOString()
@@ -423,7 +458,10 @@ export const alfredRouter = createTRPCRouter({
 
     suggestions.push("Bu oy moliyaviy holat qanday?");
     if (suggestions.length < 3) suggestions.push("Jamoa yuklamasi qanday?");
-    return { suggestions: suggestions.slice(0, 3) };
+    return {
+      suggestions: suggestions.slice(0, 3),
+      pageLabel: scoped?.label ?? null,
+    };
   }),
 
   /**
@@ -509,6 +547,75 @@ export const alfredRouter = createTRPCRouter({
       return { memories: [] };
     }
   }),
+
+  /** Save memory candidates the user explicitly approved (consent-first). */
+  saveMemories: protectedProcedure
+    .input(
+      z.object({
+        memories: z
+          .array(
+            z.object({
+              content: z.string().min(1).max(500),
+              category: z.enum(["team", "person", "process", "preference", "general"]),
+            })
+          )
+          .min(1)
+          .max(3),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      if (!ctx.admin || !ctx.appUser) return { saved: 0 };
+      try {
+        const { data: existing } = await (ctx.admin as any)
+          .from("alfred_memories")
+          .select("content")
+          .eq("active", true)
+          .limit(200);
+        const seen = new Set(
+          ((existing as any[]) || []).map((m) =>
+            String(m.content).trim().toLowerCase()
+          )
+        );
+        const fresh = input.memories.filter(
+          (m) => !seen.has(m.content.trim().toLowerCase())
+        );
+        if (fresh.length === 0) return { saved: 0 };
+        const { error } = await (ctx.admin as any).from("alfred_memories").insert(
+          fresh.map((m) => ({
+            content: m.content.trim(),
+            category: m.category,
+            source: "chat",
+            created_by: ctx.appUser!.id,
+          }))
+        );
+        if (error) {
+          console.error("Memory save failed:", error.message);
+          return { saved: 0 };
+        }
+        return { saved: fresh.length };
+      } catch (error) {
+        console.error("Memory save failed:", error);
+        return { saved: 0 };
+      }
+    }),
+
+  /** 👍/👎 on an answer — the quality signal. Logged to ai_usage_log. */
+  rateAnswer: protectedProcedure
+    .input(z.object({ helpful: z.boolean() }))
+    .mutation(async ({ input, ctx }) => {
+      if (!ctx.admin || !ctx.appUser) return { success: true };
+      try {
+        await (ctx.admin as any).from("ai_usage_log").insert({
+          user_id: ctx.appUser.id,
+          feature: "alfred_feedback",
+          model: "claude-sonnet-5",
+          success: input.helpful,
+        });
+      } catch (error) {
+        console.error("Feedback log failed:", error);
+      }
+      return { success: true };
+    }),
 
   /** Forget a memory (soft delete — an agent that learned wrong must be correctable). */
   deleteMemory: protectedProcedure
@@ -740,11 +847,28 @@ async function persistConversation(
       }
     }
 
+    // Semantic title (haiku, best-effort) instead of the raw first message
+    let title = userMessage.slice(0, 80);
+    try {
+      const { callText } = await import("@/lib/ai/claude");
+      const generated = await callText({
+        feature: "alfred_title",
+        system:
+          "Suhbatning birinchi xabaridan 3-6 so'zlik qisqa sarlavha yoz, xabar tilida. FAQAT sarlavhani qaytar — qo'shtirnoqsiz, izohsiz.",
+        user: userMessage.slice(0, 300),
+        maxTokens: 40,
+      });
+      const clean = generated.trim().replace(/^["'«]|["'»]$/g, "").slice(0, 80);
+      if (clean) title = clean;
+    } catch {
+      // title generation is cosmetic — never block the chat
+    }
+
     const { data: created, error } = await admin
       .from("alfred_conversations")
       .insert({
         user_id: userId,
-        title: userMessage.slice(0, 80),
+        title,
         messages: newMessages,
         active: true,
       })
@@ -759,60 +883,6 @@ async function persistConversation(
   } catch (error) {
     console.error("Conversation persist failed:", error);
     return conversationId;
-  }
-}
-
-/**
- * Run memory extraction over the exchange and store any genuinely new facts.
- * Returns how many memories were saved. Never throws.
- */
-async function extractAndSaveMemories(
-  chatService: AlfredChatService,
-  admin: any,
-  userId: string,
-  userMessage: string,
-  assistantMessage: string,
-  knownMemories: Array<{ content: string; category: string }>
-): Promise<number> {
-  try {
-    const extracted = await chatService.extractMemories(
-      userMessage,
-      assistantMessage,
-      knownMemories.map((m) => m.content)
-    );
-    if (extracted.length === 0) return 0;
-
-    // Dedupe against everything currently stored, not just the injected slice
-    const { data: existing } = await admin
-      .from("alfred_memories")
-      .select("content")
-      .eq("active", true)
-      .limit(200);
-    const seen = new Set(
-      ((existing as any[]) || []).map((m) => String(m.content).trim().toLowerCase())
-    );
-
-    const fresh = extracted.filter(
-      (m) => !seen.has(m.content.trim().toLowerCase())
-    );
-    if (fresh.length === 0) return 0;
-
-    const { error } = await admin.from("alfred_memories").insert(
-      fresh.map((m) => ({
-        content: m.content,
-        category: m.category,
-        source: "chat",
-        created_by: userId,
-      }))
-    );
-    if (error) {
-      console.error("Memory save failed:", error.message);
-      return 0;
-    }
-    return fresh.length;
-  } catch (error) {
-    console.error("Memory extraction failed:", error);
-    return 0;
   }
 }
 

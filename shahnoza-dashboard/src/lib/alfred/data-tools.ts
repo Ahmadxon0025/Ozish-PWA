@@ -128,7 +128,7 @@ export async function executeDataTool(
       case "search_tasks": {
         let q = db
           .from("tasks")
-          .select("title, status, priority, due_date, completed_at, assigned_to, created_at");
+          .select("id, title, status, priority, due_date, completed_at, assigned_to, created_at");
         if (input?.status && input.status !== "all") {
           q = q.eq("status", input.status);
         }
@@ -146,6 +146,7 @@ export async function executeDataTool(
         return {
           count: (data || []).length,
           tasks: (data || []).map((t: any) => ({
+            id: t.id,
             title: t.title,
             status: t.status,
             priority: t.priority,

@@ -3,7 +3,7 @@ import { SupabaseClient } from "@supabase/supabase-js";
 export interface ActionInput {
   conversationId: string | null;
   actionId: string;
-  actionType: "assign" | "update" | "create" | "notify" | "expense" | "expense_update" | "sale" | "payment";
+  actionType: "assign" | "update" | "create" | "notify" | "expense" | "expense_update" | "expense_delete" | "sale" | "payment";
   data: Record<string, any>;
 }
 
@@ -57,6 +57,9 @@ export class AlfredActionExecutor {
           break;
         case "expense_update":
           result = await this.executeExpenseUpdate(data as any);
+          break;
+        case "expense_delete":
+          result = await this.executeExpenseDelete(data as any);
           break;
         case "sale":
           result = await this.executeSale(data as any);
@@ -616,6 +619,71 @@ export class AlfredActionExecutor {
       return {
         success: false,
         message: `Xarajatni to'g'rlab bo'lmadi: ${detail}`,
+        error: detail,
+      };
+    }
+  }
+
+  /** Delete (cancel) an expense. Finds by description match or most recent. */
+  private async executeExpenseDelete(data: {
+    match_description?: string;
+  }): Promise<ActionResult> {
+    try {
+      const matchDesc = data.match_description
+        ? String(data.match_description).trim()
+        : null;
+
+      // Find the expense to delete: by description match or most recent
+      let query = this.supabase
+        .from("expenses")
+        .select("id, description, amount, amount_usd, currency, paid_to, expense_date, created_at");
+
+      if (matchDesc) {
+        query = query.ilike("description", `%${matchDesc}%`);
+      }
+
+      const { data: expenses } = await query
+        .order("expense_date", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      if (!expenses || expenses.length === 0) {
+        return {
+          success: false,
+          message: matchDesc
+            ? `"${matchDesc}" tasvifli xarajat topilmadi`
+            : "Yaqinda qo'shilgan xarajat topilmadi",
+        };
+      }
+
+      const expense = expenses[0];
+      const prior = {
+        id: expense.id,
+        description: expense.description,
+        amount: expense.amount,
+        amount_usd: expense.amount_usd,
+        paid_to: expense.paid_to,
+        expense_date: expense.expense_date,
+      };
+
+      // Delete the expense
+      const { error } = await this.supabase
+        .from("expenses")
+        .delete()
+        .eq("id", expense.id);
+
+      if (error) throw error;
+
+      return {
+        success: true,
+        message: `Xarajat bekor qilindi: ${expense.amount}${expense.currency === "uzs" ? " so'm" : " USD"} (${expense.description})`,
+        data: { expenseId: expense.id, prior },
+      };
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Unknown error";
+      return {
+        success: false,
+        message: `Xarajatni bekor qilib bo'lmadi: ${detail}`,
         error: detail,
       };
     }

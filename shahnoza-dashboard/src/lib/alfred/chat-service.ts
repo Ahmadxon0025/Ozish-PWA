@@ -64,7 +64,7 @@ export interface AlfredProposal {
   description: string;
   actions: Array<{
     id: string;
-    type: "assign" | "update" | "create" | "notify";
+    type: "assign" | "update" | "create" | "notify" | "expense" | "expense_update" | "expense_delete" | "sale" | "payment";
     label: string;
     data?: Record<string, any>;
   }>;
@@ -530,7 +530,7 @@ Respond with [] if nothing new is worth remembering.`,
 
     try {
       const parsed = JSON.parse(match[1]);
-      const allowedTypes = new Set(["assign", "update", "create", "notify"]);
+      const allowedTypes = new Set(["assign", "update", "create", "notify", "expense", "expense_update", "expense_delete", "sale", "payment"]);
       const actions = (Array.isArray(parsed.actions) ? parsed.actions : [])
         .filter((a: any) => a && allowedTypes.has(a.type))
         .map((a: any, i: number) => ({

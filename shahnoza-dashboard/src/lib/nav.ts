@@ -50,7 +50,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Umumiy",
     items: [
       { label: "Boshqaruv paneli", href: "/dashboard", icon: LayoutDashboard, roles: OWNER_ROLES },
-      { label: "AI Miya", href: "/brain", icon: Sparkles, roles: OWNER_ROLES },
+      { label: "Alfred", href: "/brain", icon: Sparkles, roles: OWNER_ROLES },
     ],
   },
   {

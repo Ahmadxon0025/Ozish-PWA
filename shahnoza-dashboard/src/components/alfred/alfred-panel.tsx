@@ -107,7 +107,13 @@ type ChatMessage = {
   }>;
 };
 
-export function AlfredPanel({ onClose }: { onClose: () => void }) {
+export function AlfredPanel({
+  onClose,
+  variant = "overlay",
+}: {
+  onClose?: () => void;
+  variant?: "overlay" | "page";
+}) {
   const [message, setMessage] = useState("");
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -226,12 +232,13 @@ export function AlfredPanel({ onClose }: { onClose: () => void }) {
   };
 
   useEffect(() => {
+    if (variant !== "overlay" || !onClose) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, variant]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({
@@ -390,14 +397,22 @@ export function AlfredPanel({ onClose }: { onClose: () => void }) {
 
   return (
     <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px]"
-        onClick={onClose}
-      />
+      {/* Backdrop (overlay mode only) */}
+      {variant === "overlay" && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px]"
+          onClick={onClose}
+        />
+      )}
 
-      {/* Half-screen slide-over panel */}
-      <div className="fixed right-0 top-0 z-50 flex h-full w-full flex-col border-l border-slate-800 bg-slate-950 shadow-2xl duration-300 animate-in slide-in-from-right sm:w-[85vw] md:w-[55vw] lg:w-1/2">
+      {/* Overlay: half-screen slide-over. Page: fills its container. */}
+      <div
+        className={
+          variant === "overlay"
+            ? "fixed right-0 top-0 z-50 flex h-full w-full flex-col border-l border-slate-800 bg-slate-950 shadow-2xl duration-300 animate-in slide-in-from-right sm:w-[85vw] md:w-[55vw] lg:w-1/2"
+            : "relative flex h-full w-full flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-950"
+        }
+      >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
           <div className="flex items-center gap-2">
@@ -440,12 +455,14 @@ export function AlfredPanel({ onClose }: { onClose: () => void }) {
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">Yangi suhbat</span>
             </button>
-            <button
-              onClick={onClose}
-              className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
-            >
-              <X className="h-5 w-5" />
-            </button>
+            {variant === "overlay" && (
+              <button
+                onClick={onClose}
+                className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            )}
 
             {/* History dropdown */}
             {showHistory && (
@@ -704,45 +721,45 @@ export function AlfredPanel({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
-        {/* Intent pills (empty state only) */}
+        {/* Intent pills (empty state only). The prompt menu renders ABOVE the
+            row in normal flow — an absolutely-positioned menu inside the
+            overflow-x scroll row gets clipped and looks like a dead click. */}
         {!showMemories && isEmpty && (
           <div className="px-4 pb-1 sm:px-6">
-            {openPill && (
-              <div
-                className="fixed inset-0 z-10"
-                onClick={() => setOpenPill(null)}
-              />
-            )}
+            {openPill &&
+              (() => {
+                const pill = INTENT_PILLS.find((p) => p.label === openPill);
+                if (!pill) return null;
+                return (
+                  <div className="mb-2 rounded-xl border border-slate-700 bg-slate-900 p-1.5 shadow-xl duration-200 animate-in fade-in slide-in-from-bottom-2">
+                    {pill.prompts.map((p) => (
+                      <button
+                        key={p}
+                        onClick={() => injectPrompt(p)}
+                        className="block w-full rounded-lg px-2.5 py-2 text-left text-xs text-slate-300 transition-colors hover:bg-slate-800 hover:text-white"
+                      >
+                        {p.endsWith(": ") ? `${p}…` : p}
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
             <div className="flex gap-2 overflow-x-auto pb-1">
               {INTENT_PILLS.map((pill) => (
-                <div key={pill.label} className="relative shrink-0">
-                  {openPill === pill.label && (
-                    <div className="absolute bottom-full left-0 z-20 mb-2 w-72 rounded-xl border border-slate-700 bg-slate-900 p-1.5 shadow-xl">
-                      {pill.prompts.map((p) => (
-                        <button
-                          key={p}
-                          onClick={() => injectPrompt(p)}
-                          className="block w-full rounded-lg px-2.5 py-2 text-left text-xs text-slate-300 transition-colors hover:bg-slate-800 hover:text-white"
-                        >
-                          {p.endsWith(": ") ? `${p}…` : p}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  <button
-                    onClick={() =>
-                      setOpenPill(openPill === pill.label ? null : pill.label)
-                    }
-                    className={`flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs transition-colors ${
-                      openPill === pill.label
-                        ? "border-purple-500/60 bg-slate-800 text-white"
-                        : "border-slate-700 bg-slate-900 text-slate-300 hover:border-purple-500/50 hover:bg-slate-800 hover:text-white"
-                    }`}
-                  >
-                    <span>{pill.emoji}</span>
-                    {pill.label}
-                  </button>
-                </div>
+                <button
+                  key={pill.label}
+                  onClick={() =>
+                    setOpenPill(openPill === pill.label ? null : pill.label)
+                  }
+                  className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs transition-colors ${
+                    openPill === pill.label
+                      ? "border-purple-500/60 bg-slate-800 text-white"
+                      : "border-slate-700 bg-slate-900 text-slate-300 hover:border-purple-500/50 hover:bg-slate-800 hover:text-white"
+                  }`}
+                >
+                  <span>{pill.emoji}</span>
+                  {pill.label}
+                </button>
               ))}
             </div>
           </div>

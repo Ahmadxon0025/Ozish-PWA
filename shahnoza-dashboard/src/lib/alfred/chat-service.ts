@@ -30,6 +30,10 @@ export interface WorkspaceContext {
   memories?: MemoryEntry[];
   /** Deterministic finance/sales snapshot, RLS-filtered per requesting user. */
   business?: BusinessSnapshot;
+  /** Full name of the signed-in user Alfred is talking to. */
+  currentUserName?: string;
+  /** Today's date (Tashkent), YYYY-MM-DD. */
+  today?: string;
   users: Array<{
     id: string;
     name: string;
@@ -171,6 +175,9 @@ export class AlfredChatService {
         : "(no open tasks)";
 
     return `You are Alfred, Ozish PWA's intelligent task management assistant.
+
+TODAY: ${context.today ?? "(unknown)"} (Tashkent, UTC+5)
+CURRENT USER: ${context.currentUserName ?? "(unknown)"} — this is the person you are talking to. When they say "men", "mening vazifalarim", "my tasks", they mean ${context.currentUserName ?? "this user"}. Never ask who they are.
 
 YOUR ROLE:
 - Analyze team workload and task assignments

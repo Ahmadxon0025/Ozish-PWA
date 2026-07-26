@@ -289,6 +289,10 @@ export const alfredRouter = createTRPCRouter({
         // Build workspace context (tasks + deterministic business snapshot,
         // both through the caller's client so RLS decides visibility)
         const context = await buildWorkspaceContextForChat(ctx.supabase);
+        context.currentUserName = ctx.appUser?.full_name ?? undefined;
+        context.today = new Date(Date.now() + 5 * 3600 * 1000)
+          .toISOString()
+          .slice(0, 10);
         try {
           context.business = await buildBusinessSnapshot(ctx.supabase);
         } catch (error) {

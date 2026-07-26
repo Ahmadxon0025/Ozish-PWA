@@ -1,4 +1,6 @@
 import { SupabaseClient } from "@supabase/supabase-js";
+import { insertAccountEntry } from "@/lib/business/account-posting";
+import { getCurrentRate } from "@/lib/business/exchange-rate";
 
 export interface ActionInput {
   conversationId: string | null;
@@ -24,7 +26,7 @@ export class AlfredActionExecutor {
 
     try {
       // Log action
-      const { data: logEntry } = await this.supabase
+      const { data: logEntry, error: logError } = await this.supabase
         .from("alfred_action_log")
         .insert({
           conversation_id: conversationId || null,
@@ -36,6 +38,10 @@ export class AlfredActionExecutor {
         })
         .select()
         .single();
+
+      if (logError) {
+        console.error("Failed to create action log entry:", logError);
+      }
 
       let result: ActionResult;
 
@@ -76,7 +82,7 @@ export class AlfredActionExecutor {
 
       // Update action log
       if (logEntry) {
-        await this.supabase
+        const { error: updateError } = await this.supabase
           .from("alfred_action_log")
           .update({
             status: result.success ? "executed" : "failed",
@@ -85,6 +91,10 @@ export class AlfredActionExecutor {
             executed_at: new Date().toISOString(),
           })
           .eq("id", logEntry.id);
+
+        if (updateError) {
+          console.error("Failed to update action log:", updateError);
+        }
       }
 
       return { ...result, logId: logEntry?.id ?? null };
@@ -541,10 +551,12 @@ export class AlfredActionExecutor {
         }
       }
 
-      // Convert to USD if in UZS. Use a reasonable exchange rate (e.g., 12,800 UZS = 1 USD).
-      // This is approximate; the app may have better rates in the accounts module.
+      // Get current exchange rate for proper currency conversion
+      const rate = await getCurrentRate(this.supabase);
       const amount_usd =
-        currency === "uzs" ? Number((amount / 12800).toFixed(2)) : amount;
+        currency === "uzs" ? Number((amount / rate.rate).toFixed(2)) : amount;
+      const amount_uzs =
+        currency === "uzs" ? Math.round(amount) : Math.round(amount * rate.rate);
 
       const { data: result, error } = await this.supabase
         .from("expenses")
@@ -553,6 +565,8 @@ export class AlfredActionExecutor {
           paid_to: paid_to || null,
           amount: currency === "uzs" ? amount : null,
           amount_usd,
+          amount_uzs,
+          rate: rate.rate,
           currency,
           expense_date,
           created_by: this.userId,
@@ -563,6 +577,28 @@ export class AlfredActionExecutor {
         .single();
 
       if (error) throw error;
+
+      // Create the corresponding account movement (debit from account)
+      if (account_id && result) {
+        try {
+          await insertAccountEntry(this.supabase, {
+            accountId: account_id,
+            direction: "out",
+            kind: "expense",
+            amountUsd: amount_usd,
+            amountUzs: currency === "uzs" ? amount : null,
+            rate: rate.rate,
+            description: description,
+            relatedType: "expense",
+            relatedId: result.id,
+            createdBy: this.userId,
+            occurredAt: `${expense_date}T12:00:00Z`,
+          });
+        } catch (entryError) {
+          console.error("Failed to create account entry for expense:", entryError);
+          // Don't fail the whole action if account entry fails
+        }
+      }
 
       return {
         success: true,

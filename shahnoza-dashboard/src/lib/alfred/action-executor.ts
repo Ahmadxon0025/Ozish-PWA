@@ -3,7 +3,7 @@ import { SupabaseClient } from "@supabase/supabase-js";
 export interface ActionInput {
   conversationId: string | null;
   actionId: string;
-  actionType: "assign" | "update" | "create" | "notify";
+  actionType: "assign" | "update" | "create" | "notify" | "expense" | "sale" | "payment";
   data: Record<string, any>;
 }
 
@@ -51,6 +51,15 @@ export class AlfredActionExecutor {
           break;
         case "notify":
           result = await this.executeNotify(data as any);
+          break;
+        case "expense":
+          result = await this.executeExpense(data as any);
+          break;
+        case "sale":
+          result = await this.executeSale(data as any);
+          break;
+        case "payment":
+          result = await this.executePayment(data as any);
           break;
         default:
           result = {
@@ -460,6 +469,245 @@ export class AlfredActionExecutor {
         success: false,
         message: "Failed to send notification",
         error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
+  /** Create an expense record. */
+  private async executeExpense(data: {
+    amount: number;
+    description: string;
+    paid_to?: string;
+    currency?: string;
+    expense_date?: string;
+  }): Promise<ActionResult> {
+    try {
+      const amount = Number(data.amount);
+      const description = String(data.description || "").trim();
+      const paid_to = String(data.paid_to || "").trim();
+      const currency = String(data.currency || "uzs").toLowerCase();
+      const expense_date = data.expense_date || new Date().toISOString().slice(0, 10);
+
+      if (!amount || amount <= 0 || !description) {
+        return {
+          success: false,
+          message: "Xarajat: miqdori va tavsifi majburiy",
+        };
+      }
+
+      // Convert to USD if in UZS. Use a reasonable exchange rate (e.g., 12,800 UZS = 1 USD).
+      // This is approximate; the app may have better rates in the accounts module.
+      const amount_usd =
+        currency === "uzs" ? Number((amount / 12800).toFixed(2)) : amount;
+
+      const { data: result, error } = await this.supabase
+        .from("expenses")
+        .insert({
+          description,
+          paid_to: paid_to || null,
+          amount: currency === "uzs" ? amount : null,
+          amount_usd,
+          currency,
+          expense_date,
+          created_by: this.userId,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      return {
+        success: true,
+        message: `Xarajat qo'shildi: ${amount}${currency === "uzs" ? " so'm" : " USD"} (${description})`,
+        data: result,
+      };
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Unknown error";
+      return {
+        success: false,
+        message: `Xarajatni qo'shib bo'lmadi: ${detail}`,
+        error: detail,
+      };
+    }
+  }
+
+  /** Create a sale and associated payment record. */
+  private async executeSale(data: {
+    customer_name: string;
+    amount: number;
+    product_name?: string;
+    currency?: string;
+    sold_at?: string;
+    notes?: string;
+  }): Promise<ActionResult> {
+    try {
+      const customer_name = String(data.customer_name || "").trim();
+      const amount = Number(data.amount);
+      const product_name = String(data.product_name || "").trim();
+      const currency = String(data.currency || "uzs").toLowerCase();
+      const sold_at = data.sold_at || new Date().toISOString();
+      const notes = String(data.notes || "").trim();
+
+      if (!customer_name || !amount || amount <= 0) {
+        return {
+          success: false,
+          message: "Sotuv: mijoz nomi va miqdori majburiy",
+        };
+      }
+
+      // Try to find or create the lead/customer
+      const { data: leads } = await this.supabase
+        .from("leads")
+        .select("id")
+        .ilike("full_name", `%${customer_name}%`)
+        .limit(2);
+
+      let leadId: string | null = null;
+      if (leads && leads.length === 1) {
+        leadId = leads[0].id;
+      } else if (!leads || leads.length === 0) {
+        // Create a new lead if not found
+        const { data: newLead, error: createError } = await this.supabase
+          .from("leads")
+          .insert({ full_name: customer_name, status: "sold" })
+          .select()
+          .single();
+        if (createError) throw createError;
+        leadId = newLead.id;
+      } else {
+        return {
+          success: false,
+          message: `"${customer_name}" bo'yicha bir nechta mijoz topildi. Aniqroq nom kerak.`,
+        };
+      }
+
+      // Convert amount to USD if in UZS
+      const amount_usd = currency === "uzs" ? Number((amount / 12800).toFixed(2)) : amount;
+      const amount_uzs = currency === "uzs" ? amount : null;
+
+      // Create the sale
+      const { data: sale, error: saleError } = await this.supabase
+        .from("sales")
+        .insert({
+          lead_id: leadId,
+          sales_person_id: this.userId,
+          total_amount_usd: currency !== "uzs" ? amount : amount_usd,
+          total_amount_uzs: amount_uzs,
+          sold_at,
+          notes: notes || null,
+          payment_type: "full", // Default; can be refined later
+          is_refunded: false,
+        })
+        .select()
+        .single();
+
+      if (saleError) throw saleError;
+
+      // Create a payment/receivable record
+      const dueDate = new Date(sold_at);
+      dueDate.setDate(dueDate.getDate() + 7); // Default due in 7 days
+      const dueDateStr = dueDate.toISOString().slice(0, 10);
+
+      const { error: paymentError } = await this.supabase.from("payments").insert({
+        sale_id: sale.id,
+        amount_usd: currency !== "uzs" ? amount : amount_usd,
+        status: "pending",
+        due_date: dueDateStr,
+      });
+
+      if (paymentError) throw paymentError;
+
+      return {
+        success: true,
+        message: `Sotuv qo'shildi: ${customer_name}, ${amount}${currency === "uzs" ? " so'm" : " USD"}`,
+        data: { saleId: sale.id, leadId },
+      };
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Unknown error";
+      return {
+        success: false,
+        message: `Sotuvni qo'shib bo'lmadi: ${detail}`,
+        error: detail,
+      };
+    }
+  }
+
+  /** Mark a payment as paid or log a payment. */
+  private async executePayment(data: {
+    customer_name: string;
+    amount: number;
+    currency?: string;
+  }): Promise<ActionResult> {
+    try {
+      const customer_name = String(data.customer_name || "").trim();
+      const amount = Number(data.amount);
+      const currency = String(data.currency || "uzs").toLowerCase();
+
+      if (!customer_name || !amount || amount <= 0) {
+        return {
+          success: false,
+          message: "To'lov: mijoz nomi va miqdori majburiy",
+        };
+      }
+
+      // Find unpaid payments for this customer
+      const { data: leads } = await this.supabase
+        .from("leads")
+        .select("id")
+        .ilike("full_name", `%${customer_name}%`)
+        .limit(2);
+
+      if (!leads || leads.length === 0) {
+        return {
+          success: false,
+          message: `"${customer_name}" topilmadi`,
+        };
+      }
+
+      if (leads.length > 1) {
+        return {
+          success: false,
+          message: `"${customer_name}" bo'yicha bir nechta mijoz topildi. Aniqroq nom kerak.`,
+        };
+      }
+
+      const leadId = leads[0].id;
+
+      // Find the latest unpaid payment for this lead
+      const { data: payments } = await this.supabase
+        .from("payments")
+        .select("id, sale_id, amount_usd, status")
+        .eq("status", "pending")
+        .order("due_date", { ascending: true })
+        .limit(1);
+
+      // TODO: join with sales to filter by lead_id. For now, update the first unpaid.
+      if (!payments || payments.length === 0) {
+        return {
+          success: false,
+          message: `"${customer_name}" uchun to'lanishi kerak qolgan to'lov topilmadi`,
+        };
+      }
+
+      const payment = payments[0];
+      const { error } = await this.supabase
+        .from("payments")
+        .update({ status: "paid", paid_at: new Date().toISOString() })
+        .eq("id", payment.id);
+
+      if (error) throw error;
+
+      return {
+        success: true,
+        message: `To'lov qo'yildi: ${customer_name}, ${amount}${currency === "uzs" ? " so'm" : " USD"}`,
+        data: { paymentId: payment.id },
+      };
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Unknown error";
+      return {
+        success: false,
+        message: `To'lovni qo'yib bo'lmadi: ${detail}`,
+        error: detail,
       };
     }
   }

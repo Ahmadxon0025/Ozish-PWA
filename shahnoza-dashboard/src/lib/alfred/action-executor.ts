@@ -25,22 +25,40 @@ export class AlfredActionExecutor {
     const { conversationId, actionId, actionType, data } = input;
 
     try {
-      // Log action
+      // Log action with detailed diagnostics
+      const logPayload = {
+        conversation_id: conversationId || null,
+        actor_id: this.userId,
+        action_type: actionType,
+        target_id: actionId,
+        input_data: data,
+        status: "pending",
+      };
+
+      console.log("🔍 alfred_action_log insert payload:", logPayload);
+
       const { data: logEntry, error: logError } = await this.supabase
         .from("alfred_action_log")
-        .insert({
-          conversation_id: conversationId || null,
-          actor_id: this.userId,
-          action_type: actionType,
-          target_id: actionId,
-          input_data: data,
-          status: "pending",
-        })
+        .insert(logPayload)
         .select()
         .single();
 
       if (logError) {
-        console.error("Failed to create action log entry:", logError);
+        console.error("❌ Failed to create action log entry:", {
+          error: logError,
+          code: logError?.code,
+          message: logError?.message,
+          details: logError?.details,
+          hint: logError?.hint,
+          payload: logPayload,
+        });
+      } else if (!logEntry) {
+        console.warn("⚠️ alfred_action_log insert returned no data:", {
+          payload: logPayload,
+          userId: this.userId,
+        });
+      } else {
+        console.log("✅ alfred_action_log created:", logEntry.id);
       }
 
       let result: ActionResult;

@@ -3,6 +3,10 @@ import {
   renderBusinessSnapshot,
   type BusinessSnapshot,
 } from "./workspace-data";
+import { ALFRED_DATA_TOOLS } from "./data-tools";
+
+/** Executes one of ALFRED_DATA_TOOLS against live data; supplied by the caller. */
+export type ToolExecutor = (name: string, input: any) => Promise<any>;
 
 export interface TaskSummary {
   title: string;
@@ -90,12 +94,13 @@ export class AlfredChatService {
   async chat(
     userMessage: string,
     workspaceContext: WorkspaceContext,
-    conversationHistory: ConversationMessage[] = []
+    conversationHistory: ConversationMessage[] = [],
+    toolExecutor?: ToolExecutor
   ): Promise<ChatResponse> {
     const systemPrompt = this.buildSystemPrompt(workspaceContext);
 
     // Cap history so the prompt stays bounded as conversations grow
-    const messages = [
+    const messages: Anthropic.MessageParam[] = [
       ...conversationHistory.slice(-20).map((m) => ({
         role: m.role as "user" | "assistant",
         content: m.content,
@@ -107,12 +112,49 @@ export class AlfredChatService {
     ];
 
     try {
-      const response = await this.client.messages.create({
+      const tools = toolExecutor ? ALFRED_DATA_TOOLS : undefined;
+      let response = await this.client.messages.create({
         model: "claude-sonnet-5",
         max_tokens: 2048,
         system: systemPrompt,
-        messages: messages,
+        messages,
+        ...(tools ? { tools } : {}),
       });
+
+      // Tool loop: the model queries live data (RLS-scoped) until it has
+      // what it needs. Bounded so a confused model can't spin forever.
+      let rounds = 0;
+      while (response.stop_reason === "tool_use" && toolExecutor && rounds < 5) {
+        rounds++;
+        const toolUses = response.content.filter(
+          (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
+        );
+        const results: Anthropic.ToolResultBlockParam[] = [];
+        for (const tu of toolUses) {
+          let result: any;
+          try {
+            result = await toolExecutor(tu.name, tu.input);
+          } catch (error) {
+            result = {
+              error: error instanceof Error ? error.message : "Tool failed",
+            };
+          }
+          results.push({
+            type: "tool_result",
+            tool_use_id: tu.id,
+            content: JSON.stringify(result).slice(0, 12000),
+          });
+        }
+        messages.push({ role: "assistant", content: response.content });
+        messages.push({ role: "user", content: results });
+        response = await this.client.messages.create({
+          model: "claude-sonnet-5",
+          max_tokens: 2048,
+          system: systemPrompt,
+          messages,
+          ...(tools ? { tools } : {}),
+        });
+      }
 
       // The model may return thinking or other block types before the text
       // block, so collect every text block instead of assuming content[0].
@@ -225,10 +267,12 @@ IMPORTANT RULES:
 8. ANSWER in the same language the user writes in (Uzbek or English)
 9. ANSWER whatever is asked using the workspace data above — cite real task titles, assignees, and due dates
 
+DATA TOOLS — use them, don't plead ignorance:
+You have live read-only tools (search_tasks, search_sales, search_leads, search_expenses, search_payments, get_team_workload) that query the database with the current user's permissions. The snapshot above is only a summary — when the user asks about anything not fully listed in it (done/completed tasks, individual sales or expenses, leads, payment schedules, another person's full list, older periods), CALL A TOOL instead of saying you don't have the data. Only say data is unavailable after a tool returned nothing or an error.
+
 NUMBERS — NON-NEGOTIABLE:
-- Every figure you state must appear verbatim in the BUSINESS SNAPSHOT or task data above. Quote it; never compute, extrapolate, or estimate a number yourself.
-- If a section says "(not visible to this user)", say you don't have access to that data — do not guess.
-- If the user asks for a number that isn't in your context, say exactly which data you'd need.
+- Every figure you state must appear verbatim in the BUSINESS SNAPSHOT, the task data above, or a tool result. Quote it; never compute, extrapolate, or estimate a number yourself.
+- If a section says "(not visible to this user)" and the matching tool also errors, say you don't have access — do not guess.
 
 ACTIONS — how you get things done:
 When the user explicitly asks you to create, assign, or update a task, describe what you'll do in your reply, then append EXACTLY ONE action block at the very end of your message, in this format:

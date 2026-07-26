@@ -7,6 +7,7 @@ import { getUserKnowledge } from "@/lib/alfred/learning-engine";
 import { AlfredChatService, type WorkspaceContext, type ConversationMessage } from "@/lib/alfred/chat-service";
 import { AlfredActionExecutor } from "@/lib/alfred/action-executor";
 import { buildBusinessSnapshot } from "@/lib/alfred/workspace-data";
+import { executeDataTool } from "@/lib/alfred/data-tools";
 
 export const alfredRouter = createTRPCRouter({
   getAnalysis: protectedProcedure.query(async ({ ctx }) => {
@@ -306,11 +307,13 @@ export const alfredRouter = createTRPCRouter({
         // Initialize chat service
         const chatService = new AlfredChatService();
 
-        // Process message
+        // Process message — the tool executor runs on the caller's client,
+        // so every live query Alfred makes is RLS-filtered to this user.
         const response = await chatService.chat(
           input.message,
           context,
-          input.conversationHistory || []
+          input.conversationHistory || [],
+          (name, toolInput) => executeDataTool(ctx.supabase, name, toolInput)
         );
 
         // Persist the exchange and extract new learnings (both best-effort)

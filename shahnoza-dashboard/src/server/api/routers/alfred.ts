@@ -314,16 +314,6 @@ export const alfredRouter = createTRPCRouter({
     )
     .mutation(async ({ input, ctx }) => {
       try {
-        // Get auth user for identity-based operations (RLS policies use auth.uid())
-        const { data: authData } = await ctx.supabase.auth.getUser();
-        const authId = authData?.user?.id;
-        if (!authId) {
-          return {
-            success: false,
-            error: "User not authenticated",
-          };
-        }
-
         // Build workspace context (tasks + deterministic business snapshot,
         // both through the caller's client so RLS decides visibility)
         const context = await buildWorkspaceContextForChat(ctx.supabase);
@@ -361,7 +351,7 @@ export const alfredRouter = createTRPCRouter({
         if (ctx.admin && ctx.appUser) {
           conversationId = await persistConversation(
             ctx.admin,
-            authId,
+            ctx.appUser.id,
             conversationId,
             input.message,
             response.message
@@ -378,7 +368,7 @@ export const alfredRouter = createTRPCRouter({
         if (response.proposal && ctx.appUser) {
           const executor = new AlfredActionExecutor(
             ctx.supabase,
-            authId
+            ctx.appUser.id
           );
           for (const action of response.proposal.actions) {
             const result = await executor.execute({
@@ -799,7 +789,7 @@ export const alfredRouter = createTRPCRouter({
           .from("alfred_conversations")
           .select("id")
           .eq("id", input.conversationId)
-          .eq("user_id", user.user.id)
+          .eq("user_id", ctx.appUser.id)
           .single();
 
         if (!conversation) {
@@ -853,7 +843,7 @@ async function loadMemories(
  */
 async function persistConversation(
   admin: any,
-  authId: string,
+  userId: string,
   conversationId: string | null,
   userMessage: string,
   assistantMessage: string
@@ -870,7 +860,7 @@ async function persistConversation(
         .from("alfred_conversations")
         .select("id, messages")
         .eq("id", conversationId)
-        .eq("user_id", authId)
+        .eq("user_id", userId)
         .maybeSingle();
 
       if (conv) {
@@ -916,7 +906,7 @@ async function persistConversation(
     const { data: created, error } = await admin
       .from("alfred_conversations")
       .insert({
-        user_id: authId,
+        user_id: userId,
         title,
         messages: newMessages,
         active: true,

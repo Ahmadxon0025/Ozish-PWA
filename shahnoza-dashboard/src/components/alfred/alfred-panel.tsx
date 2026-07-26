@@ -532,7 +532,7 @@ export function AlfredPanel({
           ...withUser,
           {
             role: "alfred",
-            content: response.response,
+            content: response.response ?? "Xabar qayta yuklash muvaffaq bo'lmadi",
             messageId,
             executed,
             followUps: response.followUps ?? undefined,

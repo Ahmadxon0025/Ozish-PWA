@@ -1,5 +1,6 @@
 import { computePnl, type PnlResult } from "@/lib/business/pnl";
 import { commissionForSale } from "@/lib/business/commission";
+import { getCurrentRate } from "@/lib/business/exchange-rate";
 import { monthRange } from "@/lib/dates";
 
 /**
@@ -15,6 +16,7 @@ import { monthRange } from "@/lib/dates";
 
 export interface BusinessSnapshot {
   monthLabel: string;
+  /** So'm-native P&L (same booked-rate logic as the finance pages). */
   pnl: PnlResult | null;
   accounts: Array<{ name: string; currency: string; balance: number }> | null;
   receivables: {
@@ -29,7 +31,7 @@ export interface BusinessSnapshot {
       daysLate: number;
     }>;
   } | null;
-  salesMonth: { count: number; totalUsd: number } | null;
+  salesMonth: { count: number; totalUzs: number } | null;
   leadsMonth: { newCount: number } | null;
 }
 
@@ -43,7 +45,11 @@ export async function buildBusinessSnapshot(
   supabase: any
 ): Promise<BusinessSnapshot> {
   const month = monthRange();
-  const monthLabel = month.from.slice(0, 7);
+  // month.from is the UTC instant of Tashkent midnight (previous UTC day), so
+  // slicing it mislabels the month — derive the label from Tashkent "now".
+  const monthLabel = new Date(Date.now() + 5 * 3600 * 1000)
+    .toISOString()
+    .slice(0, 7);
 
   const snapshot: BusinessSnapshot = {
     monthLabel,
@@ -54,62 +60,81 @@ export async function buildBusinessSnapshot(
     leadsMonth: null,
   };
 
-  // Month P&L — same recognition rules as the finance pages:
-  // refunds by refunded_at, commissions = per-sale net × rate.
+  // Month P&L in BOOKED SO'M — mirrors netProfitUzsFor in the finance router:
+  // sales carry native total_amount_uzs (USD column is often empty for synced
+  // deals); refunds recognized by refunded_at; commissions scaled by each
+  // sale's own booked rate, falling back to the current CBU rate.
   try {
-    const [salesRes, refundsRes, expensesRes] = await Promise.all([
+    const [salesRes, refundsRes, expensesRes, rate] = await Promise.all([
       supabase
         .from("sales")
-        .select("total_amount_usd, is_refunded, refund_amount_usd")
+        .select("total_amount_usd, total_amount_uzs")
         .gte("sold_at", month.from)
         .lt("sold_at", month.to),
       supabase
         .from("sales")
-        .select("refund_amount_usd")
+        .select("refund_amount_usd, total_amount_usd, total_amount_uzs")
         .eq("is_refunded", true)
         .gte("refunded_at", month.from)
         .lt("refunded_at", month.to),
       supabase
         .from("expenses")
-        .select("amount_usd")
+        .select("amount_usd, amount_uzs")
         .gte("expense_date", month.from.slice(0, 10))
         .lt("expense_date", month.to.slice(0, 10)),
+      getCurrentRate(supabase),
     ]);
 
     if (!salesRes.error && !expensesRes.error) {
+      const currentRate = rate.rate;
+      const bookedRate = (uzs: number | null, usd: number | null): number =>
+        uzs && usd && usd !== 0 ? uzs / usd : currentRate;
+
       const sales = salesRes.data || [];
-      const grossRevenueUsd = sales.reduce(
-        (a: number, s: any) => a + Number(s.total_amount_usd ?? 0),
-        0
-      );
-      const refundsUsd = (refundsRes.data || []).reduce(
-        (a: number, s: any) => a + Number(s.refund_amount_usd ?? 0),
-        0
-      );
-      const operatingExpensesUsd = (expensesRes.data || []).reduce(
-        (a: number, e: any) => a + Number(e.amount_usd ?? 0),
-        0
-      );
-      const commissionsUsd = sales.reduce(
+      const grossRevenueUzs = sales.reduce(
         (a: number, s: any) =>
           a +
-          commissionForSale({
-            totalAmountUsd: s.total_amount_usd,
-            isRefunded: s.is_refunded,
-            refundAmountUsd: s.refund_amount_usd,
-          }),
+          (s.total_amount_uzs ??
+            Math.round(Number(s.total_amount_usd ?? 0) * currentRate)),
         0
       );
+      const refundsUzs = (refundsRes.data || []).reduce(
+        (a: number, r: any) =>
+          a +
+          Math.round(
+            Number(r.refund_amount_usd ?? 0) *
+              bookedRate(r.total_amount_uzs, r.total_amount_usd)
+          ),
+        0
+      );
+      const operatingExpensesUzs = (expensesRes.data || []).reduce(
+        (a: number, e: any) =>
+          a +
+          (e.amount_uzs ??
+            Math.round(Number(e.amount_usd ?? 0) * currentRate)),
+        0
+      );
+      const commissionsUzs = sales.reduce((a: number, s: any) => {
+        const usd = commissionForSale({
+          totalAmountUsd: s.total_amount_usd,
+          isRefunded: false,
+          refundAmountUsd: null,
+        });
+        return (
+          a + Math.round(usd * bookedRate(s.total_amount_uzs, s.total_amount_usd))
+        );
+      }, 0);
 
+      // computePnl is unit-agnostic arithmetic — feeding so'm yields a so'm P&L
       snapshot.pnl = computePnl({
-        grossRevenueUsd,
-        refundsUsd,
-        operatingExpensesUsd,
-        commissionsUsd,
+        grossRevenueUsd: grossRevenueUzs,
+        refundsUsd: refundsUzs,
+        operatingExpensesUsd: operatingExpensesUzs,
+        commissionsUsd: commissionsUzs,
       });
       snapshot.salesMonth = {
         count: sales.length,
-        totalUsd: Math.round(grossRevenueUsd * 100) / 100,
+        totalUzs: grossRevenueUzs,
       };
     }
   } catch (error) {
@@ -221,15 +246,17 @@ export async function buildBusinessSnapshot(
 export function renderBusinessSnapshot(s: BusinessSnapshot): string {
   const lines: string[] = [];
 
+  const uz = (n: number) => `${Math.round(n).toLocaleString("en-US")} so'm`;
+
   if (s.pnl) {
     lines.push(
-      `P&L for ${s.monthLabel} (USD, app-computed):`,
-      `  Gross revenue: $${s.pnl.grossRevenueUsd}`,
-      `  Refunds: $${s.pnl.refundsUsd}`,
-      `  Net revenue: $${s.pnl.netRevenueUsd}`,
-      `  Operating expenses: $${s.pnl.operatingExpensesUsd}`,
-      `  Commissions: $${s.pnl.commissionsUsd}`,
-      `  NET PROFIT: $${s.pnl.netProfitUsd} (margin ${s.pnl.marginPct}%)`
+      `P&L for ${s.monthLabel} (booked so'm, app-computed — same as the P&L page):`,
+      `  Gross revenue: ${uz(s.pnl.grossRevenueUsd)}`,
+      `  Refunds: ${uz(s.pnl.refundsUsd)}`,
+      `  Net revenue: ${uz(s.pnl.netRevenueUsd)}`,
+      `  Operating expenses: ${uz(s.pnl.operatingExpensesUsd)}`,
+      `  Commissions: ${uz(s.pnl.commissionsUsd)}`,
+      `  NET PROFIT: ${uz(s.pnl.netProfitUsd)} (margin ${s.pnl.marginPct}%)`
     );
   } else {
     lines.push("P&L: (not visible to this user)");
@@ -237,7 +264,7 @@ export function renderBusinessSnapshot(s: BusinessSnapshot): string {
 
   if (s.salesMonth) {
     lines.push(
-      `Sales this month: ${s.salesMonth.count} deals, $${s.salesMonth.totalUsd} gross`
+      `Sales this month: ${s.salesMonth.count} deals, ${uz(s.salesMonth.totalUzs)} gross`
     );
   }
   if (s.leadsMonth) {

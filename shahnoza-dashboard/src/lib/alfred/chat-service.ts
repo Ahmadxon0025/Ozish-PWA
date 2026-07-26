@@ -171,8 +171,22 @@ export class AlfredChatService {
         throw new Error("Model returned no text content");
       }
 
+      // Safety net: strip any internal tool name that leaked into the reply,
+      // plus a dangling Uzbek connector it may have left behind.
+      const scrubbed = fullText
+        .replace(
+          /\b(get_team_workload|search_tasks|search_sales|search_leads|search_expenses|search_payments)\b/gi,
+          ""
+        )
+        .replace(
+          /^\s*(natijasiga|natijalariga|ma'lumotiga|ma'lumotlariga)\s+ko'ra[,:]?\s*/i,
+          ""
+        )
+        .replace(/[ \t]{2,}/g, " ")
+        .trim();
+
       // Pull structured blocks (follow-ups, then actions) out of the reply
-      const { followUps, remainingText } = this.parseFollowUps(fullText);
+      const { followUps, remainingText } = this.parseFollowUps(scrubbed);
       const { proposal, cleanedText } = this.parseActionBlock(remainingText);
 
       return {
@@ -228,9 +242,11 @@ CURRENT USER: ${context.currentUserName ?? "(unknown)"} — this is the person y
         : ""
     }
 
-FORMATTING: Reply in Markdown — **bold** for key figures and titles, "-" bullets, short paragraphs. Link a task ONLY when you have its real id (from an "(id: ...)" in OPEN TASKS or a search_tasks result): [Vazifa nomi](/tasks/<real-id>). If you do NOT have the id, write the task name as plain **bold** text — NEVER emit "[name](/tasks/)" with an empty or missing id. For sales point to [Sotuvlar ro'yxati](/sales/list), leads to [Leadlar](/leads), P&L to [P&L](/finance/pnl) when it helps the user jump there.
+FORMATTING: Reply in Markdown — **bold** for key figures and titles, "-" bullets, short paragraphs. Use *italic* sparingly. Do NOT use Markdown tables (no "|" pipes, no "---" separator rows) — the chat is narrow; use "-" bullet lists instead, one item per line. Link a task ONLY when you have its real id (from an "(id: ...)" in OPEN TASKS or a search_tasks result): [Vazifa nomi](/tasks/<real-id>). If you do NOT have the id, write the task name as plain **bold** text — NEVER emit "[name](/tasks/)" with an empty or missing id. For sales point to [Sotuvlar ro'yxati](/sales/list), leads to [Leadlar](/leads), P&L to [P&L](/finance/pnl) when it helps the user jump there.
 
-MEMORY: You do NOT save or recall long-term memory yourself. NEVER claim to remember, save, note, or accept a fact ("yodda saqladim", "eslab qoldim", "eslab qolaman", "qabul qildim", "esimda") — a separate system asks the user for permission and stores it. If the user tells you to remember something, acknowledge you'll SUGGEST it for saving (e.g. "Buni eslab qolishni taklif qilaman") — never assert that it is saved.
+NEVER mention internal tool or function names in your reply (search_tasks, get_team_workload, search_sales, etc.). Just state the finding — say "Jamoa yuklamasiga ko'ra…", never "get_team_workload natijasiga ko'ra…".
+
+MEMORY: You do NOT save or recall long-term memory yourself. NEVER claim to remember, save, note, or accept a fact ("yodda saqladim", "eslab qoldim", "eslab qolaman", "qabul qildim", "esimda"). If the user tells you to remember something, reply with ONE short line offering to save it — e.g. "Buni eslab qolishni taklif qilaman — pastdan tasdiqlang." Do NOT explain how the memory system works or that a separate system confirms it.
 
 YOUR ROLE:
 - Analyze team workload and task assignments

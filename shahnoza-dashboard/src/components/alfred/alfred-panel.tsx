@@ -138,7 +138,9 @@ type ChatMessage = {
 
 function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
   const nodes: React.ReactNode[] = [];
-  const regex = /\*\*(.+?)\*\*|\[([^\]]+)\]\((\/[^)\s]+)\)/g;
+  // Order matters: **bold** before *italic*; links; then _italic_.
+  const regex =
+    /\*\*(.+?)\*\*|\[([^\]]+)\]\((\/[^)\s]+)\)|\*([^*\n]+?)\*|_([^_\n]+?)_/g;
   let last = 0;
   let m: RegExpExecArray | null;
   let i = 0;
@@ -150,7 +152,7 @@ function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
           {m[1]}
         </strong>
       );
-    } else {
+    } else if (m[2] !== undefined) {
       // Guard: a link whose path has no id (e.g. "/tasks/" or "/leads/")
       // renders as plain bold text — never a dead link.
       const href = m[3];
@@ -175,6 +177,13 @@ function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
           </a>
         );
       }
+    } else {
+      // *italic* or _italic_
+      nodes.push(
+        <em key={`${keyPrefix}i${i++}`} className="italic text-slate-300">
+          {m[4] ?? m[5]}
+        </em>
+      );
     }
     last = m.index + m[0].length;
   }
@@ -182,11 +191,40 @@ function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
   return nodes;
 }
 
+/** A markdown table separator row like |---|:--:|---| — never shown. */
+function isTableSeparator(line: string): boolean {
+  return /^\s*\|?[\s:|-]+\|?\s*$/.test(line) && line.includes("-");
+}
+
+/** A pipe table row. Rendered as " · "-joined cells (tables overflow a chat bubble). */
+function isTableRow(line: string): boolean {
+  const t = line.trim();
+  return t.startsWith("|") && (line.match(/\|/g)?.length ?? 0) >= 2;
+}
+
+function tableRowCells(line: string): string {
+  return line
+    .split("|")
+    .map((c) => c.trim())
+    .filter((c, idx, arr) => !(c === "" && (idx === 0 || idx === arr.length - 1)))
+    .join(" · ");
+}
+
 function MarkdownText({ text }: { text: string }) {
   const lines = text.split("\n");
   return (
     <div className="space-y-1">
       {lines.map((line, i) => {
+        // Markdown tables overflow a narrow chat bubble — drop the separator
+        // row and render each row as " · "-joined cells.
+        if (isTableSeparator(line)) return null;
+        if (isTableRow(line)) {
+          return (
+            <p key={i} className="text-slate-300">
+              {renderInline(tableRowCells(line), `t${i}`)}
+            </p>
+          );
+        }
         const header = line.match(/^#{1,4}\s+(.*)/);
         if (header) {
           return (

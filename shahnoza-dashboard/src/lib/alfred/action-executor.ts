@@ -3,7 +3,7 @@ import { SupabaseClient } from "@supabase/supabase-js";
 export interface ActionInput {
   conversationId: string | null;
   actionId: string;
-  actionType: "assign" | "update" | "create" | "notify" | "expense" | "sale" | "payment";
+  actionType: "assign" | "update" | "create" | "notify" | "expense" | "expense_update" | "sale" | "payment";
   data: Record<string, any>;
 }
 
@@ -54,6 +54,9 @@ export class AlfredActionExecutor {
           break;
         case "expense":
           result = await this.executeExpense(data as any);
+          break;
+        case "expense_update":
+          result = await this.executeExpenseUpdate(data as any);
           break;
         case "sale":
           result = await this.executeSale(data as any);
@@ -526,6 +529,93 @@ export class AlfredActionExecutor {
       return {
         success: false,
         message: `Xarajatni qo'shib bo'lmadi: ${detail}`,
+        error: detail,
+      };
+    }
+  }
+
+  /** Update (correct) a recent expense. Finds by description match or "most recent". */
+  private async executeExpenseUpdate(data: {
+    description?: string;
+    amount?: number;
+    paid_to?: string;
+    currency?: string;
+    match_description?: string;
+  }): Promise<ActionResult> {
+    try {
+      const new_description =
+        data.description && String(data.description).trim();
+      const new_amount = data.amount ? Number(data.amount) : null;
+      const new_paid_to = data.paid_to ? String(data.paid_to).trim() : null;
+      const currency = String(data.currency || "uzs").toLowerCase();
+      const matchDesc = data.match_description
+        ? String(data.match_description).trim()
+        : null;
+
+      if (!new_amount && !new_description && !new_paid_to) {
+        return {
+          success: false,
+          message: "Xarajat: yangi miqdor yoki tavsif kerak",
+        };
+      }
+
+      // Find the expense to update: by description match or most recent
+      let query = this.supabase.from("expenses").select("id, description, amount, amount_usd, currency, paid_to, expense_date");
+
+      if (matchDesc) {
+        query = query.ilike("description", `%${matchDesc}%`);
+      }
+
+      const { data: expenses } = await query
+        .order("expense_date", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      if (!expenses || expenses.length === 0) {
+        return {
+          success: false,
+          message: matchDesc
+            ? `"${matchDesc}" tasvifli xarajat topilmadi`
+            : "Yaqinda qo'shilgan xarajat topilmadi",
+        };
+      }
+
+      const expense = expenses[0];
+      const prior = {
+        description: expense.description,
+        amount: expense.amount,
+        amount_usd: expense.amount_usd,
+        paid_to: expense.paid_to,
+      };
+
+      // Prepare updates
+      const updates: Record<string, any> = {};
+      if (new_description) updates.description = new_description;
+      if (new_paid_to) updates.paid_to = new_paid_to;
+      if (new_amount) {
+        updates.amount = currency === "uzs" ? new_amount : null;
+        updates.amount_usd = currency === "uzs" ? Number((new_amount / 12800).toFixed(2)) : new_amount;
+        updates.currency = currency;
+      }
+
+      const { error } = await this.supabase
+        .from("expenses")
+        .update(updates)
+        .eq("id", expense.id);
+
+      if (error) throw error;
+
+      const changed = Object.keys(updates).join(", ");
+      return {
+        success: true,
+        message: `Xarajat to'g'rilandi (${changed}): ${new_amount || expense.amount}${currency === "uzs" ? " so'm" : " USD"}`,
+        data: { expenseId: expense.id, prior, updates },
+      };
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Unknown error";
+      return {
+        success: false,
+        message: `Xarajatni to'g'rlab bo'lmadi: ${detail}`,
         error: detail,
       };
     }

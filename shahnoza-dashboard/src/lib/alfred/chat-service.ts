@@ -335,8 +335,9 @@ TASKS:
 - "assign": {"task_title": exact title from OPEN TASKS, "assignee_name": exact team member name}
 - "update": {"task_title": exact title from OPEN TASKS, "updates": {"status"?: (todo|in_progress|review|done), "due_date"?: string, "priority"?: string}}
 
-FINANCE (NEW):
-- "expense": {"amount": number (so'm by default), "description": string, "paid_to"?: string, "currency"?: string (uzs|usd), "expense_date"?: YYYY-MM-DD}
+FINANCE:
+- "expense": {"amount": number (so'm by default), "description": string, "paid_to"?: string, "currency"?: string (uzs|usd), "expense_date"?: YYYY-MM-DD} — create new
+- "expense_update": {"amount"?: number, "description"?: string, "paid_to"?: string, "currency"?: string, "match_description"?: string} — correct recent expense (finds by description match or most recent)
 - "sale": {"customer_name": string, "amount": number, "product_name"?: string, "currency"?: string (uzs|usd), "sold_at"?: timestamp, "notes"?: string}
 - "payment": {"customer_name": string, "amount": number, "currency"?: string (uzs|usd)} — marks receivable as paid or logs payment
 
@@ -358,6 +359,7 @@ Action rules:
 - FLAG, DON'T GUESS: if a required detail is ambiguous (which task, which customer, what amount), ask the user instead of emitting a block. No block until it's clear.
 - Use exact task titles and team member names from the context above.
 - Finance actions (expense, sale, payment) are reversible within 24 hours — undo like tasks. Never create a duplicate same-day entry.
+- For corrections: if the user says "it was $100, not $10" or "change that to $50", use "expense_update" instead of creating a new entry. This finds the recent matching expense and corrects it in-place (no undo needed, just one action).
 
 RESPONSE STYLE:
 - Start with direct answer or analysis

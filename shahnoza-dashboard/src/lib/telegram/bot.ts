@@ -72,7 +72,19 @@ export function financeGroupId(): string {
   );
 }
 
-/** Ops group for tasks, marketing, sales performance, per-salesperson reports. */
+/** Sales group for sales team + per-salesperson detailed reports. */
+export function salesGroupId(): string {
+  return (
+    env.TELEGRAM_SALES_GROUP_ID ||
+    env.TELEGRAM_OPS_GROUP_ID ||
+    env.TELEGRAM_TASKS_CHAT_ID ||
+    env.TELEGRAM_FINANCE_CHAT_ID ||
+    env.TELEGRAM_ADMIN_CHAT_ID ||
+    env.TELEGRAM_OWNER_CHAT_ID
+  );
+}
+
+/** Management group for tasks, marketing, Alfred brief, weekly summary. */
 export function opsGroupId(): string {
   return (
     env.TELEGRAM_OPS_GROUP_ID ||

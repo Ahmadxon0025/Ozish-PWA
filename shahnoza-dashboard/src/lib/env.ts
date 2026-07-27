@@ -41,7 +41,9 @@ export const env = {
   TELEGRAM_TASKS_CHAT_ID: process.env.TELEGRAM_TASKS_CHAT_ID ?? "",
   // Dedicated finance group for scheduled finance reports (P&L, kassa, collection).
   TELEGRAM_FINANCE_GROUP_ID: process.env.TELEGRAM_FINANCE_GROUP_ID ?? "",
-  // Ops group for tasks, marketing, sales performance, per-salesperson reports.
+  // Sales group for sales team + per-salesperson detailed reports.
+  TELEGRAM_SALES_GROUP_ID: process.env.TELEGRAM_SALES_GROUP_ID ?? "",
+  // Management group for tasks, marketing, Alfred brief, weekly summary.
   TELEGRAM_OPS_GROUP_ID: process.env.TELEGRAM_OPS_GROUP_ID ?? "",
   // Secret token Telegram echoes back on every webhook call (X-Telegram-Bot-Api-Secret-Token).
   TELEGRAM_WEBHOOK_SECRET: process.env.TELEGRAM_WEBHOOK_SECRET ?? "",

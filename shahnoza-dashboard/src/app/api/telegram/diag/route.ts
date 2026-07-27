@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
     ownerChatId: Boolean(env.TELEGRAM_OWNER_CHAT_ID),
     tasksChatId: Boolean(env.TELEGRAM_TASKS_CHAT_ID),
     financeGroupId: Boolean(env.TELEGRAM_FINANCE_GROUP_ID),
+    salesGroupId: Boolean(env.TELEGRAM_SALES_GROUP_ID),
     opsGroupId: Boolean(env.TELEGRAM_OPS_GROUP_ID),
     webhookSecret: Boolean(env.TELEGRAM_WEBHOOK_SECRET),
     cronSecret: Boolean(env.CRON_SECRET),

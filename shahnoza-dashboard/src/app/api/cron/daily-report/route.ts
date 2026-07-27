@@ -85,24 +85,24 @@ export async function GET(request: NextRequest) {
     // non-fatal
   }
 
-  // Sales team performance → ops group (overall + per-person breakdown).
+  // Sales team performance → sales group (overall + per-person breakdown).
   let salesTeam = false;
   try {
     const { buildSalesTeamReport } = await import("@/lib/telegram/sales-report");
-    const { sendMessage, opsGroupId } = await import("@/lib/telegram/bot");
+    const { sendMessage, salesGroupId } = await import("@/lib/telegram/bot");
     const text = await buildSalesTeamReport();
-    salesTeam = (await sendMessage(opsGroupId(), text)) !== null;
+    salesTeam = (await sendMessage(salesGroupId(), text)) !== null;
   } catch {
     // non-fatal
   }
 
-  // Per-salesperson detailed reports → ops group (individual stats + izoh).
+  // Per-salesperson detailed reports → sales group (individual stats + izoh).
   let personalReports = 0;
   try {
     const { buildPerSalespersonReports } = await import("@/lib/telegram/sales-report");
-    const { sendMessage, opsGroupId } = await import("@/lib/telegram/bot");
+    const { sendMessage, salesGroupId } = await import("@/lib/telegram/bot");
     const reports = await buildPerSalespersonReports();
-    const chatId = opsGroupId();
+    const chatId = salesGroupId();
     for (const r of reports) {
       if ((await sendMessage(chatId, r.text)) !== null) personalReports++;
     }

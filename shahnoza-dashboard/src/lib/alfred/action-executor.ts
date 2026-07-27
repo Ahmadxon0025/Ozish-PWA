@@ -758,7 +758,7 @@ export class AlfredActionExecutor {
       const changed = Object.keys(updates).join(", ");
       return {
         success: true,
-        message: `Xarajat to'g'rilandi (${changed}): ${new_amount || expense.amount}${currency === "uzs" ? " so'm" : " USD"}`,
+        message: `Xarajat to'g'rilandi (${changed}): ${new_amount ?? expense.amount ?? expense.amount_usd}${currency === "uzs" ? " so'm" : " USD"}`,
         data: { expenseId: expense.id, prior, updates },
       };
     } catch (error) {
@@ -822,7 +822,8 @@ export class AlfredActionExecutor {
 
       return {
         success: true,
-        message: `Xarajat bekor qilindi: ${expense.amount}${expense.currency === "uzs" ? " so'm" : " USD"} (${expense.description})`,
+        // amount is the UZS-native column and is null for USD expenses
+        message: `Xarajat bekor qilindi: ${expense.amount ?? expense.amount_usd}${expense.currency === "uzs" ? " so'm" : " USD"} (${expense.description})`,
         data: { expenseId: expense.id, prior },
       };
     } catch (error) {

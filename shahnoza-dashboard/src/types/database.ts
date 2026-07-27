@@ -506,6 +506,70 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["ai_usage_log"]["Insert"]>;
         Relationships: [];
       };
+      alfred_action_log: {
+        Row: {
+          id: string;
+          conversation_id: string | null;
+          actor_id: string | null;
+          action_type: string;
+          target_id: string | null;
+          target_type: string | null;
+          input_data: Json | null;
+          output_data: Json | null;
+          status: string | null;
+          error_message: string | null;
+          executed_at: string | null;
+          created_at: string;
+          telegram_chat_id: string | null;
+          telegram_confirm_message_id: string | null;
+        };
+        Insert: {
+          id?: string;
+          conversation_id?: string | null;
+          actor_id?: string | null;
+          action_type: string;
+          target_id?: string | null;
+          target_type?: string | null;
+          input_data?: Json | null;
+          output_data?: Json | null;
+          status?: string | null;
+          error_message?: string | null;
+          executed_at?: string | null;
+          created_at?: string;
+          telegram_chat_id?: string | null;
+          telegram_confirm_message_id?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["alfred_action_log"]["Insert"]>;
+        Relationships: [];
+      };
+      alfred_conversations: {
+        Row: {
+          id: string;
+          user_id: string;
+          workspace_id: string | null;
+          title: string | null;
+          messages: Json;
+          context_snapshot: Json | null;
+          active: boolean | null;
+          created_at: string;
+          updated_at: string;
+          expires_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          workspace_id?: string | null;
+          title?: string | null;
+          messages?: Json;
+          context_snapshot?: Json | null;
+          active?: boolean | null;
+          created_at?: string;
+          updated_at?: string;
+          expires_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["alfred_conversations"]["Insert"]>;
+        Relationships: [];
+      };
       app_settings: {
         Row: {
           key: string;

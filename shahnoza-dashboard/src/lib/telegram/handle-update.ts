@@ -117,6 +117,11 @@ async function resolveCreatedBy(db: AdminDb, fromId: string | null): Promise<str
 const HELP = [
   "🤖 *Moliya boti*",
   "",
+  "🎩 *Alfred* — erkin tilda yozing, u tushunadi va bajaradi:",
+  "`alfred kecha taksi uchun 30 ming ishlatdim`",
+  "`alfred bu oy foyda qancha?`",
+  "Bajarilgan amalni bekor qilish: Alfred javobiga *bekor* deb reply qiling.",
+  "",
   "Xarajat qo'shish uchun shunday yozing:",
   "`rasxod 50$ facebook reklama`",
   "`rasxod 500000 video montaj`",
@@ -422,6 +427,56 @@ export async function handleTelegramUpdate(update: unknown): Promise<void> {
 
   const db = requireAdminClient();
 
+  // --- Alfred (full agent): "alfred <savol yoki buyruq>" ----------------------
+  // Natural language with action execution + undo, e.g.
+  // "alfred kecha taksi uchun 30 ming ishlatdim" or "alfred bu oy foyda qancha?"
+  const alfredMatch = text.match(/^\/?(?:alfred|альфред)(?:@\w+)?[,:.!\s]\s*(.*)$/is);
+  if (alfredMatch) {
+    const alfredText = alfredMatch[1].trim();
+    if (!alfredText) {
+      await sendMessage(
+        chatId,
+        "Alfredga savol yoki buyruq yozing. Masalan: `alfred kecha taksi uchun 30 ming ishlatdim`",
+        { replyToMessageId: msg.message_id },
+      );
+      return;
+    }
+    if (!isAiConfigured()) {
+      await sendMessage(chatId, "AI hozircha sozlanmagan.", {
+        replyToMessageId: msg.message_id,
+      });
+      return;
+    }
+    try {
+      const { runAlfredFromTelegram } = await import("@/lib/alfred/telegram-bridge");
+      const result = await runAlfredFromTelegram({
+        db,
+        telegramUserId: fromId,
+        chatId,
+        message: alfredText,
+      });
+      const confirmId = await sendMessage(chatId, result.text, {
+        replyToMessageId: msg.message_id,
+      });
+      // The confirmation message is the undo handle for every action executed
+      if (confirmId && result.logIds.length > 0) {
+        await db
+          .from("alfred_action_log")
+          .update({
+            telegram_chat_id: String(chatId),
+            telegram_confirm_message_id: String(confirmId),
+          })
+          .in("id", result.logIds);
+      }
+    } catch (error) {
+      console.error("Alfred telegram error:", error);
+      await sendMessage(chatId, "❌ Alfred xatoga uchradi. Keyinroq urinib ko'ring.", {
+        replyToMessageId: msg.message_id,
+      });
+    }
+    return;
+  }
+
   // --- AI brain: "/ai bu oy qancha sotuv bo'ldi?" -----------------------------
   if (/^\/(ai|sora|brain)(@\w+)?\b/i.test(text)) {
     const question = text.replace(/^\/(ai|sora|brain)(@\w+)?\s*/i, "").trim();
@@ -529,6 +584,53 @@ export async function handleTelegramUpdate(update: unknown): Promise<void> {
   // --- Edit / delete: a reply to a tracked expense message ---
   if (msg.reply_to_message) {
     const rid = msg.reply_to_message.message_id;
+
+    // "bekor" on an Alfred confirmation → undo that action (same engine as
+    // the web app; only the original actor can undo, and only once).
+    if (/^(bekor|undo|отмена|отменить)\b/i.test(text)) {
+      const { data: alfredLog } = await db
+        .from("alfred_action_log")
+        .select("id, actor_id")
+        .eq("telegram_chat_id", String(chatId))
+        .eq("telegram_confirm_message_id", String(rid))
+        .limit(1)
+        .maybeSingle();
+      if (alfredLog) {
+        let actorId: string | null = null;
+        if (fromId) {
+          const { data: sender } = await db
+            .from("users")
+            .select("id")
+            .eq("telegram_id", fromId)
+            .maybeSingle();
+          actorId = sender?.id ?? null;
+        }
+        if (!actorId || actorId !== alfredLog.actor_id) {
+          await sendMessage(
+            chatId,
+            "⚠️ Faqat amalni bajargan foydalanuvchi bekor qila oladi.",
+            { replyToMessageId: msg.message_id },
+          );
+          return;
+        }
+        const { undoAlfredAction } = await import("@/lib/alfred/undo-action");
+        const result = await undoAlfredAction({
+          opsDb: db,
+          logDb: db,
+          actionLogId: alfredLog.id,
+          actorId,
+        });
+        await sendMessage(
+          chatId,
+          result.success
+            ? "↩️ Amal bekor qilindi."
+            : `❌ ${result.error ?? "Bekor qilib bo'lmadi"}`,
+          { replyToMessageId: msg.message_id },
+        );
+        return;
+      }
+      // no Alfred log for this message — fall through to other reply handlers
+    }
 
     // A reply to a task confirmation card → mark that task done.
     const { data: repliedTask } = await db

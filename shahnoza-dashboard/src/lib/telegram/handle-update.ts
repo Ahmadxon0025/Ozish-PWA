@@ -371,6 +371,30 @@ export async function handleTelegramUpdate(update: unknown): Promise<void> {
   const text = msg.text.trim();
   const fromId = msg.from?.id != null ? String(msg.from.id) : null;
 
+  // A pasted multi-line message where two or more lines are finance commands
+  // is N separate entries, not one entry with a long description — process
+  // each command line as its own message (each gets its own confirmation,
+  // so reply-editing keeps working per entry).
+  const msgLines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  if (msgLines.length > 1) {
+    const isFinanceLine = (l: string) =>
+      isExpenseTrigger(l) ||
+      isDepositTrigger(l) ||
+      isTransferTrigger(l) ||
+      isSaleTrigger(l);
+    if (msgLines.filter(isFinanceLine).length >= 2) {
+      for (const line of msgLines) {
+        if (isFinanceLine(line)) {
+          await handleTelegramUpdate({ message: { ...msg, text: line } });
+        }
+      }
+      return;
+    }
+  }
+
   // Telegram mentions: a tap-mention carries the user object (→ telegram_id),
   // an @username mention only flags that someone was tagged.
   let mentionedTgId: string | null = null;
@@ -864,6 +888,26 @@ export async function handleTelegramUpdate(update: unknown): Promise<void> {
       await sendMessage(
         chatId,
         "❓ Summani topolmadim. Masalan: `rasxod 50$ facebook`",
+        { replyToMessageId: msg.message_id },
+      );
+      return;
+    }
+
+    // One expense per message: if the remainder still carries another expense
+    // trigger followed by a number, it's almost certainly a second entry —
+    // refuse instead of silently swallowing it into the description.
+    if (
+      /(?:^|\s)(rasxod|rasxad|xarajat|harajat|chiqim|expense|расход)\s+[^\n]*?\d/i.test(
+        parsed.description,
+      )
+    ) {
+      await sendMessage(
+        chatId,
+        [
+          "❗️ Bitta xabarda bitta xarajat yozing — har birini alohida qatorda yuboring:",
+          "`rasxod 50$ facebook`",
+          "`xarajat 200000 xosting`",
+        ].join("\n"),
         { replyToMessageId: msg.message_id },
       );
       return;

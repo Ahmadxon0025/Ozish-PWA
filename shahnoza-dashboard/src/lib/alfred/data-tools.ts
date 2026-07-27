@@ -69,7 +69,7 @@ export const ALFRED_DATA_TOOLS: Anthropic.Tool[] = [
   {
     name: "crm_overview",
     description:
-      "Lead pipeline overview for a period: new lead counts, status breakdown, top sources, conversion %, and stale (ignored) open leads. Use for questions like 'how are leads doing', 'conversion this month', 'which leads are stuck'.",
+      "Lead pipeline overview: ALL-TIME total lead count, how many have phone numbers, period lead counts, status breakdown, top sources, conversion %, and stale (ignored) open leads. Use for 'how many leads total', 'how are leads doing', 'conversion this month', 'which leads are stuck'.",
     input_schema: {
       type: "object",
       properties: {
@@ -268,7 +268,7 @@ export async function executeDataTool(
         const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
         const staleCutoff = new Date(Date.now() - staleDays * 86400000).toISOString();
 
-        const [periodRes, weekRes, staleRes] = await Promise.all([
+        const [periodRes, weekRes, staleRes, allRes, phoneRes] = await Promise.all([
           db
             .from("leads")
             .select("status, utm_source")
@@ -286,6 +286,12 @@ export async function executeDataTool(
             .lt("last_activity_at", staleCutoff)
             .order("last_activity_at", { ascending: true })
             .limit(15),
+          db.from("leads").select("id", { count: "exact", head: true }),
+          db
+            .from("leads")
+            .select("id", { count: "exact", head: true })
+            .not("phone", "is", null)
+            .neq("phone", ""),
         ]);
 
         const byStatus: Record<string, number> = {};
@@ -301,6 +307,8 @@ export async function executeDataTool(
         const names = await userMap(db);
         return {
           period: { from: from.slice(0, 10), to: to.slice(0, 10) },
+          all_time_total: allRes.count ?? 0,
+          all_time_with_phone: phoneRes.count ?? 0,
           total_new: total,
           new_last_7_days: weekRes.count ?? 0,
           by_status: byStatus,

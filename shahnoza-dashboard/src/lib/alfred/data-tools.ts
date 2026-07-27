@@ -45,7 +45,7 @@ export const ALFRED_DATA_TOOLS: Anthropic.Tool[] = [
   {
     name: "search_leads",
     description:
-      "Search leads/customers: name, phone, status, source, who they're assigned to. Use for lead pipeline questions or finding a specific customer.",
+      "Search leads/customers: name, phone, status, source, who they're assigned to. Results are ALWAYS newest-first — for 'the latest lead' just call with limit 1 and no filters. Use for lead pipeline questions or finding a specific customer.",
     input_schema: {
       type: "object",
       properties: {

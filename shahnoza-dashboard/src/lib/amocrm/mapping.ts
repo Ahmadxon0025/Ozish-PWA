@@ -15,7 +15,7 @@ export interface AmoLead {
     values?: Array<{ value?: string | number }>;
   }> | null;
   _embedded?: {
-    contacts?: Array<{ id: number }>;
+    contacts?: Array<{ id: number; is_main?: boolean }>;
   };
 }
 
@@ -23,6 +23,37 @@ export interface AmoUser {
   id: number;
   name?: string;
   email?: string;
+}
+
+export interface AmoContact {
+  id: number;
+  name?: string | null;
+  custom_fields_values?: Array<{
+    field_code?: string | null;
+    field_name?: string | null;
+    values?: Array<{ value?: unknown }> | null;
+  }> | null;
+}
+
+/** First phone number on a contact (field_code PHONE, or a phone-named field). */
+export function contactPhone(c: AmoContact): string | null {
+  for (const f of c.custom_fields_values ?? []) {
+    if (
+      f?.field_code === "PHONE" ||
+      /телефон|phone|raqam/i.test(f?.field_name ?? "")
+    ) {
+      const v = f?.values?.[0]?.value;
+      if (v != null && String(v).trim()) return String(v).trim();
+    }
+  }
+  return null;
+}
+
+/** The lead's primary embedded contact id, if any. */
+export function mainContactId(lead: AmoLead): number | null {
+  const cs = lead._embedded?.contacts ?? [];
+  const main = cs.find((c) => c.is_main) ?? cs[0];
+  return main?.id ?? null;
 }
 
 // AmoCRM system statuses (global across pipelines).

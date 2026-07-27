@@ -14,8 +14,11 @@ import {
   pickBoolByName,
   statusFromStage,
   unixToIso,
+  contactPhone,
+  mainContactId,
   type AmoLead,
   type AmoUser,
+  type AmoContact,
 } from "./mapping";
 
 const MAX_PAGES = 40; // up to 10k leads/page (250 each)
@@ -132,6 +135,41 @@ export async function runAmocrmSync(): Promise<SyncResult> {
       const leads = res?._embedded?.leads ?? [];
       if (leads.length === 0) break;
 
+      // Person name + phone live on the CONTACT entity, not the lead (deal).
+      // Batch-fetch this page's main contacts so leads carry real identities.
+      const contactIds = Array.from(
+        new Set(
+          leads
+            .map((l) => mainContactId(l))
+            .filter((id): id is number => id != null),
+        ),
+      );
+      const contactById = new Map<
+        number,
+        { name: string | null; phone: string | null }
+      >();
+      for (let i = 0; i < contactIds.length; i += 50) {
+        const chunk = contactIds.slice(i, i + 50);
+        const query: Record<string, string | number> = { limit: 250 };
+        chunk.forEach((id, idx) => {
+          query[`filter[id][${idx}]`] = id;
+        });
+        try {
+          const cres = await amoGet<{ _embedded?: { contacts?: AmoContact[] } }>(
+            "/api/v4/contacts",
+            query,
+          );
+          for (const c of cres?._embedded?.contacts ?? []) {
+            contactById.set(c.id, {
+              name: c.name?.trim() || null,
+              phone: contactPhone(c),
+            });
+          }
+        } catch (err) {
+          console.error("AmoCRM contacts fetch failed:", err);
+        }
+      }
+
       for (const lead of leads) {
         const assignedTo = lead.responsible_user_id
           ? userIdByAmo.get(lead.responsible_user_id) ?? null
@@ -142,13 +180,18 @@ export async function runAmocrmSync(): Promise<SyncResult> {
         const createdIso = unixToIso(lead.created_at);
         const cancelReason = pickByName(lead, "Rad etish sababi");
         const courseStartSec = pickNumberByName(lead, "Dars boshlangan sana");
+        const cid = mainContactId(lead);
+        const contact = cid != null ? contactById.get(cid) : undefined;
 
         const { data: upserted } = await db
           .from("leads")
           .upsert(
             {
               amocrm_lead_id: lead.id,
-              full_name: lead.name ?? null,
+              // Prefer the person's name over generic deal titles ("Сделка #N");
+              // undefined leaves any existing value untouched on re-sync.
+              full_name: contact?.name ?? lead.name ?? null,
+              phone: contact?.phone ?? undefined,
               status,
               assigned_to: assignedTo,
               amocrm_status_id: lead.status_id ?? null,

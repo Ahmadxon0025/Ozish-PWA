@@ -33,7 +33,7 @@ export interface BusinessSnapshot {
     }>;
   } | null;
   salesMonth: { count: number; totalUzs: number } | null;
-  leadsMonth: { newCount: number } | null;
+  leadsMonth: { newCount: number; staleCount?: number } | null;
 }
 
 function tashkentToday(offsetDays = 0): string {
@@ -222,13 +222,21 @@ export async function buildBusinessSnapshot(
     console.error("Snapshot receivables failed:", error);
   }
 
-  // New leads this month.
+  // New leads this month + open leads with no recent activity.
   try {
     const { count, error } = await supabase
       .from("leads")
       .select("id", { count: "exact", head: true })
       .gte("created_at", month.from);
-    if (!error) snapshot.leadsMonth = { newCount: count ?? 0 };
+    if (!error) {
+      const staleCutoff = new Date(Date.now() - 3 * 86400000).toISOString();
+      const { count: staleCount } = await supabase
+        .from("leads")
+        .select("id", { count: "exact", head: true })
+        .not("status", "in", "(sold,lost)")
+        .lt("last_activity_at", staleCutoff);
+      snapshot.leadsMonth = { newCount: count ?? 0, staleCount: staleCount ?? 0 };
+    }
   } catch (error) {
     console.error("Snapshot leads failed:", error);
   }
@@ -262,7 +270,11 @@ export function renderBusinessSnapshot(s: BusinessSnapshot): string {
     );
   }
   if (s.leadsMonth) {
-    lines.push(`New leads this month: ${s.leadsMonth.newCount}`);
+    const stale =
+      s.leadsMonth.staleCount != null && s.leadsMonth.staleCount > 0
+        ? ` (${s.leadsMonth.staleCount} open leads idle >3 days)`
+        : "";
+    lines.push(`New leads this month: ${s.leadsMonth.newCount}${stale}`);
   }
 
   if (s.accounts && s.accounts.length > 0) {

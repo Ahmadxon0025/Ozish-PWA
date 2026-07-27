@@ -64,7 +64,7 @@ export interface AlfredProposal {
   description: string;
   actions: Array<{
     id: string;
-    type: "assign" | "update" | "create" | "notify" | "expense" | "expense_update" | "expense_delete" | "sale" | "payment";
+    type: "assign" | "update" | "create" | "notify" | "expense" | "expense_update" | "expense_delete" | "sale" | "payment" | "lead_update";
     label: string;
     data?: Record<string, any>;
   }>;
@@ -342,8 +342,11 @@ FINANCE:
 - "sale": {"customer_name": string, "amount": number, "product_name"?: string, "currency"?: string (uzs|usd), "sold_at"?: timestamp, "notes"?: string}
 - "payment": {"customer_name": string, "amount": number, "currency"?: string (uzs|usd)} — marks receivable as paid or logs payment
 
+CRM (leads):
+- "lead_update": {"match_name": string, "status"?: string (new|contacted|qualified|sold|lost), "assignee_name"?: string, "lost_reason"?: string} — update a lead's stage or assignment (finds by name, exact match preferred). For "call X tomorrow" style follow-ups, use "create" (a task) instead — optionally alongside a lead_update.
+
 due_date format: "YYYY-MM-DD" for date-only, or "YYYY-MM-DDTHH:mm:00+05:00" when the user gives a time (Tashkent is UTC+5).
-amounts are UZS by default unless currency: "usd" is specified. Exchange rate: 1 USD ≈ 12,800 UZS (approximation).
+amounts are UZS by default unless currency: "usd" is specified. The system converts currencies with the live CBU rate automatically — never do the conversion math yourself; pass the amount exactly as the user said it.
 
 FOLLOW-UPS — after EVERY reply:
 Append this block at the very end of every message (after the ACTION block when there is one):
@@ -530,7 +533,7 @@ Respond with [] if nothing new is worth remembering.`,
 
     try {
       const parsed = JSON.parse(match[1]);
-      const allowedTypes = new Set(["assign", "update", "create", "notify", "expense", "expense_update", "expense_delete", "sale", "payment"]);
+      const allowedTypes = new Set(["assign", "update", "create", "notify", "expense", "expense_update", "expense_delete", "sale", "payment", "lead_update"]);
       const actions = (Array.isArray(parsed.actions) ? parsed.actions : [])
         .filter((a: any) => a && allowedTypes.has(a.type))
         .map((a: any, i: number) => ({

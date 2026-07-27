@@ -41,6 +41,31 @@ export async function fetchCbuUsdRate(): Promise<{ rate: number; asOf: string } 
 export async function refreshFxRate(db: DB): Promise<FxRate> {
   const fetched = await fetchCbuUsdRate();
   if (fetched) {
+    // Sanity band: a "new" rate more than 5% off the last accepted one is far
+    // outside any normal daily move — almost certainly a corrupted response
+    // (e.g. a shifted decimal). Keep the cached rate instead. Escape hatch: if
+    // the last accepted rate is over 7 days old, a large real move (or a long
+    // outage) is plausible, so accept what CBU says.
+    const { data: last } = await db
+      .from("fx_rates")
+      .select("rate, as_of")
+      .eq("base", "USD")
+      .eq("quote", "UZS")
+      .order("as_of", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (last && Number(last.rate) > 0) {
+      const drift = Math.abs(fetched.rate / Number(last.rate) - 1);
+      const ageDays =
+        (Date.now() - new Date(String(last.as_of)).getTime()) / 86400000;
+      if (drift > 0.05 && ageDays < 7) {
+        console.error(
+          `CBU rate rejected by sanity band: ${fetched.rate} deviates ` +
+            `${(drift * 100).toFixed(1)}% from ${last.rate} (${last.as_of})`
+        );
+        return { rate: Number(last.rate), asOf: String(last.as_of), source: "cbu" };
+      }
+    }
     await db
       .from("fx_rates")
       .upsert(

@@ -711,6 +711,7 @@ export const alfredRouter = createTRPCRouter({
           "expense_delete",
           "sale",
           "payment",
+          "lead_update",
         ]),
         data: z.record(z.any()),
       })

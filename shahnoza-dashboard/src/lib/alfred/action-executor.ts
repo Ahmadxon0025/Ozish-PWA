@@ -8,7 +8,7 @@ import { getCurrentRate } from "@/lib/business/exchange-rate";
 export interface ActionInput {
   conversationId: string | null;
   actionId: string;
-  actionType: "assign" | "update" | "create" | "notify" | "expense" | "expense_update" | "expense_delete" | "sale" | "payment";
+  actionType: "assign" | "update" | "create" | "notify" | "expense" | "expense_update" | "expense_delete" | "sale" | "payment" | "lead_update";
   data: Record<string, any>;
 }
 
@@ -93,6 +93,9 @@ export class AlfredActionExecutor {
           break;
         case "payment":
           result = await this.executePayment(data as any);
+          break;
+        case "lead_update":
+          result = await this.executeLeadUpdate(data as any);
           break;
         default:
           result = {
@@ -947,6 +950,90 @@ export class AlfredActionExecutor {
       return {
         success: false,
         message: `Sotuvni qo'shib bo'lmadi: ${detail}`,
+        error: detail,
+      };
+    }
+  }
+
+  /** Update a lead's stage/assignment. Finds by name, exact match preferred. */
+  private async executeLeadUpdate(data: {
+    match_name: string;
+    status?: string;
+    assignee_name?: string;
+    lost_reason?: string;
+  }): Promise<ActionResult> {
+    try {
+      const matchName = String(data.match_name || "").trim();
+      if (!matchName) return { success: false, message: "Lead nomi majburiy" };
+
+      const run = async (pattern: string) => {
+        const { data: rows } = await this.supabase
+          .from("leads")
+          .select(
+            "id, full_name, status, assigned_to, lost_reason, qualified_at, sold_at, lost_at, last_activity_at"
+          )
+          .ilike("full_name", pattern)
+          .order("created_at", { ascending: false })
+          .limit(2);
+        return rows || [];
+      };
+      let rows = await run(matchName);
+      if (rows.length === 0) rows = await run(`%${matchName}%`);
+      if (rows.length === 0) {
+        return { success: false, message: `"${matchName}" lead topilmadi` };
+      }
+      if (rows.length > 1) {
+        return {
+          success: false,
+          message: `"${matchName}" bo'yicha bir nechta lead topildi. Aniqroq nom kerak.`,
+        };
+      }
+      const lead = rows[0];
+
+      const updates: Record<string, any> = {};
+      if (data.status) {
+        const status = String(data.status).toLowerCase();
+        updates.status = status;
+        if (status === "qualified") updates.qualified_at = new Date().toISOString();
+        if (status === "sold") updates.sold_at = new Date().toISOString();
+        if (status === "lost") updates.lost_at = new Date().toISOString();
+      }
+      if (data.lost_reason) updates.lost_reason = String(data.lost_reason).trim();
+      if (data.assignee_name) {
+        const resolved = await this.resolveUserByName(String(data.assignee_name));
+        if ("error" in resolved) return { success: false, message: resolved.error };
+        updates.assigned_to = resolved.id;
+      }
+      if (Object.keys(updates).length === 0) {
+        return { success: false, message: "Lead uchun o'zgartirish ko'rsatilmagan" };
+      }
+      updates.last_activity_at = new Date().toISOString();
+
+      // Snapshot the pre-values of every column we touch (undo restores them)
+      const prior: Record<string, any> = {};
+      for (const key of Object.keys(updates)) {
+        prior[key] = (lead as any)[key] ?? null;
+      }
+
+      const { error } = await this.supabase
+        .from("leads")
+        .update(updates)
+        .eq("id", lead.id);
+      if (error) throw error;
+
+      const changed = Object.keys(updates)
+        .filter((k) => k !== "last_activity_at")
+        .join(", ");
+      return {
+        success: true,
+        message: `Lead yangilandi: ${lead.full_name} (${changed})`,
+        data: { leadId: lead.id, prior, updates },
+      };
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Unknown error";
+      return {
+        success: false,
+        message: `Leadni yangilab bo'lmadi: ${detail}`,
         error: detail,
       };
     }

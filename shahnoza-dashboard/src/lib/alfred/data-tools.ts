@@ -45,13 +45,32 @@ export const ALFRED_DATA_TOOLS: Anthropic.Tool[] = [
   {
     name: "search_leads",
     description:
-      "Search leads/customers: name, phone, status, who they're assigned to. Use for lead pipeline questions or finding a specific customer.",
+      "Search leads/customers: name, phone, status, source, who they're assigned to. Use for lead pipeline questions or finding a specific customer.",
     input_schema: {
       type: "object",
       properties: {
         status: { type: "string", description: "Lead status, e.g. new, qualified, sold, lost" },
         query: { type: "string", description: "Match against lead name or phone" },
+        source: { type: "string", description: "Filter by traffic source (utm_source substring)" },
+        from: { type: "string", description: "Created on/after this date (YYYY-MM-DD)" },
+        to: { type: "string", description: "Created before this date (YYYY-MM-DD)" },
+        stale_days: {
+          type: "number",
+          description: "Only open leads with no activity for this many days (finds stuck/ignored leads)",
+        },
         limit: { type: "number", description: "Max rows, default 30, max 50" },
+      },
+    },
+  },
+  {
+    name: "crm_overview",
+    description:
+      "Lead pipeline overview for a period: new lead counts, status breakdown, top sources, conversion %, and stale (ignored) open leads. Use for questions like 'how are leads doing', 'conversion this month', 'which leads are stuck'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        month: { type: "string", description: "YYYY-MM; defaults to the current month" },
+        stale_days: { type: "number", description: "Staleness threshold in days, default 3" },
       },
     },
   },
@@ -191,10 +210,21 @@ export async function executeDataTool(
       case "search_leads": {
         let q = db
           .from("leads")
-          .select("full_name, phone, status, assigned_to, created_at");
+          .select("full_name, phone, status, assigned_to, created_at, last_activity_at, utm_source");
         if (input?.status) q = q.eq("status", input.status);
         if (input?.query) {
           q = q.or(`full_name.ilike.%${input.query}%,phone.ilike.%${input.query}%`);
+        }
+        if (input?.source) q = q.ilike("utm_source", `%${input.source}%`);
+        if (input?.from) q = q.gte("created_at", input.from);
+        if (input?.to) q = q.lt("created_at", input.to);
+        if (input?.stale_days) {
+          const cutoff = new Date(
+            Date.now() - Number(input.stale_days) * 86400000
+          ).toISOString();
+          q = q
+            .not("status", "in", "(sold,lost)")
+            .lt("last_activity_at", cutoff);
         }
         const { data, error } = await q
           .order("created_at", { ascending: false })
@@ -208,7 +238,78 @@ export async function executeDataTool(
             phone: l.phone ?? null,
             status: l.status,
             assigned: names.get(l.assigned_to) ?? "biriktirilmagan",
+            source: l.utm_source ?? null,
             created: String(l.created_at).slice(0, 10),
+            last_activity: l.last_activity_at
+              ? String(l.last_activity_at).slice(0, 10)
+              : null,
+          })),
+        };
+      }
+
+      case "crm_overview": {
+        const staleDays = Number(input?.stale_days ?? 3);
+        const b = input?.month ? monthBounds(input.month) : null;
+        if (input?.month && !b) return { error: "month formati YYYY-MM bo'lishi kerak" };
+        const now = new Date();
+        const from = b
+          ? b.from
+          : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+        const to = b
+          ? b.to
+          : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString();
+        const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+        const staleCutoff = new Date(Date.now() - staleDays * 86400000).toISOString();
+
+        const [periodRes, weekRes, staleRes] = await Promise.all([
+          db
+            .from("leads")
+            .select("status, utm_source")
+            .gte("created_at", from)
+            .lt("created_at", to)
+            .limit(5000),
+          db
+            .from("leads")
+            .select("id", { count: "exact", head: true })
+            .gte("created_at", weekAgo),
+          db
+            .from("leads")
+            .select("full_name, status, assigned_to, last_activity_at")
+            .not("status", "in", "(sold,lost)")
+            .lt("last_activity_at", staleCutoff)
+            .order("last_activity_at", { ascending: true })
+            .limit(15),
+        ]);
+
+        const byStatus: Record<string, number> = {};
+        const bySource: Record<string, number> = {};
+        for (const l of periodRes.data || []) {
+          const st = l.status ?? "unknown";
+          byStatus[st] = (byStatus[st] || 0) + 1;
+          const src = l.utm_source || "noma'lum";
+          bySource[src] = (bySource[src] || 0) + 1;
+        }
+        const total = (periodRes.data || []).length;
+        const sold = byStatus["sold"] ?? 0;
+        const names = await userMap(db);
+        return {
+          period: { from: from.slice(0, 10), to: to.slice(0, 10) },
+          total_new: total,
+          new_last_7_days: weekRes.count ?? 0,
+          by_status: byStatus,
+          top_sources: Object.entries(bySource)
+            .sort((a, c) => c[1] - a[1])
+            .slice(0, 6)
+            .map(([source, count]) => ({ source, count })),
+          conversion_pct: total > 0 ? Math.round((sold / total) * 100) : null,
+          stale_days: staleDays,
+          stale: (staleRes.data || []).map((l: any) => ({
+            name: l.full_name ?? "—",
+            status: l.status,
+            assigned: names.get(l.assigned_to) ?? "biriktirilmagan",
+            last_activity: l.last_activity_at
+              ? String(l.last_activity_at).slice(0, 10)
+              : null,
           })),
         };
       }

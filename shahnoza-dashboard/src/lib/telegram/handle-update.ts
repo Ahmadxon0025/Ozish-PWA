@@ -1093,6 +1093,11 @@ export async function handleTelegramUpdate(update: unknown): Promise<void> {
       [
         `✅ *Xarajat qo'shildi*`,
         `${fmtMoney(parsed.amount, parsed.currency)}${parsed.currency !== "USD" ? ` (≈ ${formatUsd(amountUsd)})` : ""} — ${cat?.name ?? "Boshqa"}`,
+        rate.source === "fallback"
+          ? `⚠️ CBU kursi olinmadi — zaxira kurs ishlatildi (${groupThousands(rate.rate)} so'm/$)`
+          : rate.asOf !== todayKey()
+            ? `⚠️ Kurs ${rate.asOf} sanasiga tegishli (${groupThousands(rate.rate)} so'm/$)`
+            : "",
         parsed.description ? `_${parsed.description}_` : "",
         accountName ? `💳 ${accountName}` : "",
         "",

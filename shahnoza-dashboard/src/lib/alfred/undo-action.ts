@@ -159,6 +159,14 @@ export async function undoAlfredAction(opts: {
       if (log.output_data?.createdLead && log.output_data?.leadId) {
         await db.from("leads").delete().eq("id", log.output_data.leadId);
       }
+    } else if (log.action_type === "lead_update") {
+      const leadId = log.output_data?.leadId;
+      const prior = log.output_data?.prior;
+      if (!leadId || !prior) {
+        return { success: false, error: "Bekor qilish ma'lumoti yo'q" };
+      }
+      const { error } = await db.from("leads").update(prior).eq("id", leadId);
+      if (error) throw error;
     } else if (log.action_type === "payment") {
       const paymentId = log.output_data?.paymentId;
       if (!paymentId) {

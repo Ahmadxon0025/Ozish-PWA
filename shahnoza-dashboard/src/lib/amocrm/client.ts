@@ -90,6 +90,41 @@ export async function getValidTokens(): Promise<AmoTokens | null> {
   return tokens;
 }
 
+/** Authenticated JSON write (PATCH/POST) against the AmoCRM v4 API. */
+async function amoSend<T = unknown>(
+  method: "PATCH" | "POST",
+  path: string,
+  body: unknown,
+): Promise<T | null> {
+  const tokens = await getValidTokens();
+  if (!tokens) throw new Error("AmoCRM not connected.");
+
+  const res = await fetch(`https://${tokens.baseDomain}${path}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${tokens.accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+  if (res.status === 204) return null;
+  if (!res.ok) {
+    throw new Error(
+      `AmoCRM ${method} ${path} failed: ${res.status} ${await res.text()}`,
+    );
+  }
+  return (await res.json()) as T;
+}
+
+export function amoPatch<T = unknown>(path: string, body: unknown) {
+  return amoSend<T>("PATCH", path, body);
+}
+
+export function amoPost<T = unknown>(path: string, body: unknown) {
+  return amoSend<T>("POST", path, body);
+}
+
 /** Authenticated GET against the AmoCRM v4 API. */
 export async function amoGet<T = unknown>(
   path: string,

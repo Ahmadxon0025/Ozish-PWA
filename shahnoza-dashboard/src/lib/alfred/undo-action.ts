@@ -167,6 +167,21 @@ export async function undoAlfredAction(opts: {
       }
       const { error } = await db.from("leads").update(prior).eq("id", leadId);
       if (error) throw error;
+      // If the change was pushed to amoCRM, reverse it there too (best-effort)
+      const amo = log.output_data?.amo;
+      if (amo?.pushed && amo?.amoLeadId) {
+        try {
+          const { pushLeadUndoToAmo } = await import("@/lib/amocrm/push");
+          await pushLeadUndoToAmo({
+            amoLeadId: Number(amo.amoLeadId),
+            statusPushed: Boolean(amo.statusPushed),
+            priorStatusId: amo.priorStatusId ?? null,
+            priorResponsibleAmoUserId: amo.priorResponsibleAmoUserId ?? null,
+          });
+        } catch (amoError) {
+          console.error("amoCRM undo push failed:", amoError);
+        }
+      }
     } else if (log.action_type === "payment") {
       const paymentId = log.output_data?.paymentId;
       if (!paymentId) {

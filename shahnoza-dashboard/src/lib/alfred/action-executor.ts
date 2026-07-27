@@ -970,7 +970,7 @@ export class AlfredActionExecutor {
         const { data: rows } = await this.supabase
           .from("leads")
           .select(
-            "id, full_name, status, assigned_to, lost_reason, qualified_at, sold_at, lost_at, last_activity_at"
+            "id, full_name, status, assigned_to, lost_reason, qualified_at, sold_at, lost_at, last_activity_at, amocrm_lead_id, amocrm_status_id"
           )
           .ilike("full_name", pattern)
           .order("created_at", { ascending: false })
@@ -1021,13 +1021,70 @@ export class AlfredActionExecutor {
         .eq("id", lead.id);
       if (error) throw error;
 
+      // Best-effort write-back into amoCRM: won/lost + responsible user are
+      // patched (unambiguous universal mapping); everything else lands as a
+      // note on the lead. A push failure never fails the local action.
+      let amoInfo: Record<string, any> | null = null;
+      let amoSuffix = "";
+      if ((lead as any).amocrm_lead_id) {
+        try {
+          let responsibleAmoUserId: number | null = null;
+          let priorResponsibleAmoUserId: number | null = null;
+          if (updates.assigned_to) {
+            const { data: newUser } = await this.supabase
+              .from("users")
+              .select("amocrm_user_id")
+              .eq("id", updates.assigned_to)
+              .maybeSingle();
+            responsibleAmoUserId = newUser?.amocrm_user_id ?? null;
+            if (lead.assigned_to) {
+              const { data: oldUser } = await this.supabase
+                .from("users")
+                .select("amocrm_user_id")
+                .eq("id", lead.assigned_to)
+                .maybeSingle();
+              priorResponsibleAmoUserId = oldUser?.amocrm_user_id ?? null;
+            }
+          }
+          const noteParts: string[] = [];
+          if (updates.status) noteParts.push(`holat → ${updates.status}`);
+          if (updates.lost_reason) noteParts.push(`sabab: ${updates.lost_reason}`);
+          if (data.assignee_name && updates.assigned_to) {
+            noteParts.push(`mas'ul → ${String(data.assignee_name).trim()}`);
+          }
+          const { pushLeadUpdateToAmo } = await import("@/lib/amocrm/push");
+          const pushed = await pushLeadUpdateToAmo({
+            amoLeadId: Number((lead as any).amocrm_lead_id),
+            status: updates.status ?? null,
+            responsibleAmoUserId,
+            noteText:
+              noteParts.length > 0 ? `🎩 Alfred: ${noteParts.join(", ")}` : null,
+          });
+          amoInfo = {
+            pushed: pushed.pushed,
+            amoLeadId: Number((lead as any).amocrm_lead_id),
+            statusPushed: updates.status === "sold" || updates.status === "lost",
+            priorStatusId: (lead as any).amocrm_status_id ?? null,
+            priorResponsibleAmoUserId,
+          };
+          if (pushed.pushed) amoSuffix = " · amoCRM ham yangilandi";
+        } catch (amoError) {
+          console.error("amoCRM push failed:", amoError);
+          amoInfo = {
+            pushed: false,
+            error: amoError instanceof Error ? amoError.message : "failed",
+          };
+          amoSuffix = " · amoCRM yangilanmadi (lokal saqlandi)";
+        }
+      }
+
       const changed = Object.keys(updates)
         .filter((k) => k !== "last_activity_at")
         .join(", ");
       return {
         success: true,
-        message: `Lead yangilandi: ${lead.full_name} (${changed})`,
-        data: { leadId: lead.id, prior, updates },
+        message: `Lead yangilandi: ${lead.full_name} (${changed})${amoSuffix}`,
+        data: { leadId: lead.id, prior, updates, amo: amoInfo },
       };
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Unknown error";

@@ -592,6 +592,11 @@ export async function handleTelegramUpdate(update: unknown): Promise<void> {
         patch.amount = parsed.amount;
         patch.currency = parsed.currency;
         patch.amount_usd = toUsd(parsed.amount, parsed.currency, editRate.rate);
+        patch.amount_uzs =
+          parsed.currency === "UZS"
+            ? Math.round(parsed.amount)
+            : Math.round(parsed.amount * editRate.rate);
+        patch.rate = editRate.rate;
       }
       let categoryName: string | null = null;
       if (parsed.categoryName) {
@@ -634,11 +639,15 @@ export async function handleTelegramUpdate(update: unknown): Promise<void> {
         });
       }
 
+      // Show the native currency; add the USD equivalent for UZS entries.
+      const newAmount =
+        patch.amount != null ? Number(patch.amount) : Number(expense.amount ?? expense.amount_usd ?? 0);
+      const newCurrency = String(patch.currency ?? expense.currency ?? "UZS");
       const newUsd =
         patch.amount_usd != null ? Number(patch.amount_usd) : Number(expense.amount_usd ?? 0);
       await sendMessage(
         chatId,
-        `✏️ *Tahrirlandi:* ${formatUsd(newUsd)}${categoryName ? ` — ${categoryName}` : ""}`,
+        `✏️ *Tahrirlandi:* ${fmtMoney(newAmount, newCurrency)}${newCurrency !== "USD" ? ` (≈ ${formatUsd(newUsd)})` : ""}${categoryName ? ` — ${categoryName}` : ""}`,
         { replyToMessageId: msg.message_id },
       );
       return;
@@ -981,7 +990,7 @@ export async function handleTelegramUpdate(update: unknown): Promise<void> {
       chatId,
       [
         `✅ *Xarajat qo'shildi*`,
-        `${formatUsd(amountUsd)} — ${cat?.name ?? "Boshqa"}`,
+        `${fmtMoney(parsed.amount, parsed.currency)}${parsed.currency !== "USD" ? ` (≈ ${formatUsd(amountUsd)})` : ""} — ${cat?.name ?? "Boshqa"}`,
         parsed.description ? `_${parsed.description}_` : "",
         accountName ? `💳 ${accountName}` : "",
         "",

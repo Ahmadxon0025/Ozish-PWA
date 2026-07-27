@@ -8,7 +8,12 @@ export const dynamic = "force-dynamic";
  * reach api.telegram.org, so this registers our /api/webhooks/telegram endpoint.
  *
  * Auth: pass ?key=<CRON_SECRET> (so it can be opened in a browser).
- * Actions: ?action=set (default) | info | delete
+ * Actions: ?action=set (default) | info | delete | identity
+ *
+ * "identity" pushes the bot's public profile (name, about, description,
+ * command list) to Telegram — the parts of the BotFather card we can manage
+ * from code. Botpic, description picture, and privacy policy remain manual
+ * in BotFather; the username cannot be changed on an existing bot at all.
  */
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
@@ -33,6 +38,49 @@ export async function GET(request: NextRequest) {
     if (action === "delete") {
       const res = await fetch(api("deleteWebhook"), { cache: "no-store" });
       return NextResponse.json(await res.json());
+    }
+    if (action === "identity") {
+      const post = async (method: string, body: unknown) => {
+        const res = await fetch(api(method), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        return { method, ...(await res.json()) };
+      };
+      const results = [
+        await post("setMyName", { name: "Alfred" }),
+        await post("setMyShortDescription", {
+          short_description:
+            "Jamoaning AI yordamchisi: moliya, leadlar, vazifalar. " +
+            "Erkin tilda yozing — Alfred tushunadi va bajaradi.",
+        }),
+        await post("setMyDescription", {
+          description:
+            "🎩 Alfred — biznes yordamchingiz.\n\n" +
+            "💬 Erkin tilda: «alfred kecha taksi uchun 30 ming ishlatdim», " +
+            "«alfred bu oy foyda qancha?», «alfred Dilnoza leadini sold qil»\n\n" +
+            "⚡️ Tez buyruqlar: rasxod 50$ facebook · sotuv 379$ mijoz · " +
+            "kirim 6 mln firma · o'tkazma 3 mln firma viza\n\n" +
+            "↩️ Har bir amal 24 soat ichida bekor qilinadi — javobga " +
+            "«bekor» deb reply qiling.\n\n" +
+            "Boshlash uchun: /help",
+        }),
+        await post("setMyCommands", {
+          commands: [
+            { command: "help", description: "Yordam va barcha buyruqlar" },
+            { command: "alfred", description: "Alfred bilan erkin tilda (amallar + bekor)" },
+            { command: "ai", description: "Savol berish (faqat javob, amalsiz)" },
+            { command: "vazifa", description: "Vazifa yaratish" },
+            { command: "vazifalar", description: "Bugungi va muddati o'tgan vazifalar" },
+            { command: "vazifalarim", description: "Mening ochiq vazifalarim" },
+            { command: "bajarilgan", description: "Yaqinda bajarilgan vazifalar" },
+            { command: "kun", description: "Kunlik hisobot" },
+            { command: "id", description: "Chat ID ko'rsatish" },
+          ],
+        }),
+      ];
+      return NextResponse.json({ results });
     }
 
     const webhookUrl = `${env.APP_URL}/api/webhooks/telegram`;

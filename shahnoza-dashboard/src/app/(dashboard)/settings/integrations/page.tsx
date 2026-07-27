@@ -416,9 +416,7 @@ function TelegramCard({
     onSuccess: (res) => {
       toast({
         title: "Yuborildi",
-        description: `Moliya guruh: ${res.sent.financeGroup ? "✓" : "—"} · Boshqa: ${
-          res.sent.broadcast
-        } ta`,
+        description: `Moliya guruh: ${res.sent ? "✓" : "—"}`,
         variant: "success",
       });
     },

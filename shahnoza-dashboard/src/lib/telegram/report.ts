@@ -11,7 +11,7 @@ import { computePnl } from "@/lib/business/pnl";
 import { commissionForSale } from "@/lib/business/commission";
 import { getCurrentRate } from "@/lib/business/exchange-rate";
 import { formatUzs } from "@/lib/format";
-import { broadcast, sendMessage, financeGroupId } from "./bot";
+import { sendMessage, financeGroupId } from "./bot";
 
 function sum<T>(rows: T[], pick: (r: T) => number | null | undefined): number {
   return rows.reduce((a, r) => a + Number(pick(r) ?? 0), 0);
@@ -215,18 +215,11 @@ export async function buildDailyReport(): Promise<string> {
 }
 
 export async function sendDailyReport(): Promise<{
-  sent: { financeGroup: boolean; broadcast: number };
+  sent: boolean;
   text: string;
 }> {
   const text = await buildDailyReport();
   const fgId = financeGroupId();
-  const fgOk = fgId ? (await sendMessage(fgId, text)) !== null : false;
-  const results = await broadcast(text);
-  return {
-    sent: {
-      financeGroup: fgOk,
-      broadcast: results.filter((r) => r.ok).length,
-    },
-    text,
-  };
+  const ok = fgId ? (await sendMessage(fgId, text)) !== null : false;
+  return { sent: ok, text };
 }

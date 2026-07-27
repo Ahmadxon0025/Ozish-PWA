@@ -62,6 +62,27 @@ export function tasksChatId(): string {
   );
 }
 
+/** Dedicated finance group for scheduled reports (P&L, kassa, collection). */
+export function financeGroupId(): string {
+  return (
+    env.TELEGRAM_FINANCE_GROUP_ID ||
+    env.TELEGRAM_FINANCE_CHAT_ID ||
+    env.TELEGRAM_ADMIN_CHAT_ID ||
+    env.TELEGRAM_OWNER_CHAT_ID
+  );
+}
+
+/** Ops group for tasks, marketing, sales performance, per-salesperson reports. */
+export function opsGroupId(): string {
+  return (
+    env.TELEGRAM_OPS_GROUP_ID ||
+    env.TELEGRAM_TASKS_CHAT_ID ||
+    env.TELEGRAM_FINANCE_CHAT_ID ||
+    env.TELEGRAM_ADMIN_CHAT_ID ||
+    env.TELEGRAM_OWNER_CHAT_ID
+  );
+}
+
 /** The distinct chats that should receive the daily finance report. */
 export function reportChatIds(): string[] {
   return Array.from(

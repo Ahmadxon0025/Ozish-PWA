@@ -1,7 +1,7 @@
 import "server-only";
 import { requireAdminClient } from "@/lib/supabase/admin";
 import { formatUzs } from "@/lib/format";
-import { sendMessage, tasksChatId } from "./bot";
+import { sendMessage, financeGroupId } from "./bot";
 
 /** Tashkent (UTC+5) date, `offsetDays` from today, as YYYY-MM-DD. */
 function tashkentDate(offsetDays = 0): string {
@@ -75,6 +75,6 @@ export async function sendCollectionReminders(): Promise<{ sent: boolean; overdu
   if (soon.length) {
     parts.push(`\n🟡 *Yaqin muddat* (3 kun):\n${soon.slice(0, 20).join("\n")}`);
   }
-  const ok = (await sendMessage(tasksChatId(), parts.join("\n"))) !== null;
+  const ok = (await sendMessage(financeGroupId(), parts.join("\n"))) !== null;
   return { sent: ok, overdue: overdue.length, soon: soon.length };
 }

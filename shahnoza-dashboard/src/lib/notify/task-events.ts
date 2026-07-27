@@ -1,6 +1,6 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendMessage, tasksChatId } from "@/lib/telegram/bot";
+import { sendMessage, opsGroupId } from "@/lib/telegram/bot";
 import { priorityLabel } from "@/lib/ai/task-capture";
 import { sendPushToUser } from "@/lib/push/web-push";
 
@@ -75,7 +75,7 @@ export async function notifyTaskCreated(info: NewTaskInfo): Promise<void> {
         `⚡️ ${priorityLabel(info.priority)}`,
       ];
       if (creatorName && !selfAssigned) lines.push(`✍️ ${creatorName} qo'shdi`);
-      await sendMessage(tasksChatId(), lines.join("\n"));
+      await sendMessage(opsGroupId(), lines.join("\n"));
     }
 
     // 2) Private Telegram DM to the assignee (not when self-assigned).

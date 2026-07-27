@@ -29,11 +29,13 @@ export async function GET(request: NextRequest) {
 
   const config = {
     botToken: Boolean(env.TELEGRAM_BOT_TOKEN),
-    appUrl: env.APP_URL, // shown in full so you can verify the webhook target
+    appUrl: env.APP_URL,
     financeChatId: Boolean(env.TELEGRAM_FINANCE_CHAT_ID),
     adminChatId: Boolean(env.TELEGRAM_ADMIN_CHAT_ID),
     ownerChatId: Boolean(env.TELEGRAM_OWNER_CHAT_ID),
     tasksChatId: Boolean(env.TELEGRAM_TASKS_CHAT_ID),
+    financeGroupId: Boolean(env.TELEGRAM_FINANCE_GROUP_ID),
+    opsGroupId: Boolean(env.TELEGRAM_OPS_GROUP_ID),
     webhookSecret: Boolean(env.TELEGRAM_WEBHOOK_SECRET),
     cronSecret: Boolean(env.CRON_SECRET),
     serviceRole: isServiceRoleConfigured(),

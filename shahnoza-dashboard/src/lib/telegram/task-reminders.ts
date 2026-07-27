@@ -1,6 +1,6 @@
 import "server-only";
 import { requireAdminClient } from "@/lib/supabase/admin";
-import { sendMessage, tasksChatId } from "./bot";
+import { sendMessage, opsGroupId } from "./bot";
 
 const OPEN = ["backlog", "todo", "in_progress", "review"];
 
@@ -284,7 +284,7 @@ export async function buildTodayRecap(): Promise<string | null> {
 export async function sendTodayRecap(): Promise<{ group: number }> {
   const groupText = await buildTodayRecap();
   if (!groupText) return { group: 0 };
-  const ok = (await sendMessage(tasksChatId(), groupText)) !== null;
+  const ok = (await sendMessage(opsGroupId(), groupText)) !== null;
   return { group: ok ? 1 : 0 };
 }
 
@@ -297,7 +297,7 @@ export async function sendTaskReminders(): Promise<{
   if (!groupText) return { group: 0, dms: 0 };
 
   // Task reminders go to the dedicated tasks group (not the finance chat).
-  const groupOk = (await sendMessage(tasksChatId(), groupText)) !== null;
+  const groupOk = (await sendMessage(opsGroupId(), groupText)) !== null;
   let dms = 0;
   for (const u of perUser) {
     if ((await sendMessage(u.telegramId, u.text)) !== null) dms += 1;

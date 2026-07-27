@@ -11,8 +11,7 @@ import { computePnl } from "@/lib/business/pnl";
 import { commissionForSale } from "@/lib/business/commission";
 import { getCurrentRate } from "@/lib/business/exchange-rate";
 import { formatUzs } from "@/lib/format";
-import { env } from "@/lib/env";
-import { broadcast } from "./bot";
+import { broadcast, sendMessage, financeGroupId } from "./bot";
 
 function sum<T>(rows: T[], pick: (r: T) => number | null | undefined): number {
   return rows.reduce((a, r) => a + Number(pick(r) ?? 0), 0);
@@ -216,19 +215,17 @@ export async function buildDailyReport(): Promise<string> {
 }
 
 export async function sendDailyReport(): Promise<{
-  sent: { admin: boolean; owner: boolean; group: boolean; chats: number };
+  sent: { financeGroup: boolean; broadcast: number };
   text: string;
 }> {
   const text = await buildDailyReport();
+  const fgId = financeGroupId();
+  const fgOk = fgId ? (await sendMessage(fgId, text)) !== null : false;
   const results = await broadcast(text);
-  const okFor = (chatId: string) =>
-    Boolean(chatId) && results.some((r) => r.chatId === chatId && r.ok);
   return {
     sent: {
-      admin: okFor(env.TELEGRAM_ADMIN_CHAT_ID),
-      owner: okFor(env.TELEGRAM_OWNER_CHAT_ID),
-      group: okFor(env.TELEGRAM_FINANCE_CHAT_ID),
-      chats: results.filter((r) => r.ok).length,
+      financeGroup: fgOk,
+      broadcast: results.filter((r) => r.ok).length,
     },
     text,
   };

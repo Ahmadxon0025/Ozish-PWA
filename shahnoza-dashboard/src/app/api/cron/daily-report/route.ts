@@ -56,17 +56,7 @@ export async function GET(request: NextRequest) {
   const { sendDailyReport } = await import("@/lib/telegram/report");
   const { sent } = await sendDailyReport();
 
-  // Daily task reminders — who has tasks due today or overdue. Team summary to
-  // the group + owner, plus a personal DM to anyone with a Telegram id.
-  let reminders = { group: 0, dms: 0 };
-  try {
-    const { sendTaskReminders } = await import("@/lib/telegram/task-reminders");
-    reminders = await sendTaskReminders();
-  } catch {
-    // non-fatal
-  }
-
-  // Daily collection nudge — overdue instalments + those due in the next 3 days.
+  // Collection nudge → finance group (overdue instalments + due in 3 days).
   let collection = { sent: false, overdue: 0, soon: 0 };
   try {
     const { sendCollectionReminders } = await import("@/lib/telegram/collection-reminders");
@@ -75,17 +65,60 @@ export async function GET(request: NextRequest) {
     // non-fatal
   }
 
-  // Alfred morning brief — AI-narrated synthesis of cash, receivables, and
-  // overdue tasks, informed by Alfred's long-term memory. Numbers are
-  // computed deterministically; the model only narrates. Non-fatal.
+  // Task reminders → ops group (who has tasks due today or overdue).
+  let reminders = { group: 0, dms: 0 };
+  try {
+    const { sendTaskReminders } = await import("@/lib/telegram/task-reminders");
+    reminders = await sendTaskReminders();
+  } catch {
+    // non-fatal
+  }
+
+  // Marketing report → ops group (lead funnel, sources, UTM breakdown).
+  let marketing = false;
+  try {
+    const { buildMarketingReport } = await import("@/lib/telegram/marketing-report");
+    const { sendMessage, opsGroupId } = await import("@/lib/telegram/bot");
+    const text = await buildMarketingReport();
+    marketing = (await sendMessage(opsGroupId(), text)) !== null;
+  } catch {
+    // non-fatal
+  }
+
+  // Sales team performance → ops group (overall + per-person breakdown).
+  let salesTeam = false;
+  try {
+    const { buildSalesTeamReport } = await import("@/lib/telegram/sales-report");
+    const { sendMessage, opsGroupId } = await import("@/lib/telegram/bot");
+    const text = await buildSalesTeamReport();
+    salesTeam = (await sendMessage(opsGroupId(), text)) !== null;
+  } catch {
+    // non-fatal
+  }
+
+  // Per-salesperson detailed reports → ops group (individual stats + izoh).
+  let personalReports = 0;
+  try {
+    const { buildPerSalespersonReports } = await import("@/lib/telegram/sales-report");
+    const { sendMessage, opsGroupId } = await import("@/lib/telegram/bot");
+    const reports = await buildPerSalespersonReports();
+    const chatId = opsGroupId();
+    for (const r of reports) {
+      if ((await sendMessage(chatId, r.text)) !== null) personalReports++;
+    }
+  } catch {
+    // non-fatal
+  }
+
+  // Alfred morning brief → ops group (AI-narrated synthesis).
   let brief = false;
   if (isAiConfigured()) {
     try {
       const { buildAlfredBrief } = await import("@/lib/ai/alfred-brief");
       const text = await buildAlfredBrief();
       if (text) {
-        const { sendMessage, tasksChatId } = await import("@/lib/telegram/bot");
-        await sendMessage(tasksChatId(), `🎩 *ALFRED ERTALABKI BRIF*\n\n${text}`);
+        const { sendMessage, opsGroupId } = await import("@/lib/telegram/bot");
+        await sendMessage(opsGroupId(), `🎩 *ALFRED ERTALABKI BRIF*\n\n${text}`);
         brief = true;
       }
     } catch {
@@ -93,16 +126,15 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Weekly AI summary on Mondays (04:00 UTC = 09:00 Tashkent) — folded into the
-  // daily cron to stay within the Hobby-plan 2-cron limit. Aggregates only.
+  // Weekly AI summary on Mondays → ops group.
   let weekly = false;
   if (new Date().getUTCDay() === 1 && isAiConfigured()) {
     try {
       const { buildWeeklySummary } = await import("@/lib/ai/weekly-summary");
       const text = await buildWeeklySummary();
       if (text) {
-        const { sendMessage, tasksChatId } = await import("@/lib/telegram/bot");
-        await sendMessage(tasksChatId(), `🗓️ *HAFTALIK XULOSA (AI)*\n\n${text}`);
+        const { sendMessage, opsGroupId } = await import("@/lib/telegram/bot");
+        await sendMessage(opsGroupId(), `🗓️ *HAFTALIK XULOSA (AI)*\n\n${text}`);
         weekly = true;
       }
     } catch {
@@ -110,5 +142,15 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, sent, reminders, collection, brief, weekly });
+  return NextResponse.json({
+    ok: true,
+    sent,
+    collection,
+    reminders,
+    marketing,
+    salesTeam,
+    personalReports,
+    brief,
+    weekly,
+  });
 }

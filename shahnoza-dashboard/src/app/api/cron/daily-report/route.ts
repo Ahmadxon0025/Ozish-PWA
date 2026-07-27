@@ -12,7 +12,9 @@ export const maxDuration = 60;
 
 function authorized(request: NextRequest): boolean {
   if (!env.CRON_SECRET) return process.env.NODE_ENV !== "production";
-  return request.headers.get("authorization") === `Bearer ${env.CRON_SECRET}`;
+  const header = request.headers.get("authorization");
+  if (header === `Bearer ${env.CRON_SECRET}`) return true;
+  return new URL(request.url).searchParams.get("key") === env.CRON_SECRET;
 }
 
 /**

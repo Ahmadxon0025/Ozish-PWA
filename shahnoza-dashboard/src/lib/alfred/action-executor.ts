@@ -1,5 +1,8 @@
 import { SupabaseClient } from "@supabase/supabase-js";
-import { insertAccountEntry } from "@/lib/business/account-posting";
+import {
+  insertAccountEntry,
+  deleteRelatedEntries,
+} from "@/lib/business/account-posting";
 import { getCurrentRate } from "@/lib/business/exchange-rate";
 
 export interface ActionInput {
@@ -659,7 +662,7 @@ export class AlfredActionExecutor {
       }
 
       // Find the expense to update: by description match or most recent
-      let query = this.supabase.from("expenses").select("id, description, amount, amount_usd, currency, paid_to, expense_date, account_id");
+      let query = this.supabase.from("expenses").select("id, description, amount, amount_usd, currency, rate, paid_to, expense_date, account_id");
 
       if (matchDesc) {
         query = query.ilike("description", `%${matchDesc}%`);
@@ -685,6 +688,10 @@ export class AlfredActionExecutor {
         amount: expense.amount,
         amount_usd: expense.amount_usd,
         paid_to: expense.paid_to,
+        currency: expense.currency,
+        rate: expense.rate,
+        expense_date: expense.expense_date,
+        account_id: expense.account_id,
       };
 
       // Prepare updates
@@ -692,8 +699,17 @@ export class AlfredActionExecutor {
       if (new_description) updates.description = new_description;
       if (new_paid_to) updates.paid_to = new_paid_to;
       if (new_amount) {
+        const rate = await getCurrentRate(this.supabase);
         updates.amount = currency === "uzs" ? new_amount : null;
-        updates.amount_usd = currency === "uzs" ? Number((new_amount / 12800).toFixed(2)) : new_amount;
+        updates.amount_usd =
+          currency === "uzs"
+            ? Number((new_amount / rate.rate).toFixed(2))
+            : new_amount;
+        updates.amount_uzs =
+          currency === "uzs"
+            ? Math.round(new_amount)
+            : Math.round(new_amount * rate.rate);
+        updates.rate = rate.rate;
         updates.currency = currency;
       }
       // Link to account if orphaned
@@ -715,6 +731,29 @@ export class AlfredActionExecutor {
         .eq("id", expense.id);
 
       if (error) throw error;
+
+      // Amount changed → the old ledger movement is stale; replace it
+      const ledgerAccountId = updates.account_id ?? expense.account_id;
+      if (new_amount && ledgerAccountId) {
+        try {
+          await deleteRelatedEntries(this.supabase, "expense", expense.id);
+          await insertAccountEntry(this.supabase, {
+            accountId: ledgerAccountId,
+            direction: "out",
+            kind: "expense",
+            amountUsd: updates.amount_usd,
+            amountUzs: currency === "uzs" ? new_amount : null,
+            rate: updates.rate,
+            description: updates.description ?? expense.description,
+            relatedType: "expense",
+            relatedId: expense.id,
+            createdBy: this.userId,
+            occurredAt: `${expense.expense_date}T12:00:00Z`,
+          });
+        } catch (entryError) {
+          console.error("Failed to re-sync account entry for expense:", entryError);
+        }
+      }
 
       const changed = Object.keys(updates).join(", ");
       return {
@@ -741,10 +780,9 @@ export class AlfredActionExecutor {
         ? String(data.match_description).trim()
         : null;
 
-      // Find the expense to delete: by description match or most recent
-      let query = this.supabase
-        .from("expenses")
-        .select("id, description, amount, amount_usd, currency, paid_to, expense_date, created_at, account_id");
+      // Find the expense to delete: by description match or most recent.
+      // Full row so undo can restore it exactly.
+      let query = this.supabase.from("expenses").select("*");
 
       if (matchDesc) {
         query = query.ilike("description", `%${matchDesc}%`);
@@ -765,15 +803,14 @@ export class AlfredActionExecutor {
       }
 
       const expense = expenses[0];
-      const prior = {
-        id: expense.id,
-        description: expense.description,
-        amount: expense.amount,
-        amount_usd: expense.amount_usd,
-        paid_to: expense.paid_to,
-        expense_date: expense.expense_date,
-        account_id: expense.account_id,
-      };
+      const prior = { ...expense };
+
+      // Remove the ledger movement first so the account balance stays true
+      try {
+        await deleteRelatedEntries(this.supabase, "expense", expense.id);
+      } catch (entryError) {
+        console.error("Failed to delete account entry for expense:", entryError);
+      }
 
       // Delete the expense
       const { error } = await this.supabase
@@ -830,6 +867,7 @@ export class AlfredActionExecutor {
         .limit(2);
 
       let leadId: string | null = null;
+      let createdLead = false;
       if (leads && leads.length === 1) {
         leadId = leads[0].id;
       } else if (!leads || leads.length === 0) {
@@ -841,6 +879,7 @@ export class AlfredActionExecutor {
           .single();
         if (createError) throw createError;
         leadId = newLead.id;
+        createdLead = true;
       } else {
         return {
           success: false,
@@ -849,7 +888,9 @@ export class AlfredActionExecutor {
       }
 
       // Convert amount to USD if in UZS
-      const amount_usd = currency === "uzs" ? Number((amount / 12800).toFixed(2)) : amount;
+      const rate = await getCurrentRate(this.supabase);
+      const amount_usd =
+        currency === "uzs" ? Number((amount / rate.rate).toFixed(2)) : amount;
       const amount_uzs = currency === "uzs" ? amount : null;
 
       // Create the sale
@@ -875,19 +916,23 @@ export class AlfredActionExecutor {
       dueDate.setDate(dueDate.getDate() + 7); // Default due in 7 days
       const dueDateStr = dueDate.toISOString().slice(0, 10);
 
-      const { error: paymentError } = await this.supabase.from("payments").insert({
-        sale_id: sale.id,
-        amount_usd: currency !== "uzs" ? amount : amount_usd,
-        status: "pending",
-        due_date: dueDateStr,
-      });
+      const { data: payment, error: paymentError } = await this.supabase
+        .from("payments")
+        .insert({
+          sale_id: sale.id,
+          amount_usd: currency !== "uzs" ? amount : amount_usd,
+          status: "pending",
+          due_date: dueDateStr,
+        })
+        .select("id")
+        .single();
 
       if (paymentError) throw paymentError;
 
       return {
         success: true,
         message: `Sotuv qo'shildi: ${customer_name}, ${amount}${currency === "uzs" ? " so'm" : " USD"}`,
-        data: { saleId: sale.id, leadId },
+        data: { saleId: sale.id, leadId, createdLead, paymentId: payment?.id },
       };
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Unknown error";
@@ -940,15 +985,15 @@ export class AlfredActionExecutor {
 
       const leadId = leads[0].id;
 
-      // Find the latest unpaid payment for this lead
+      // Earliest-due unpaid payment belonging to THIS lead (join through sales)
       const { data: payments } = await this.supabase
         .from("payments")
-        .select("id, sale_id, amount_usd, status")
+        .select("id, sale_id, amount_usd, status, paid_at, sales!inner(lead_id)")
+        .eq("sales.lead_id", leadId)
         .eq("status", "pending")
         .order("due_date", { ascending: true })
         .limit(1);
 
-      // TODO: join with sales to filter by lead_id. For now, update the first unpaid.
       if (!payments || payments.length === 0) {
         return {
           success: false,
@@ -967,7 +1012,10 @@ export class AlfredActionExecutor {
       return {
         success: true,
         message: `To'lov qo'yildi: ${customer_name}, ${amount}${currency === "uzs" ? " so'm" : " USD"}`,
-        data: { paymentId: payment.id },
+        data: {
+          paymentId: payment.id,
+          prior: { status: payment.status, paid_at: payment.paid_at ?? null },
+        },
       };
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Unknown error";

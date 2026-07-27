@@ -8,6 +8,10 @@ import { AlfredChatService, type WorkspaceContext, type ConversationMessage } fr
 import { AlfredActionExecutor } from "@/lib/alfred/action-executor";
 import { buildBusinessSnapshot } from "@/lib/alfred/workspace-data";
 import { executeDataTool } from "@/lib/alfred/data-tools";
+import {
+  insertAccountEntry,
+  deleteRelatedEntries,
+} from "@/lib/business/account-posting";
 
 /** Dashboard route → human label + page-scoped suggestion (longest prefix wins). */
 const PAGE_MAP: Array<{ prefix: string; label: string; suggestion: string }> = [
@@ -743,6 +747,99 @@ export const alfredRouter = createTRPCRouter({
               }
             }
           }
+        } else if (log.action_type === "expense") {
+          // output_data is the created expense row; remove its ledger
+          // movement first so the account balance stays true
+          const expenseId = log.output_data?.id;
+          if (!expenseId) {
+            return { success: false, error: "Bekor qilish ma'lumoti yo'q" };
+          }
+          await deleteRelatedEntries(db, "expense", expenseId);
+          const { error } = await db
+            .from("expenses")
+            .delete()
+            .eq("id", expenseId);
+          if (error) throw error;
+        } else if (log.action_type === "expense_update") {
+          const expenseId = log.output_data?.expenseId;
+          const prior = log.output_data?.prior;
+          if (!expenseId || !prior) {
+            return { success: false, error: "Bekor qilish ma'lumoti yo'q" };
+          }
+          const { expense_date, account_id, ...fields } = prior;
+          const { error } = await db
+            .from("expenses")
+            .update(fields)
+            .eq("id", expenseId);
+          if (error) throw error;
+          // Restore the ledger movement to the prior amounts
+          if (account_id && prior.amount_usd != null) {
+            await deleteRelatedEntries(db, "expense", expenseId);
+            await insertAccountEntry(db, {
+              accountId: account_id,
+              direction: "out",
+              kind: "expense",
+              amountUsd: prior.amount_usd,
+              amountUzs: prior.amount ?? null,
+              rate: prior.rate ?? 1,
+              description: prior.description ?? null,
+              relatedType: "expense",
+              relatedId: expenseId,
+              createdBy: ctx.appUser.id,
+              occurredAt: expense_date ? `${expense_date}T12:00:00Z` : null,
+            });
+          }
+        } else if (log.action_type === "expense_delete") {
+          // output_data.prior is the full deleted row — restore it verbatim
+          const prior = log.output_data?.prior;
+          if (!prior?.id) {
+            return { success: false, error: "Bekor qilish ma'lumoti yo'q" };
+          }
+          const { error } = await db.from("expenses").insert(prior);
+          if (error) throw error;
+          if (prior.account_id && prior.amount_usd != null) {
+            await insertAccountEntry(db, {
+              accountId: prior.account_id,
+              direction: "out",
+              kind: "expense",
+              amountUsd: prior.amount_usd,
+              amountUzs: prior.amount ?? null,
+              rate: prior.rate ?? 1,
+              description: prior.description ?? null,
+              relatedType: "expense",
+              relatedId: prior.id,
+              createdBy: ctx.appUser.id,
+              occurredAt: prior.expense_date
+                ? `${prior.expense_date}T12:00:00Z`
+                : null,
+            });
+          }
+        } else if (log.action_type === "sale") {
+          const saleId = log.output_data?.saleId;
+          if (!saleId) {
+            return { success: false, error: "Bekor qilish ma'lumoti yo'q" };
+          }
+          await db.from("payments").delete().eq("sale_id", saleId);
+          const { error } = await db.from("sales").delete().eq("id", saleId);
+          if (error) throw error;
+          // Only remove the lead if this sale created it
+          if (log.output_data?.createdLead && log.output_data?.leadId) {
+            await db.from("leads").delete().eq("id", log.output_data.leadId);
+          }
+        } else if (log.action_type === "payment") {
+          const paymentId = log.output_data?.paymentId;
+          if (!paymentId) {
+            return { success: false, error: "Bekor qilish ma'lumoti yo'q" };
+          }
+          const prior = log.output_data?.prior;
+          const { error } = await db
+            .from("payments")
+            .update({
+              status: prior?.status ?? "pending",
+              paid_at: prior?.paid_at ?? null,
+            })
+            .eq("id", paymentId);
+          if (error) throw error;
         } else {
           return { success: false, error: "Bu turdagi amal bekor qilinmaydi" };
         }
@@ -767,7 +864,17 @@ export const alfredRouter = createTRPCRouter({
       z.object({
         conversationId: z.string(),
         actionId: z.string(),
-        actionType: z.enum(["assign", "update", "create", "notify"]),
+        actionType: z.enum([
+          "assign",
+          "update",
+          "create",
+          "notify",
+          "expense",
+          "expense_update",
+          "expense_delete",
+          "sale",
+          "payment",
+        ]),
         data: z.record(z.any()),
       })
     )
@@ -799,8 +906,9 @@ export const alfredRouter = createTRPCRouter({
           };
         }
 
-        // Execute action
-        const executor = new AlfredActionExecutor(ctx.supabase, user.user.id);
+        // Execute action. Actor must be the app-level user id (public.users.id)
+        // — the action-log RLS policy maps auth.uid() through users.auth_id.
+        const executor = new AlfredActionExecutor(ctx.supabase, ctx.appUser.id);
         const result = await executor.execute(input);
 
         return result;

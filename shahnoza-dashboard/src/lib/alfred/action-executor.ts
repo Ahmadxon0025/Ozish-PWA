@@ -636,6 +636,30 @@ export class AlfredActionExecutor {
     }
   }
 
+  /**
+   * Most-recent expense matching a description — exact (case-insensitive)
+   * first, substring as fallback, so "test2" can never grab "logid-test2".
+   * No description → most recent overall.
+   */
+  private async findExpenseByDescription(
+    columns: string,
+    matchDesc: string | null
+  ): Promise<any | null> {
+    const run = async (pattern: string | null) => {
+      let q = this.supabase.from("expenses").select(columns);
+      if (pattern) q = q.ilike("description", pattern);
+      const { data } = await q
+        .order("expense_date", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(1);
+      return data?.[0] ?? null;
+    };
+    if (matchDesc) {
+      return (await run(matchDesc)) ?? (await run(`%${matchDesc}%`));
+    }
+    return run(null);
+  }
+
   /** Update (correct) a recent expense. Finds by description match or "most recent". */
   private async executeExpenseUpdate(data: {
     description?: string;
@@ -662,18 +686,12 @@ export class AlfredActionExecutor {
       }
 
       // Find the expense to update: by description match or most recent
-      let query = this.supabase.from("expenses").select("id, description, amount, amount_usd, currency, rate, paid_to, expense_date, account_id");
+      const expense = await this.findExpenseByDescription(
+        "id, description, amount, amount_usd, currency, rate, paid_to, expense_date, account_id",
+        matchDesc
+      );
 
-      if (matchDesc) {
-        query = query.ilike("description", `%${matchDesc}%`);
-      }
-
-      const { data: expenses } = await query
-        .order("expense_date", { ascending: false })
-        .order("created_at", { ascending: false })
-        .limit(1);
-
-      if (!expenses || expenses.length === 0) {
+      if (!expense) {
         return {
           success: false,
           message: matchDesc
@@ -682,7 +700,6 @@ export class AlfredActionExecutor {
         };
       }
 
-      const expense = expenses[0];
       const prior = {
         description: expense.description,
         amount: expense.amount,
@@ -782,18 +799,9 @@ export class AlfredActionExecutor {
 
       // Find the expense to delete: by description match or most recent.
       // Full row so undo can restore it exactly.
-      let query = this.supabase.from("expenses").select("*");
+      const expense = await this.findExpenseByDescription("*", matchDesc);
 
-      if (matchDesc) {
-        query = query.ilike("description", `%${matchDesc}%`);
-      }
-
-      const { data: expenses } = await query
-        .order("expense_date", { ascending: false })
-        .order("created_at", { ascending: false })
-        .limit(1);
-
-      if (!expenses || expenses.length === 0) {
+      if (!expense) {
         return {
           success: false,
           message: matchDesc
@@ -802,7 +810,6 @@ export class AlfredActionExecutor {
         };
       }
 
-      const expense = expenses[0];
       const prior = { ...expense };
 
       // Remove the ledger movement first so the account balance stays true

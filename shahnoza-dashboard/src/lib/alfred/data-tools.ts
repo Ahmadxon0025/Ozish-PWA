@@ -58,6 +58,10 @@ export const ALFRED_DATA_TOOLS: Anthropic.Tool[] = [
           type: "number",
           description: "Only open leads with no activity for this many days (finds stuck/ignored leads)",
         },
+        has_phone: {
+          type: "boolean",
+          description: "true = only leads that have a phone number recorded",
+        },
         limit: { type: "number", description: "Max rows, default 30, max 50" },
       },
     },
@@ -225,6 +229,9 @@ export async function executeDataTool(
           q = q
             .not("status", "in", "(sold,lost)")
             .lt("last_activity_at", cutoff);
+        }
+        if (input?.has_phone) {
+          q = q.not("phone", "is", null).neq("phone", "");
         }
         const { data, error } = await q
           .order("created_at", { ascending: false })

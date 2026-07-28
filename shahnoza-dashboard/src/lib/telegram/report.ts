@@ -4,10 +4,7 @@ import {
   monthRange,
   yesterdayRange,
   todayKey,
-  currentMonthKey,
 } from "@/lib/dates";
-import { computePnl } from "@/lib/business/pnl";
-import { commissionForSale } from "@/lib/business/commission";
 import { getCurrentRate } from "@/lib/business/exchange-rate";
 import { formatUzs } from "@/lib/format";
 import { sendMessage, financeGroupId } from "./bot";
@@ -21,19 +18,17 @@ export async function buildDailyReport(): Promise<string> {
   const db = requireAdminClient();
   const month = monthRange();
   const yesterday = yesterdayRange();
-  const monthKey = currentMonthKey();
 
   const [
     salesMonth,
     salesYday,
     expMonth,
     expYday,
-    salesTarget,
     rateRow,
   ] = await Promise.all([
     db
       .from("sales")
-      .select("total_amount_usd, total_amount_uzs, sales_person_id, is_refunded, refund_amount_usd")
+      .select("total_amount_usd, total_amount_uzs")
       .gte("sold_at", month.from)
       .lt("sold_at", month.to),
     db
@@ -51,13 +46,6 @@ export async function buildDailyReport(): Promise<string> {
       .select("amount_usd, amount_uzs")
       .gte("expense_date", yesterday.from.slice(0, 10))
       .lt("expense_date", yesterday.to.slice(0, 10)),
-    db
-      .from("company_targets")
-      .select("target_value")
-      .eq("scope", "sales")
-      .eq("metric", "revenue_uzs")
-      .eq("month", monthKey)
-      .maybeSingle(),
     getCurrentRate(db),
   ]);
 
@@ -65,22 +53,11 @@ export async function buildDailyReport(): Promise<string> {
   // Booked so'm per row: native so'm if present, else USD × today's rate.
   const saleUzs = (s: { total_amount_uzs: number | null; total_amount_usd: number | null }) =>
     s.total_amount_uzs ?? Math.round(Number(s.total_amount_usd ?? 0) * currentRate);
-  // Per-row booked rate (uzs per usd), for scaling refunds/commissions.
-  const bookedRate = (uzs: number | null, usd: number | null): number =>
-    uzs && usd && usd !== 0 ? uzs / usd : currentRate;
 
   const sm = salesMonth.data ?? [];
   const monthAmountUzs = sum(sm, saleUzs);
   const ydayAmountUzs = sum(salesYday.data ?? [], saleUzs);
 
-  const refundsUzs = sum(sm, (s) =>
-    s.is_refunded
-      ? Math.round(
-          Number(s.refund_amount_usd ?? 0) *
-            bookedRate(s.total_amount_uzs, s.total_amount_usd),
-        )
-      : 0,
-  );
   const expMonthUzs = sum(
     expMonth.data ?? [],
     (e) => e.amount_uzs ?? Math.round(Number(e.amount_usd ?? 0) * currentRate),
@@ -89,31 +66,6 @@ export async function buildDailyReport(): Promise<string> {
     expYday.data ?? [],
     (e) => e.amount_uzs ?? Math.round(Number(e.amount_usd ?? 0) * currentRate),
   );
-  const commissionsUzs = sum(sm, (s) => {
-    const usd = commissionForSale({
-      totalAmountUsd: s.total_amount_usd,
-      isRefunded: s.is_refunded,
-      refundAmountUsd: s.refund_amount_usd,
-    });
-    return Math.round(usd * bookedRate(s.total_amount_uzs, s.total_amount_usd));
-  });
-
-  // computePnl is unit-agnostic arithmetic — feed so'm to get a so'm P&L.
-  const pnl = computePnl({
-    grossRevenueUsd: monthAmountUzs,
-    refundsUsd: refundsUzs,
-    operatingExpensesUsd: expMonthUzs,
-    commissionsUsd: commissionsUzs,
-  });
-
-  // Monthly sales plan = the CEO's revenue goal for this month (so'm).
-  const revenueTargetUzs = salesTarget.data?.target_value
-    ? Number(salesTarget.data.target_value)
-    : null;
-  const planLine = revenueTargetUzs
-    ? `Oylik reja: ${Math.round((monthAmountUzs / revenueTargetUzs) * 100)}% (${formatUzs(revenueTargetUzs)})`
-    : `Oylik reja: — (maqsad belgilanmagan)`;
-
   // Account balances (kassa). Each account shows in its own currency.
   const [{ data: accts }, { data: acctTxns }] = await Promise.all([
     db.from("accounts").select("id, name, currency").order("sort_order"),
@@ -145,14 +97,10 @@ export async function buildDailyReport(): Promise<string> {
     `💰 *TUSHUM*`,
     `Kecha: ${salesYday.data?.length ?? 0} ta (${formatUzs(ydayAmountUzs)})`,
     `Bu oy: ${sm.length} ta (${formatUzs(monthAmountUzs)})`,
-    planLine,
     ``,
     `📢 *XARAJAT*`,
     `Kecha: ${formatUzs(expYdayUzs)}`,
     `Bu oy: ${formatUzs(expMonthUzs)}`,
-    ``,
-    `📈 *SOF FOYDA (bu oy)*`,
-    `${formatUzs(pnl.netProfitUsd)}`,
     ``,
     `💳 *HISOBLAR (BALANS)*`,
     acctLines,

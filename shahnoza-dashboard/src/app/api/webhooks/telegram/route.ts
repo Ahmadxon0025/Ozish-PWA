@@ -2,7 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { env, isTelegramConfigured, isServiceRoleConfigured } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 30;
+// 60s so "/hisobot hammasi" can build and send all five finance reports.
+export const maxDuration = 60;
 
 /**
  * Telegram webhook receiver. Telegram POSTs an Update object here for every

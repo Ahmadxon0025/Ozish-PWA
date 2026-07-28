@@ -153,6 +153,11 @@ const HELP = [
   "`/ai <savol>` — biznes haqida so'rang (sotuv, lead, vazifa, moliya).",
   "Masalan: `/ai bu oy qancha sotuv bo'ldi?`",
   "",
+  "📊 *Moliya hisobotlari:*",
+  "`/hisobot` — kunlik moliya hisoboti",
+  "`/hisobot hafta` / `oy` / `chorak` / `yil` — davr hisoboti",
+  "`/hisobot hammasi` — barcha 5 hisobot birdan",
+  "",
   "`/id` — shu guruh ID sini ko'rsatadi",
 ].join("\n");
 
@@ -422,6 +427,46 @@ export async function handleTelegramUpdate(update: unknown): Promise<void> {
   }
   if (/^\/(start|help)\b/i.test(text)) {
     await sendMessage(chatId, HELP, { replyToMessageId: msg.message_id });
+    return;
+  }
+
+  // --- Finance reports on demand: /hisobot [hafta|oy|chorak|yil|hammasi] ---
+  // Each report is sent as soon as it's built so a slow tail can't block the rest.
+  const reportMatch = text.match(/^\/(hisobot|report)(@\w+)?\s*(.*)$/i);
+  if (reportMatch) {
+    const which = (reportMatch[3] ?? "").trim().toLowerCase();
+    const {
+      buildDailyFinanceReport,
+      buildWeeklyFinanceReport,
+      buildMonthlyFinanceReport,
+      buildQuarterlyFinanceReport,
+      buildYearlyFinanceReport,
+    } = await import("./finance-reports");
+    const all = ["hammasi", "barchasi", "all"].includes(which);
+    const builders: [string, () => Promise<string>][] = [];
+    if (!which || all || which === "kun") builders.push(["kunlik", buildDailyFinanceReport]);
+    if (all || which === "hafta") builders.push(["haftalik", buildWeeklyFinanceReport]);
+    if (all || which === "oy") builders.push(["oylik", buildMonthlyFinanceReport]);
+    if (all || which === "chorak") builders.push(["choraklik", buildQuarterlyFinanceReport]);
+    if (all || which === "yil") builders.push(["yillik", buildYearlyFinanceReport]);
+    if (builders.length === 0) {
+      await sendMessage(
+        chatId,
+        "Foydalanish: `/hisobot` — kunlik, `/hisobot hafta|oy|chorak|yil` yoki `/hisobot hammasi`",
+        { replyToMessageId: msg.message_id },
+      );
+      return;
+    }
+    for (const [label, build] of builders) {
+      try {
+        await sendMessage(chatId, await build());
+      } catch (err) {
+        console.error(`hisobot ${label} failed:`, err);
+        await sendMessage(chatId, `⚠️ ${label.charAt(0).toUpperCase() + label.slice(1)} hisobotda xatolik.`, {
+          replyToMessageId: msg.message_id,
+        });
+      }
+    }
     return;
   }
 

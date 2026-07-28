@@ -3,7 +3,6 @@ import { requireAdminClient } from "@/lib/supabase/admin";
 import {
   monthRange,
   yesterdayRange,
-  todayRange,
   todayKey,
   currentMonthKey,
 } from "@/lib/dates";
@@ -22,17 +21,13 @@ export async function buildDailyReport(): Promise<string> {
   const db = requireAdminClient();
   const month = monthRange();
   const yesterday = yesterdayRange();
-  const today = todayRange();
   const monthKey = currentMonthKey();
 
   const [
     salesMonth,
     salesYday,
-    salesToday,
-    leadsMonth,
     expMonth,
     expYday,
-    users,
     salesTarget,
     rateRow,
   ] = await Promise.all([
@@ -47,16 +42,6 @@ export async function buildDailyReport(): Promise<string> {
       .gte("sold_at", yesterday.from)
       .lt("sold_at", yesterday.to),
     db
-      .from("sales")
-      .select("total_amount_usd, total_amount_uzs, sales_person_id")
-      .gte("sold_at", today.from)
-      .lt("sold_at", today.to),
-    db
-      .from("leads")
-      .select("qualified_at, sold_at")
-      .gte("created_at", month.from)
-      .lt("created_at", month.to),
-    db
       .from("expenses")
       .select("amount_usd, amount_uzs")
       .gte("expense_date", month.from.slice(0, 10))
@@ -66,7 +51,6 @@ export async function buildDailyReport(): Promise<string> {
       .select("amount_usd, amount_uzs")
       .gte("expense_date", yesterday.from.slice(0, 10))
       .lt("expense_date", yesterday.to.slice(0, 10)),
-    db.from("users").select("id, full_name"),
     db
       .from("company_targets")
       .select("target_value")
@@ -122,13 +106,6 @@ export async function buildDailyReport(): Promise<string> {
     commissionsUsd: commissionsUzs,
   });
 
-  const lm = leadsMonth.data ?? [];
-  const newLeads = lm.length;
-  const qualified = lm.filter((l) => l.qualified_at).length;
-  const sold = lm.filter((l) => l.sold_at).length;
-  const qPct = newLeads ? Math.round((qualified / newLeads) * 100) : 0;
-  const sPct = newLeads ? Math.round((sold / newLeads) * 100) : 0;
-
   // Monthly sales plan = the CEO's revenue goal for this month (so'm).
   const revenueTargetUzs = salesTarget.data?.target_value
     ? Number(salesTarget.data.target_value)
@@ -136,30 +113,6 @@ export async function buildDailyReport(): Promise<string> {
   const planLine = revenueTargetUzs
     ? `Oylik reja: ${Math.round((monthAmountUzs / revenueTargetUzs) * 100)}% (${formatUzs(revenueTargetUzs)})`
     : `Oylik reja: — (maqsad belgilanmagan)`;
-
-  // Top sellers today (booked so'm).
-  const nameById = new Map((users.data ?? []).map((u) => [u.id, u.full_name]));
-  const byPerson = new Map<string, { count: number; amount: number }>();
-  for (const s of salesToday.data ?? []) {
-    if (!s.sales_person_id) continue;
-    const cur = byPerson.get(s.sales_person_id) ?? { count: 0, amount: 0 };
-    cur.count += 1;
-    cur.amount += saleUzs(s);
-    byPerson.set(s.sales_person_id, cur);
-  }
-  const top = Array.from(byPerson.entries())
-    .map(([id, v]) => ({ name: nameById.get(id) ?? "—", ...v }))
-    .sort((a, b) => b.amount - a.amount)
-    .slice(0, 3);
-  const medals = ["🥇", "🥈", "🥉"];
-  const sellersLines =
-    top.length > 0
-      ? top
-          .map(
-            (t, i) => `${medals[i]} ${t.name}: ${t.count} ta (${formatUzs(t.amount)})`,
-          )
-          .join("\n")
-      : "— Bugun sotuv yo'q";
 
   // Account balances (kassa). Each account shows in its own currency.
   const [{ data: accts }, { data: acctTxns }] = await Promise.all([
@@ -187,17 +140,12 @@ export async function buildDailyReport(): Promise<string> {
       : "— Hisob yo'q";
 
   return [
-    `📊 *KUNLIK HISOBOT* — ${todayKey()}`,
+    `📊 *MOLIYAVIY HISOBOT* — ${todayKey()}`,
     ``,
-    `💰 *SOTUV*`,
+    `💰 *TUSHUM*`,
     `Kecha: ${salesYday.data?.length ?? 0} ta (${formatUzs(ydayAmountUzs)})`,
     `Bu oy: ${sm.length} ta (${formatUzs(monthAmountUzs)})`,
     planLine,
-    ``,
-    `🎯 *LEAD FUNNEL*`,
-    `Yangi lead: ${newLeads}`,
-    `Qualified: ${qualified} (${qPct}%)`,
-    `Sotuv: ${sold} (${sPct}%)`,
     ``,
     `📢 *XARAJAT*`,
     `Kecha: ${formatUzs(expYdayUzs)}`,
@@ -208,9 +156,6 @@ export async function buildDailyReport(): Promise<string> {
     ``,
     `💳 *HISOBLAR (BALANS)*`,
     acctLines,
-    ``,
-    `👥 *SOTUVCHILAR (bugun)*`,
-    sellersLines,
   ].join("\n");
 }
 

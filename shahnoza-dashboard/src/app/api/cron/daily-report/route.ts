@@ -64,6 +64,7 @@ export async function GET(request: NextRequest) {
   const { sent } = await sendDailyReport();
 
   // ── Periodic finance reports → finance group ──────────────────────
+  const forceAll = new URL(request.url).searchParams.get("force") === "all";
   const financeExtras: Record<string, boolean> = {};
   try {
     const { sendMessage, financeGroupId } = await import("@/lib/telegram/bot");
@@ -72,24 +73,24 @@ export async function GET(request: NextRequest) {
     const dom = tashkentDom();   // 1-31
     const month = tashkentMonth(); // 0-11
 
-    if (dow === 1) {
+    if (forceAll || dow === 1) {
       const { buildWeeklyFinanceReport } = await import("@/lib/telegram/finance-reports");
       const text = await buildWeeklyFinanceReport();
       financeExtras.weekly = fgId ? (await sendMessage(fgId, text)) !== null : false;
     }
 
-    if (dom === 1) {
+    if (forceAll || dom === 1) {
       const { buildMonthlyFinanceReport } = await import("@/lib/telegram/finance-reports");
       const text = await buildMonthlyFinanceReport();
       financeExtras.monthly = fgId ? (await sendMessage(fgId, text)) !== null : false;
 
-      if (month === 0 || month === 3 || month === 6 || month === 9) {
+      if (forceAll || month === 0 || month === 3 || month === 6 || month === 9) {
         const { buildQuarterlyFinanceReport } = await import("@/lib/telegram/finance-reports");
         const qText = await buildQuarterlyFinanceReport();
         financeExtras.quarterly = fgId ? (await sendMessage(fgId, qText)) !== null : false;
       }
 
-      if (month === 0) {
+      if (forceAll || month === 0) {
         const { buildYearlyFinanceReport } = await import("@/lib/telegram/finance-reports");
         const yText = await buildYearlyFinanceReport();
         financeExtras.yearly = fgId ? (await sendMessage(fgId, yText)) !== null : false;

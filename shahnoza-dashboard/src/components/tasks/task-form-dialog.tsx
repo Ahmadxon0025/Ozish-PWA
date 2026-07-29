@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { Plus, Trash2, Users2, Sparkles, Wand2, GripVertical } from "lucide-react";
+import { Plus, Trash2, Users2, Sparkles, Wand2, GripVertical, Loader2 } from "lucide-react";
 import {
   DndContext,
   PointerSensor,
@@ -839,6 +839,28 @@ export function SubtasksPanel({
     },
     onError: (e) => toast({ title: "Xato", description: e.message, variant: "destructive" }),
   });
+  // Bare create (no field reset) used to add every AI suggestion in one go.
+  const createBare = api.tasks.create.useMutation();
+  const [addingAll, setAddingAll] = useState(false);
+  const addAllSuggestions = async () => {
+    const list = [...suggestions];
+    if (list.length === 0) return;
+    setAddingAll(true);
+    setSuggestions([]);
+    let added = 0;
+    for (const s of list) {
+      try {
+        await createBare.mutateAsync({ title: s, parentTaskId: taskId });
+        added++;
+      } catch {
+        /* skip a failed one, keep going */
+      }
+    }
+    setAddingAll(false);
+    refresh();
+    toast({ title: `${added} ta ichki vazifa qo'shildi`, variant: "success" });
+  };
+
   const setStatus = api.tasks.updateStatus.useMutation({
     onSuccess: refresh,
     onError: (e) => toast({ title: "Xato", description: e.message, variant: "destructive" }),
@@ -935,7 +957,25 @@ export function SubtasksPanel({
 
       {suggestions.length > 0 && (
         <div className="space-y-1 rounded-md border border-primary/30 bg-primary/5 p-2">
-          <p className="text-xs font-medium text-primary">AI takliflari — qo&apos;shishni tanlang:</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-medium text-primary">
+              AI takliflari — qo&apos;shishni tanlang:
+            </p>
+            <Button
+              type="button"
+              size="sm"
+              className="h-7 shrink-0"
+              disabled={addingAll || createBare.isPending}
+              onClick={addAllSuggestions}
+            >
+              {addingAll ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Plus className="h-3.5 w-3.5" />
+              )}
+              Hammasini qo&apos;shish ({suggestions.length})
+            </Button>
+          </div>
           {suggestions.map((s, i) => (
             <div key={i} className="flex items-center gap-2 text-sm">
               <span className="min-w-0 flex-1 truncate">{s}</span>

@@ -120,7 +120,11 @@ export async function runAlfredFromTelegram(opts: {
     if (!appUser) {
       lines.push(
         "",
-        "⚠️ Amallarni bajarish uchun Telegram akkauntingiz tizimga bog'lanmagan.",
+        "⚠️ *Bajarilmadi* — bu amalni yozib qo'yishim uchun Telegram akkauntingiz tizimga bog'lanishi kerak.",
+        telegramUserId
+          ? `Sizning Telegram ID: \`${telegramUserId}\``
+          : "Telegram ID aniqlanmadi.",
+        "Ulash: ilovada *Sozlamalar → Profil → Telegram ID* ga shu raqamni yozib saqlang. Keyin qayta yozing.",
       );
     } else {
       const executor = new AlfredActionExecutor(db, appUser.id);

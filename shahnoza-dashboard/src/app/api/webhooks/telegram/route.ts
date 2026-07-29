@@ -5,6 +5,25 @@ export const dynamic = "force-dynamic";
 // 60s so "/hisobot hammasi" can build and send all five finance reports.
 export const maxDuration = 60;
 
+// De-dupe Telegram retries. A slow handler (Alfred can take 10-30s) makes
+// Telegram resend the SAME update, which produced duplicate replies. We track
+// recently-seen update_ids per warm instance and skip repeats. Bounded so it
+// can't grow without limit.
+const seenUpdates = new Set<number>();
+function alreadyHandled(updateId: unknown): boolean {
+  if (typeof updateId !== "number") return false;
+  if (seenUpdates.has(updateId)) return true;
+  seenUpdates.add(updateId);
+  if (seenUpdates.size > 500) {
+    // Drop the oldest ~100 (insertion order preserved by Set).
+    for (const id of seenUpdates) {
+      seenUpdates.delete(id);
+      if (seenUpdates.size <= 400) break;
+    }
+  }
+  return false;
+}
+
 /**
  * Telegram webhook receiver. Telegram POSTs an Update object here for every
  * message in chats the bot can see. We verify the secret token, then hand off
@@ -29,6 +48,11 @@ export async function POST(request: NextRequest) {
     update = await request.json();
   } catch {
     return NextResponse.json({ ok: true });
+  }
+
+  // Skip Telegram's retries of an update we're already processing / have done.
+  if (alreadyHandled((update as { update_id?: number } | null)?.update_id)) {
+    return NextResponse.json({ ok: true, deduped: true });
   }
 
   try {

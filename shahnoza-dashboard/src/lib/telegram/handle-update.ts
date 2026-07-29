@@ -420,9 +420,19 @@ export async function handleTelegramUpdate(update: unknown): Promise<void> {
 
   // --- Commands ---
   if (/^\/(id|chatid)\b/i.test(text)) {
-    await sendMessage(chatId, `🆔 Chat ID: \`${chatId}\``, {
-      replyToMessageId: msg.message_id,
-    });
+    await sendMessage(
+      chatId,
+      [
+        `🆔 Chat ID: \`${chatId}\``,
+        fromId ? `👤 Sizning Telegram ID: \`${fromId}\`` : null,
+        fromId
+          ? "_Alfred amallarni bajarishi uchun bu ID ni ilovada Sozlamalar → Profil → Telegram ID ga yozib saqlang._"
+          : null,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      { replyToMessageId: msg.message_id },
+    );
     return;
   }
   if (/^\/(start|help)\b/i.test(text)) {

@@ -355,6 +355,7 @@ const SYSTEM = (canWrite: boolean) =>
   `Siz "Shahnoza" biznesining AI miyasisiz (ERP yordamchi) — bolalar massaji onlayn-kurs biznesi. ` +
   `Bugun (Toshkent): ${tashToday()}. ` +
   `Foydalanuvchi savoliga javob berish uchun mavjud tool'lardan foydalaning — taxmin qilmang, ma'lumotni tool orqali oling. ` +
+  `"Takvim"/"Taqvim" (kalendar), "Kanban", "Vaqt jadvali" — bular vazifalarni ko'rsatuvchi KO'RINISHLAR, vazifa NOMI emas. "Takvim vazifalari", "kalendardagi vazifalar" so'ralsa — muddati bor ochiq vazifalar demakdir, get_upcoming_tasks ishlating. Bunday nomdagi vazifani qidirmang. ` +
   `Pulni doim SO'M (UZS) da, minglik ajratib ko'rsating (masalan 1 200 000 so'm). ` +
   `Javob QISQA, aniq va O'zbek tilida bo'lsin. Telegram uchun sodda matn, kerak bo'lsa emoji va ro'yxat ishlating. ` +
   (canWrite

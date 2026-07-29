@@ -11,7 +11,7 @@ export const ALFRED_DATA_TOOLS: Anthropic.Tool[] = [
   {
     name: "search_tasks",
     description:
-      "Search tasks with filters. Use for anything the OPEN TASKS snapshot doesn't show: done/completed tasks, a specific person's tasks, tasks matching a phrase, or counts by status.",
+      "Search tasks with filters. Use for anything the OPEN TASKS snapshot doesn't show: done/completed tasks, a specific person's tasks, tasks matching a phrase, or counts by status. To list scheduled/calendar tasks (the 'Takvim'/'Taqvim'/'Kanban'/'Vaqt jadvali' views), call with no query (optionally status/assignee) — these are VIEW names, not task titles.",
     input_schema: {
       type: "object",
       properties: {
@@ -24,7 +24,11 @@ export const ALFRED_DATA_TOOLS: Anthropic.Tool[] = [
           type: "string",
           description: "Filter to tasks assigned to this team member (partial name ok)",
         },
-        query: { type: "string", description: "Match against task title" },
+        query: {
+          type: "string",
+          description:
+            "Match against task TITLE only. NEVER pass an app view/section name here (takvim, taqvim, kanban, kalendar, vaqt jadvali) — those are not task titles and will match nothing; leave query empty to list the tasks in those views.",
+        },
         limit: { type: "number", description: "Max rows, default 30, max 50" },
       },
     },

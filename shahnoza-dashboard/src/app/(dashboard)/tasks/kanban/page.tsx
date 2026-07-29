@@ -179,6 +179,9 @@ function patchInCache(
         n.isOverdue =
           t.status !== "done" && !!vars.dueDate && String(vars.dueDate) < nowISO;
       }
+      if (vars.startDate !== undefined) {
+        (n as { start_date?: string | null }).start_date = vars.startDate;
+      }
       if (vars.assignedTo !== undefined) {
         const nm = vars.assignedTo ? nameById.get(vars.assignedTo) ?? "—" : null;
         n.assigned_to = vars.assignedTo;
@@ -389,6 +392,8 @@ export default function KanbanPage() {
     const oldP: Patch = {};
     if (p.priority !== undefined) oldP.priority = cur?.priority as Priority | undefined;
     if (p.dueDate !== undefined) oldP.dueDate = cur?.due_date ?? null;
+    if (p.startDate !== undefined)
+      oldP.startDate = (cur as { start_date?: string | null } | undefined)?.start_date ?? null;
     if (p.assignedTo !== undefined) oldP.assignedTo = cur?.assigned_to ?? null;
     patch.mutate({ id, ...p });
     pushHistory({

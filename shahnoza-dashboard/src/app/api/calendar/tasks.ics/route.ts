@@ -40,7 +40,8 @@ export async function GET(request: NextRequest) {
     .select("id, title, status, priority, start_date, due_date, assigned_to")
     .neq("status", "cancelled")
     .or(orClause)
-    .not("due_date", "is", null);
+    // A task needs at least one date to be placeable on a calendar.
+    .or("due_date.not.is.null,start_date.not.is.null");
 
   // Resolve the primary assignee's display name for each task.
   const rows = tasks ?? [];

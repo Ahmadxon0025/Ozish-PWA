@@ -51,6 +51,7 @@ export type Priority = (typeof TASK_PRIORITIES)[number];
 export type Patch = {
   priority?: Priority;
   dueDate?: string | null;
+  startDate?: string | null;
   assignedTo?: string | null;
 };
 
@@ -110,11 +111,20 @@ export function TaskCardBody({
   const [menuOpen, setMenuOpen] = useState(false);
   const [dDate, setDDate] = useState("");
   const [dTime, setDTime] = useState("");
+  const [sDate, setSDate] = useState("");
+  const [sTime, setSTime] = useState("");
   useEffect(() => {
     const i = dueToInputs(task.due_date);
     setDDate(i.date);
     setDTime(i.time);
   }, [task.due_date]);
+  useEffect(() => {
+    const i = dueToInputs((task as { start_date?: string | null }).start_date ?? null);
+    setSDate(i.date);
+    setSTime(i.time);
+  }, [task]);
+
+  const startIso = (task as { start_date?: string | null }).start_date ?? null;
 
   return (
     <Card
@@ -297,19 +307,47 @@ export function TaskCardBody({
 
         {onPatch && editing === "due" ? (
           <div onPointerDown={stop} className="space-y-2 rounded-md border p-2">
-            <div className="flex gap-2">
-              <Input
-                type="date"
-                value={dDate}
-                onChange={(e) => setDDate(e.target.value)}
-                className="h-8"
-              />
-              <Input
-                type="time"
-                value={dTime}
-                onChange={(e) => setDTime(e.target.value)}
-                className="h-8 w-[104px]"
-              />
+            {/* Boshlanish (start): date + time */}
+            <div className="space-y-1">
+              <span className="text-[10px] font-medium uppercase text-muted-foreground">
+                Boshlanish
+              </span>
+              <div className="flex gap-2">
+                <Input
+                  type="date"
+                  value={sDate}
+                  onChange={(e) => setSDate(e.target.value)}
+                  className="h-8"
+                />
+                <Input
+                  type="time"
+                  value={sTime}
+                  onChange={(e) => setSTime(e.target.value)}
+                  disabled={!sDate}
+                  className="h-8 w-[104px]"
+                />
+              </div>
+            </div>
+            {/* Tugash / muddat (finish): date + time */}
+            <div className="space-y-1">
+              <span className="text-[10px] font-medium uppercase text-muted-foreground">
+                Tugash / muddat
+              </span>
+              <div className="flex gap-2">
+                <Input
+                  type="date"
+                  value={dDate}
+                  onChange={(e) => setDDate(e.target.value)}
+                  className="h-8"
+                />
+                <Input
+                  type="time"
+                  value={dTime}
+                  onChange={(e) => setDTime(e.target.value)}
+                  disabled={!dDate}
+                  className="h-8 w-[104px]"
+                />
+              </div>
             </div>
             <div className="flex gap-1">
               <Button
@@ -317,7 +355,10 @@ export function TaskCardBody({
                 className="h-7"
                 disabled={patching}
                 onClick={() => {
-                  onPatch({ dueDate: combineDue(dDate, dTime) });
+                  onPatch({
+                    startDate: combineDue(sDate, sTime),
+                    dueDate: combineDue(dDate, dTime),
+                  });
                   setEditing(null);
                 }}
               >
@@ -328,7 +369,7 @@ export function TaskCardBody({
                 variant="ghost"
                 className="h-7"
                 onClick={() => {
-                  onPatch({ dueDate: null });
+                  onPatch({ startDate: null, dueDate: null });
                   setEditing(null);
                 }}
               >
@@ -354,13 +395,14 @@ export function TaskCardBody({
                 ? "font-medium text-destructive"
                 : "text-muted-foreground"
             }`}
-            title={onPatch ? "Muddatni o'zgartirish" : undefined}
+            title={onPatch ? "Vaqtni o'zgartirish (boshlanish → tugash)" : undefined}
           >
             {task.isOverdue ? (
               <AlertTriangle className="h-3.5 w-3.5" />
             ) : (
               <CalendarDays className="h-3.5 w-3.5" />
             )}
+            {startIso ? `${formatDue(startIso)} → ` : ""}
             {formatDue(task.due_date)}
             {onPatch && <Pencil className="h-3 w-3 opacity-40" />}
           </button>

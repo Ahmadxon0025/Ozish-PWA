@@ -80,6 +80,7 @@ export function TaskFormDialog({
   initial,
   defaultStatus = "todo",
   defaultSpaceId,
+  defaultDue,
 }: {
   trigger: ReactNode;
   onSaved: () => void;
@@ -87,6 +88,8 @@ export function TaskFormDialog({
   initial?: TaskInitial;
   defaultStatus?: (typeof TASK_FLOW_STATUSES)[number];
   defaultSpaceId?: string | null;
+  /** Prefill the deadline date (YYYY-MM-DD) for new tasks, e.g. from a calendar column. */
+  defaultDue?: string;
 }) {
   const [open, setOpen] = useState(false);
   const assignees = api.tasks.assignees.useQuery(undefined, { enabled: open });
@@ -106,7 +109,7 @@ export function TaskFormDialog({
   const [priority, setPriority] = useState(initial?.priority ?? "medium");
   const [status, setStatus] = useState<string>(defaultStatus);
   const initialDue = dueToInputs(initial?.due_date ?? null);
-  const [dueDate, setDueDate] = useState(initialDue.date);
+  const [dueDate, setDueDate] = useState(initialDue.date || defaultDue || "");
   const [dueTime, setDueTime] = useState(initialDue.time);
   const [startDate, setStartDate] = useState(initial?.start_date?.slice(0, 10) ?? "");
   const [estimate, setEstimate] = useState(
@@ -138,7 +141,7 @@ export function TaskFormDialog({
       setCollaborators([]);
       setPriority("medium");
       setStatus(defaultStatus);
-      setDueDate("");
+      setDueDate(defaultDue ?? "");
       setDueTime("");
       setStartDate("");
       setEstimate("");

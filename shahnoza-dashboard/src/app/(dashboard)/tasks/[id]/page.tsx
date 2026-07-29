@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -10,7 +10,7 @@ import {
   Trash2,
   Send,
   Plus,
-  CalendarDays,
+  X,
 } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,11 +31,17 @@ import {
   SubtasksPanel,
 } from "@/components/tasks/task-form-dialog";
 import { FilesPanel } from "@/components/files/files-panel";
-import { formatDue, statusVariant, priorityVariant } from "@/lib/task-ui";
+import {
+  statusVariant,
+  priorityVariant,
+  dueToInputs,
+  combineDue,
+} from "@/lib/task-ui";
 import { formatDateTime, initials } from "@/lib/format";
 import {
   TASK_STATUSES,
   TASK_STATUS_LABELS,
+  TASK_PRIORITIES,
   TASK_PRIORITY_LABELS,
 } from "@/lib/constants";
 import { toast } from "@/hooks/use-toast";
@@ -214,6 +220,24 @@ export default function TaskDetailPage() {
 
   const refetch = () => utils.tasks.get.invalidate({ id });
 
+  // Inline editing drafts (null = viewing). The due inputs mirror the task and
+  // save on blur, so fields change in place — no edit dialog required.
+  const [titleDraft, setTitleDraft] = useState<string | null>(null);
+  const [descDraft, setDescDraft] = useState<string | null>(null);
+  const [dDate, setDDate] = useState("");
+  const [dTime, setDTime] = useState("");
+  const dueIso = detail.data?.task.due_date ?? null;
+  useEffect(() => {
+    const i = dueToInputs(dueIso);
+    setDDate(i.date);
+    setDTime(i.time);
+  }, [dueIso]);
+
+  const update = api.tasks.update.useMutation({
+    onSuccess: refetch,
+    onError: (e) => toast({ title: "Xato", description: e.message, variant: "destructive" }),
+  });
+
   const updateStatus = api.tasks.updateStatus.useMutation({
     onSuccess: refetch,
     onError: (e) => toast({ title: "Xato", description: e.message, variant: "destructive" }),
@@ -258,12 +282,15 @@ export default function TaskDetailPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Link
-          href="/tasks/kanban"
+        <button
+          type="button"
+          onClick={() =>
+            window.history.length > 1 ? router.back() : router.push("/tasks/kanban")
+          }
           className="inline-flex items-center gap-1 hover:text-foreground"
         >
           <ChevronLeft className="h-4 w-4" /> Vazifalar
-        </Link>
+        </button>
         {task.parent_task_id && parentTitle && (
           <>
             <span>/</span>
@@ -278,8 +305,35 @@ export default function TaskDetailPage() {
       </div>
 
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-bold">{task.title}</h1>
+        <div className="min-w-0 flex-1">
+          {titleDraft === null ? (
+            <button
+              type="button"
+              className="block w-full text-left"
+              onClick={() => setTitleDraft(task.title)}
+              title="Nomini o'zgartirish uchun bosing"
+            >
+              <h1 className="text-2xl font-bold decoration-dotted underline-offset-4 hover:underline">
+                {task.title}
+              </h1>
+            </button>
+          ) : (
+            <Input
+              autoFocus
+              value={titleDraft}
+              onChange={(e) => setTitleDraft(e.target.value)}
+              onBlur={() => {
+                const t = (titleDraft ?? "").trim();
+                setTitleDraft(null);
+                if (t && t !== task.title) update.mutate({ id, title: t });
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                if (e.key === "Escape") setTitleDraft(null);
+              }}
+              className="h-10 text-2xl font-bold"
+            />
+          )}
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <Badge variant={statusVariant(task.status)}>
               {TASK_STATUS_LABELS[task.status] ?? task.status}
@@ -320,7 +374,7 @@ export default function TaskDetailPage() {
       </div>
 
       <Card>
-        <CardContent className="grid grid-cols-2 gap-4 p-4 sm:grid-cols-3">
+        <CardContent className="grid grid-cols-2 gap-4 p-4 sm:grid-cols-5">
           <div>
             <p className="text-xs text-muted-foreground">Holat</p>
             <Select
@@ -341,34 +395,147 @@ export default function TaskDetailPage() {
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Mas&apos;ul</p>
-            <div className="mt-1 flex items-center gap-2">
-              <Avatar className="h-6 w-6">
-                <AvatarFallback className="text-[10px]">
-                  {initials(primaryName)}
-                </AvatarFallback>
-              </Avatar>
-              <span className="truncate text-sm">{primaryName}</span>
-            </div>
+            <Select
+              value={task.assigned_to ?? "unassigned"}
+              onValueChange={(v) =>
+                update.mutate({ id, assignedTo: v === "unassigned" ? null : v })
+              }
+            >
+              <SelectTrigger className="mt-1 h-8">
+                <SelectValue>
+                  <span className="flex items-center gap-1.5">
+                    <Avatar className="h-5 w-5">
+                      <AvatarFallback className="text-[9px]">
+                        {initials(primaryName)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="truncate">{primaryName}</span>
+                  </span>
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="unassigned">Belgilanmagan</SelectItem>
+                {users.map((u) => (
+                  <SelectItem key={u.id} value={u.id}>
+                    {u.full_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
+            <p className="text-xs text-muted-foreground">Muhimlik</p>
+            <Select
+              value={task.priority}
+              onValueChange={(v) => update.mutate({ id, priority: v as never })}
+            >
+              <SelectTrigger className="mt-1 h-8">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {TASK_PRIORITIES.map((p) => (
+                  <SelectItem key={p} value={p}>
+                    {TASK_PRIORITY_LABELS[p] ?? p}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="col-span-2">
             <p className="text-xs text-muted-foreground">Muddat</p>
-            <p className="mt-1 flex items-center gap-1 text-sm">
-              <CalendarDays className="h-3.5 w-3.5" /> {formatDue(task.due_date)}
-            </p>
+            <div className="mt-1 flex items-center gap-1.5">
+              <Input
+                type="date"
+                value={dDate}
+                onChange={(e) => setDDate(e.target.value)}
+                onBlur={() => {
+                  const cur = dueToInputs(task.due_date);
+                  if (dDate === cur.date && dTime === cur.time) return;
+                  update.mutate({ id, dueDate: combineDue(dDate, dTime) });
+                }}
+                className="h-8"
+              />
+              <Input
+                type="time"
+                value={dTime}
+                onChange={(e) => setDTime(e.target.value)}
+                onBlur={() => {
+                  const cur = dueToInputs(task.due_date);
+                  if (dDate === cur.date && dTime === cur.time) return;
+                  update.mutate({ id, dueDate: combineDue(dDate, dTime) });
+                }}
+                className="h-8 w-24"
+              />
+              {task.due_date && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0 text-muted-foreground"
+                  title="Muddatni olib tashlash"
+                  onClick={() => {
+                    setDDate("");
+                    setDTime("");
+                    update.mutate({ id, dueDate: null });
+                  }}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      {task.description && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Tavsif</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="whitespace-pre-wrap text-sm">{task.description}</p>
-          </CardContent>
-        </Card>
-      )}
+      <Card>
+        <CardHeader className="flex-row items-center justify-between space-y-0">
+          <CardTitle className="text-base">Tavsif</CardTitle>
+          {descDraft === null && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setDescDraft(task.description ?? "")}
+            >
+              {task.description ? "O'zgartirish" : "Qo'shish"}
+            </Button>
+          )}
+        </CardHeader>
+        <CardContent>
+          {descDraft === null ? (
+            task.description ? (
+              <p className="whitespace-pre-wrap text-sm">{task.description}</p>
+            ) : (
+              <p className="text-sm text-muted-foreground">Tavsif yo&apos;q.</p>
+            )
+          ) : (
+            <div className="space-y-2">
+              <textarea
+                autoFocus
+                rows={4}
+                value={descDraft}
+                onChange={(e) => setDescDraft(e.target.value)}
+                className="w-full rounded-md border border-input bg-transparent p-2 text-sm outline-none focus:ring-1 focus:ring-ring"
+              />
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  disabled={update.isPending}
+                  onClick={() => {
+                    const d = descDraft.trim();
+                    setDescDraft(null);
+                    if (d !== (task.description ?? ""))
+                      update.mutate({ id, description: d || null });
+                  }}
+                >
+                  Saqlash
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setDescDraft(null)}>
+                  Bekor
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <SubtasksPanel taskId={id} users={users} onChanged={refetch} />
 

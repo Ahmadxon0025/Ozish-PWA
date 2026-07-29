@@ -232,6 +232,14 @@ export default function TaskDetailPage() {
     setDDate(i.date);
     setDTime(i.time);
   }, [dueIso]);
+  const [sDate, setSDate] = useState("");
+  const [sTime, setSTime] = useState("");
+  const startIso = detail.data?.task.start_date ?? null;
+  useEffect(() => {
+    const i = dueToInputs(startIso);
+    setSDate(i.date);
+    setSTime(i.time);
+  }, [startIso]);
 
   const update = api.tasks.update.useMutation({
     onSuccess: refetch,
@@ -441,8 +449,51 @@ export default function TaskDetailPage() {
               </SelectContent>
             </Select>
           </div>
-          <div className="col-span-2">
-            <p className="text-xs text-muted-foreground">Muddat</p>
+          <div className="col-span-2 sm:col-span-2">
+            <p className="text-xs text-muted-foreground">Boshlanish</p>
+            <div className="mt-1 flex items-center gap-1.5">
+              <Input
+                type="date"
+                value={sDate}
+                onChange={(e) => setSDate(e.target.value)}
+                onBlur={() => {
+                  const cur = dueToInputs(task.start_date);
+                  if (sDate === cur.date && sTime === cur.time) return;
+                  update.mutate({ id, startDate: combineDue(sDate, sTime) });
+                }}
+                className="h-8"
+              />
+              <Input
+                type="time"
+                value={sTime}
+                onChange={(e) => setSTime(e.target.value)}
+                onBlur={() => {
+                  const cur = dueToInputs(task.start_date);
+                  if (sDate === cur.date && sTime === cur.time) return;
+                  update.mutate({ id, startDate: combineDue(sDate, sTime) });
+                }}
+                disabled={!sDate}
+                className="h-8 w-24"
+              />
+              {task.start_date && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0 text-muted-foreground"
+                  title="Boshlanishni olib tashlash"
+                  onClick={() => {
+                    setSDate("");
+                    setSTime("");
+                    update.mutate({ id, startDate: null });
+                  }}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          </div>
+          <div className="col-span-2 sm:col-span-3">
+            <p className="text-xs text-muted-foreground">Tugash / muddat</p>
             <div className="mt-1 flex items-center gap-1.5">
               <Input
                 type="date"
@@ -464,6 +515,7 @@ export default function TaskDetailPage() {
                   if (dDate === cur.date && dTime === cur.time) return;
                   update.mutate({ id, dueDate: combineDue(dDate, dTime) });
                 }}
+                disabled={!dDate}
                 className="h-8 w-24"
               />
               {task.due_date && (

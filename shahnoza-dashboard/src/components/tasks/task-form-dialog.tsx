@@ -111,7 +111,9 @@ export function TaskFormDialog({
   const initialDue = dueToInputs(initial?.due_date ?? null);
   const [dueDate, setDueDate] = useState(initialDue.date || defaultDue || "");
   const [dueTime, setDueTime] = useState(initialDue.time);
-  const [startDate, setStartDate] = useState(initial?.start_date?.slice(0, 10) ?? "");
+  const initialStart = dueToInputs(initial?.start_date ?? null);
+  const [startDate, setStartDate] = useState(initialStart.date);
+  const [startTime, setStartTime] = useState(initialStart.time);
   const [estimate, setEstimate] = useState(
     initial?.estimate_hours != null ? String(initial.estimate_hours) : "",
   );
@@ -144,6 +146,7 @@ export function TaskFormDialog({
       setDueDate(defaultDue ?? "");
       setDueTime("");
       setStartDate("");
+      setStartTime("");
       setEstimate("");
       setLabels("");
       setRecurrence(NO_RECUR);
@@ -236,7 +239,7 @@ export function TaskFormDialog({
     const common = {
       title: title.trim(),
       priority: priority as (typeof TASK_PRIORITIES)[number],
-      startDate: startDate || undefined,
+      startDate: combineDue(startDate, startTime) ?? undefined,
       estimateHours: estimateNum,
       labels: labelList,
       collaboratorIds: collabList,
@@ -421,24 +424,41 @@ export function TaskFormDialog({
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Boshlanish sanasi</Label>
-              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              <Label>Boshlanish (sana + vaqt)</Label>
+              <div className="flex gap-2">
+                <Input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                />
+                <Input
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                  className="w-28"
+                  disabled={!startDate}
+                  title="Boshlanish vaqti"
+                />
+              </div>
             </div>
             <div className="space-y-1.5">
-              <Label>Muddat (sana)</Label>
-              <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+              <Label>Tugash / muddat (sana + vaqt)</Label>
+              <div className="flex gap-2">
+                <Input
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                />
+                <Input
+                  type="time"
+                  value={dueTime}
+                  onChange={(e) => setDueTime(e.target.value)}
+                  className="w-28"
+                  disabled={!dueDate}
+                  title="Tugash vaqti"
+                />
+              </div>
             </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Muddat vaqti (ixtiyoriy)</Label>
-            <Input
-              type="time"
-              value={dueTime}
-              onChange={(e) => setDueTime(e.target.value)}
-              className="w-40"
-              disabled={!dueDate}
-            />
           </div>
 
           <div className="grid grid-cols-2 gap-3">

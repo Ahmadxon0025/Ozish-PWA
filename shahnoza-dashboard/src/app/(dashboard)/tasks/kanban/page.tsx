@@ -636,6 +636,12 @@ export default function KanbanPage() {
                 del.mutate({ id: t.id });
             }}
             onReschedule={(taskId, newDue) => doPatch(taskId, { dueDate: newDue })}
+            onReorder={(ids) => {
+              reorderTasks.mutate(
+                { ids },
+                { onSuccess: () => board.refetch() },
+              );
+            }}
             isLoading={board.isLoading}
             onSaved={invalidate}
             defaultSpaceId={defaultSpaceForNew}

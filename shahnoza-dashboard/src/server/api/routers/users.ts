@@ -15,6 +15,12 @@ export const usersRouter = createTRPCRouter({
   /** The current user's profile. */
   me: protectedProcedure.query(({ ctx }) => ctx.appUser),
 
+  /** This user's private calendar-subscription (.ics) URL for Google/Apple. */
+  calendarFeedUrl: protectedProcedure.query(async ({ ctx }) => {
+    const { feedUrl } = await import("@/lib/calendar/ics");
+    return { url: feedUrl(ctx.appUser.id) };
+  }),
+
   /** All users — used for assignment dropdowns everywhere. */
   list: protectedProcedure
     .input(z.object({ activeOnly: z.boolean().optional() }).optional())

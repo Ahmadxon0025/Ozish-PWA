@@ -22,6 +22,7 @@ import { ROLE_LABELS } from "@/lib/constants";
 import type { UserRole } from "@/types/database";
 import { toast } from "@/hooks/use-toast";
 import { PushToggle } from "@/components/pwa/push-toggle";
+import { CalendarSyncCard } from "@/components/calendar/calendar-sync-card";
 
 export default function ProfilePage() {
   const utils = api.useUtils();
@@ -207,6 +208,8 @@ export default function ProfilePage() {
           <PushToggle />
         </CardContent>
       </Card>
+
+      <CalendarSyncCard />
     </div>
   );
 }

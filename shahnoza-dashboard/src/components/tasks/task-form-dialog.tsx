@@ -661,6 +661,9 @@ function SortableSubtaskRow({
   };
 
   const startPart = sub.start_date ? sub.start_date.slice(0, 10) : "";
+  const rawStartTime =
+    sub.start_date && sub.start_date.length > 10 ? sub.start_date.slice(11, 16) : "";
+  const startTimePart = rawStartTime === "00:00" ? "" : rawStartTime;
   const duePart = sub.due_date ? sub.due_date.slice(0, 10) : "";
   const rawTime =
     sub.due_date && sub.due_date.length > 10 ? sub.due_date.slice(11, 16) : "";
@@ -672,6 +675,13 @@ function SortableSubtaskRow({
     if (!date) return onDue(sub.id, null);
     if (time && time !== "00:00") return onDue(sub.id, `${date}T${time}:00`);
     return onDue(sub.id, date);
+  }
+
+  // Recombine start date + time into a single value for the start_date column.
+  function commitStart(date: string, time: string) {
+    if (!date) return onStart(sub.id, null);
+    if (time && time !== "00:00") return onStart(sub.id, `${date}T${time}:00`);
+    return onStart(sub.id, date);
   }
 
   return (
@@ -743,9 +753,17 @@ function SortableSubtaskRow({
           <Input
             type="date"
             value={startPart}
-            onChange={(e) => onStart(sub.id, e.target.value || null)}
+            onChange={(e) => commitStart(e.target.value, startTimePart)}
             className="h-7 w-[132px] text-xs"
             title="Boshlanish sanasi"
+          />
+          <Input
+            type="time"
+            value={startTimePart}
+            disabled={!startPart}
+            onChange={(e) => commitStart(startPart, e.target.value)}
+            className="h-7 w-[92px] text-xs disabled:opacity-40"
+            title="Boshlanish vaqti"
           />
         </label>
         <label className="flex items-center gap-1.5">
@@ -789,8 +807,14 @@ export function SubtasksPanel({
   const [title, setTitle] = useState("");
   const [assignedTo, setAssignedTo] = useState(UNASSIGNED);
   const [start, setStart] = useState("");
+  const [startTime, setStartTime] = useState("");
   const [due, setDue] = useState("");
+  const [dueTime, setDueTime] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
+
+  // Combine a date + optional time into a value for start_date/due_date.
+  const combineDT = (d: string, t: string): string | undefined =>
+    !d ? undefined : t && t !== "00:00" ? `${d}T${t}:00` : d;
 
   const aiOn = api.ai.status.useQuery().data?.configured ?? false;
   const breakdown = api.ai.breakdownSubtasks.useMutation({
@@ -808,7 +832,9 @@ export function SubtasksPanel({
       setTitle("");
       setAssignedTo(UNASSIGNED);
       setStart("");
+      setStartTime("");
       setDue("");
+      setDueTime("");
       refresh();
     },
     onError: (e) => toast({ title: "Xato", description: e.message, variant: "destructive" }),
@@ -983,8 +1009,8 @@ export function SubtasksPanel({
                   title: title.trim(),
                   parentTaskId: taskId,
                   assignedTo: assignedTo === UNASSIGNED ? undefined : assignedTo,
-                  startDate: start || undefined,
-                  dueDate: due || undefined,
+                  startDate: combineDT(start, startTime),
+                  dueDate: combineDT(due, dueTime),
                 });
               }
             }}
@@ -1030,6 +1056,14 @@ export function SubtasksPanel({
               className="h-7 w-[132px] text-xs"
               title="Boshlanish sanasi"
             />
+            <Input
+              type="time"
+              value={startTime}
+              disabled={!start}
+              onChange={(e) => setStartTime(e.target.value)}
+              className="h-7 w-[92px] text-xs disabled:opacity-40"
+              title="Boshlanish vaqti"
+            />
           </label>
           <label className="flex items-center gap-1.5">
             <span className="w-12 shrink-0">Tugash</span>
@@ -1039,6 +1073,14 @@ export function SubtasksPanel({
               onChange={(e) => setDue(e.target.value)}
               className="h-7 w-[132px] text-xs"
               title="Tugash sanasi"
+            />
+            <Input
+              type="time"
+              value={dueTime}
+              disabled={!due}
+              onChange={(e) => setDueTime(e.target.value)}
+              className="h-7 w-[92px] text-xs disabled:opacity-40"
+              title="Tugash vaqti"
             />
           </label>
         </div>

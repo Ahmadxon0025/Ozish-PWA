@@ -25,6 +25,7 @@ export const reelsRouter = createTRPCRouter({
         scheduledDate: z.string().nullable().optional(),
         stage: z.string().nullable().optional(),
         cta: z.string().nullable().optional(),
+        status: z.enum(["reja", "ssenariy", "suratga", "montaj", "chop"]).optional(),
         platforms: z.array(z.string()).optional(),
       }),
     )
@@ -37,6 +38,7 @@ export const reelsRouter = createTRPCRouter({
           scheduled_date: input.scheduledDate ?? null,
           stage: input.stage ?? null,
           cta: input.cta ?? null,
+          status: input.status ?? "reja",
           platforms: input.platforms ?? ["instagram", "telegram"],
           created_by: ctx.appUser.id,
         })

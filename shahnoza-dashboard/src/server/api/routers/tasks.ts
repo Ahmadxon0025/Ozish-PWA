@@ -142,25 +142,50 @@ export const tasksRouter = createTRPCRouter({
 
   /** Tasks assigned to, created by, or collaborated on by the current user. */
   my: protectedProcedure
-    .input(z.object({ status: statusEnum.optional() }).optional())
+    .input(
+      z
+        .object({
+          status: statusEnum.optional(),
+          // "mine": tasks assigned to me (incl. as collaborator) — the default.
+          // "delegated": tasks I created but handed to someone else.
+          // "all": both.
+          scope: z.enum(["mine", "delegated", "all"]).optional(),
+        })
+        .optional(),
+    )
     .query(async ({ ctx, input }) => {
       const me = ctx.appUser.id;
+      const scope = input?.scope ?? "mine";
       const { data: collab } = await ctx.supabase
         .from("task_assignees")
         .select("task_id")
         .eq("user_id", me);
       const collabIds = (collab ?? []).map((r) => r.task_id);
-      let orFilter = `assigned_to.eq.${me},created_by.eq.${me}`;
-      if (collabIds.length) orFilter += `,id.in.(${collabIds.join(",")})`;
+
+      // "mine" = assigned to me or a task I collaborate on.
+      // "delegated" = created by me (we drop the ones assigned to me below).
+      // "all" = either.
+      const parts: string[] = [];
+      if (scope !== "delegated") {
+        parts.push(`assigned_to.eq.${me}`);
+        if (collabIds.length) parts.push(`id.in.(${collabIds.join(",")})`);
+      }
+      if (scope !== "mine") parts.push(`created_by.eq.${me}`);
 
       let q = ctx.supabase
         .from("tasks")
         .select("*")
-        .or(orFilter)
+        .or(parts.join(","))
         .order("due_date", { ascending: true, nullsFirst: false });
       if (input?.status) q = q.eq("status", input.status);
       const { data } = await q;
-      return data ?? [];
+      let rows = data ?? [];
+      // "delegated" means handed to someone else — exclude my own tasks.
+      if (scope === "delegated") {
+        const collabSet = new Set(collabIds);
+        rows = rows.filter((t) => t.assigned_to !== me && !collabSet.has(t.id));
+      }
+      return rows;
     }),
 
   /** In-app inbox: my overdue + due-today tasks and recent comments on my

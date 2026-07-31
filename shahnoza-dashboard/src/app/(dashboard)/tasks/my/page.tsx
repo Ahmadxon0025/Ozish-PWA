@@ -92,11 +92,14 @@ function FilterCard({
   );
 }
 
+type Scope = "mine" | "delegated" | "all";
+
 export default function MyTasksPage() {
   const utils = api.useUtils();
   const [bucket, setBucket] = useState<Bucket>("all");
   const [due, setDue] = useState<string>("all");
-  const tasks = api.tasks.my.useQuery({});
+  const [scope, setScope] = useState<Scope>("mine");
+  const tasks = api.tasks.my.useQuery({ scope });
 
   const invalidate = () => {
     utils.tasks.my.invalidate();
@@ -146,9 +149,33 @@ export default function MyTasksPage() {
     <div>
       <PageHeader
         title="Vazifalarim"
-        description="Sizga tegishli va siz yaratgan vazifalar."
+        description={
+          scope === "mine"
+            ? "Sizga biriktirilgan vazifalar."
+            : scope === "delegated"
+              ? "Siz yaratib, boshqalarga bergan vazifalar."
+              : "Sizga tegishli va siz bergan barcha vazifalar."
+        }
         actions={
           <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 rounded-lg bg-muted p-1">
+              {(
+                [
+                  ["mine", "Menga"],
+                  ["delegated", "Men bergan"],
+                  ["all", "Hammasi"],
+                ] as [Scope, string][]
+              ).map(([val, label]) => (
+                <Button
+                  key={val}
+                  variant={scope === val ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setScope(val)}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
             <Select value={due} onValueChange={setDue}>
               <SelectTrigger className="w-36">
                 <SelectValue placeholder="Muddat" />

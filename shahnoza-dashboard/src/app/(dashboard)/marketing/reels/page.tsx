@@ -4,16 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Clapperboard,
   ChevronDown,
-  Instagram,
-  Send,
   ExternalLink,
   Trash2,
   Plus,
   Star,
   Phone,
+  LayoutList,
+  KanbanSquare,
 } from "lucide-react";
-import type { inferRouterOutputs } from "@trpc/server";
-import type { AppRouter } from "@/server/api/root";
 import { api } from "@/lib/trpc/react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent } from "@/components/ui/card";
@@ -30,27 +28,14 @@ import {
 } from "@/components/ui/select";
 import { formatDate } from "@/lib/format";
 import { toast } from "@/hooks/use-toast";
-
-type Reel = inferRouterOutputs<AppRouter>["reels"]["list"][number];
-
-const STATUS: { value: string; label: string; variant: "outline" | "secondary" | "warning" | "default" | "success" }[] = [
-  { value: "reja", label: "Reja", variant: "outline" },
-  { value: "ssenariy", label: "Ssenariy tayyor", variant: "secondary" },
-  { value: "suratga", label: "Suratga olindi", variant: "warning" },
-  { value: "montaj", label: "Montajda", variant: "default" },
-  { value: "chop", label: "Chop etildi", variant: "success" },
-];
-const statusMeta = (s: string) => STATUS.find((x) => x.value === s) ?? STATUS[0];
-
-function PlatformIcons({ platforms }: { platforms: string[] | null }) {
-  const p = platforms ?? [];
-  return (
-    <span className="flex items-center gap-1 text-muted-foreground">
-      {p.includes("instagram") && <Instagram className="h-3.5 w-3.5" />}
-      {p.includes("telegram") && <Send className="h-3.5 w-3.5" />}
-    </span>
-  );
-}
+import {
+  STATUS,
+  statusMeta,
+  CHANNELS,
+  ChannelIcons,
+  type Reel,
+} from "@/components/reels/reel-shared";
+import { ReelsBoard } from "@/components/reels/reels-board";
 
 function ReelCard({ reel, onChanged }: { reel: Reel; onChanged: () => void }) {
   const [open, setOpen] = useState(false);
@@ -78,11 +63,19 @@ function ReelCard({ reel, onChanged }: { reel: Reel; onChanged: () => void }) {
   });
 
   const meta = statusMeta(reel.status);
+  const platforms = reel.platforms ?? [];
   const dirty =
     script !== (reel.script ?? "") ||
     ref !== (reel.reference_link ?? "") ||
     pub !== (reel.published_link ?? "") ||
     notes !== (reel.notes ?? "");
+
+  const toggleChannel = (value: string) => {
+    const next = platforms.includes(value)
+      ? platforms.filter((p) => p !== value)
+      : [...platforms, value];
+    update.mutate({ id: reel.id, platforms: next });
+  };
 
   const saveText = () =>
     update.mutate({
@@ -96,7 +89,6 @@ function ReelCard({ reel, onChanged }: { reel: Reel; onChanged: () => void }) {
   return (
     <Card className={reel.published_link ? "border-success/40" : ""}>
       <CardContent className="p-0">
-        {/* Header row — click to expand */}
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
@@ -106,12 +98,10 @@ function ReelCard({ reel, onChanged }: { reel: Reel; onChanged: () => void }) {
             {reel.seq ?? "—"}
           </span>
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5">
-              <span className="line-clamp-2 text-sm font-medium">{reel.title}</span>
-            </div>
+            <span className="line-clamp-2 text-sm font-medium">{reel.title}</span>
             <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
               <span>{reel.scheduled_date ? formatDate(reel.scheduled_date) : "Sanasiz"}</span>
-              <PlatformIcons platforms={reel.platforms} />
+              <ChannelIcons platforms={reel.platforms} />
               {reel.cta && <Badge variant="outline" className="text-[10px]">{reel.cta}</Badge>}
               {reel.production_batch && (
                 <span className="rounded bg-muted px-1.5 py-0.5 text-[10px]">
@@ -144,21 +134,41 @@ function ReelCard({ reel, onChanged }: { reel: Reel; onChanged: () => void }) {
                 </SelectTrigger>
                 <SelectContent>
                   {STATUS.map((s) => (
-                    <SelectItem key={s.value} value={s.value}>
-                      {s.label}
-                    </SelectItem>
+                    <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               <Input
                 type="date"
                 value={reel.scheduled_date ?? ""}
-                onChange={(e) =>
-                  update.mutate({ id: reel.id, scheduledDate: e.target.value || null })
-                }
+                onChange={(e) => update.mutate({ id: reel.id, scheduledDate: e.target.value || null })}
                 className="h-8 w-40 text-xs"
                 title="Sana"
               />
+            </div>
+
+            {/* Channels */}
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Kanallar</label>
+              <div className="flex flex-wrap gap-1.5">
+                {CHANNELS.map((c) => {
+                  const on = platforms.includes(c.value);
+                  return (
+                    <button
+                      key={c.value}
+                      type="button"
+                      onClick={() => toggleChannel(c.value)}
+                      className={`flex items-center gap-1 rounded-full border px-2 py-1 text-xs transition-colors ${
+                        on
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border text-muted-foreground hover:bg-muted"
+                      }`}
+                    >
+                      <c.icon className="h-3.5 w-3.5" /> {c.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div>
@@ -180,17 +190,10 @@ function ReelCard({ reel, onChanged }: { reel: Reel; onChanged: () => void }) {
                   Namuna havolasi (reference)
                 </label>
                 <div className="flex gap-1.5">
-                  <Input
-                    value={ref}
-                    onChange={(e) => setRef(e.target.value)}
-                    placeholder="https://… (o'xshash reel)"
-                    className="h-8 text-xs"
-                  />
+                  <Input value={ref} onChange={(e) => setRef(e.target.value)} placeholder="https://… (o'xshash reel)" className="h-8 text-xs" />
                   {ref && (
                     <Button asChild variant="outline" size="icon" className="h-8 w-8 shrink-0">
-                      <a href={ref} target="_blank" rel="noopener noreferrer">
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </a>
+                      <a href={ref} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-3.5 w-3.5" /></a>
                     </Button>
                   )}
                 </div>
@@ -200,17 +203,10 @@ function ReelCard({ reel, onChanged }: { reel: Reel; onChanged: () => void }) {
                   Chop etilgan havola (live)
                 </label>
                 <div className="flex gap-1.5">
-                  <Input
-                    value={pub}
-                    onChange={(e) => setPub(e.target.value)}
-                    placeholder="https://… (chiqqan reel)"
-                    className="h-8 text-xs"
-                  />
+                  <Input value={pub} onChange={(e) => setPub(e.target.value)} placeholder="https://… (chiqqan reel)" className="h-8 text-xs" />
                   {pub && (
                     <Button asChild variant="outline" size="icon" className="h-8 w-8 shrink-0">
-                      <a href={pub} target="_blank" rel="noopener noreferrer">
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </a>
+                      <a href={pub} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-3.5 w-3.5" /></a>
                     </Button>
                   )}
                 </div>
@@ -219,18 +215,11 @@ function ReelCard({ reel, onChanged }: { reel: Reel; onChanged: () => void }) {
 
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">Izoh</label>
-              <Input
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Qo'shimcha eslatma"
-                className="h-8 text-xs"
-              />
+              <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Qo'shimcha eslatma" className="h-8 text-xs" />
             </div>
 
             <div className="flex items-center justify-between">
-              <Button size="sm" disabled={!dirty || update.isPending} onClick={saveText}>
-                Saqlash
-              </Button>
+              <Button size="sm" disabled={!dirty || update.isPending} onClick={saveText}>Saqlash</Button>
               <Button
                 variant="ghost"
                 size="icon"
@@ -254,6 +243,7 @@ export default function ReelsPage() {
   const utils = api.useUtils();
   const reels = api.reels.list.useQuery();
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [view, setView] = useState<"list" | "board">("list");
   const invalidate = () => utils.reels.list.invalidate();
 
   const create = api.reels.create.useMutation({
@@ -263,11 +253,14 @@ export default function ReelsPage() {
     },
     onError: (e) => toast({ title: "Xato", description: e.message, variant: "destructive" }),
   });
+  const updateStatus = api.reels.update.useMutation({
+    onSuccess: invalidate,
+    onError: (e) => toast({ title: "Xato", description: e.message, variant: "destructive" }),
+  });
 
   const all = useMemo(() => reels.data ?? [], [reels.data]);
   const shown = statusFilter === "all" ? all : all.filter((r) => r.status === statusFilter);
 
-  // Group by stage (bosqich), preserving first-seen order.
   const groups = useMemo(() => {
     const map = new Map<string, Reel[]>();
     for (const r of shown) {
@@ -288,35 +281,35 @@ export default function ReelsPage() {
     <div>
       <PageHeader
         title="Reels rejasi"
-        description="40-reel ketma-ketligi (Instagram + Telegram). Har biriga ssenariy va namuna havola qo'shing."
+        description="40-reel ketma-ketligi (Instagram + Telegram). Har biriga ssenariy, kanal va namuna havola qo'shing."
         actions={
           <div className="flex items-center gap-2">
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="Holat" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Barcha holat</SelectItem>
-                {STATUS.map((s) => (
-                  <SelectItem key={s.value} value={s.value}>
-                    {s.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              onClick={() =>
-                create.mutate({ title: "Yangi reel", stage: "Qo'shimcha" })
-              }
-              disabled={create.isPending}
-            >
+            <div className="flex items-center gap-1 rounded-lg bg-muted p-1">
+              <Button variant={view === "list" ? "default" : "ghost"} size="sm" onClick={() => setView("list")}>
+                <LayoutList className="h-4 w-4 mr-1" /> Ro&apos;yxat
+              </Button>
+              <Button variant={view === "board" ? "default" : "ghost"} size="sm" onClick={() => setView("board")}>
+                <KanbanSquare className="h-4 w-4 mr-1" /> Doska
+              </Button>
+            </div>
+            {view === "list" && (
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-40"><SelectValue placeholder="Holat" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Barcha holat</SelectItem>
+                  {STATUS.map((s) => (
+                    <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <Button onClick={() => create.mutate({ title: "Yangi reel", stage: "Qo'shimcha" })} disabled={create.isPending}>
               <Plus className="h-4 w-4" /> Reel
             </Button>
           </div>
         }
       />
 
-      {/* Status summary */}
       <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
         <div className="rounded-lg border bg-card p-3">
           <div className="text-lg font-bold leading-none">{counts.total}</div>
@@ -349,6 +342,11 @@ export default function ReelsPage() {
             </div>
           </CardContent>
         </Card>
+      ) : view === "board" ? (
+        <ReelsBoard
+          reels={all}
+          onStatusChange={(id, status) => updateStatus.mutate({ id, status: status as never })}
+        />
       ) : (
         <div className="space-y-6">
           {groups.map(([stage, list]) => (

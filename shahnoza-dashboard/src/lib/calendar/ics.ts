@@ -45,6 +45,7 @@ export interface IcsTask {
   start_date: string | null;
   due_date: string | null;
   assignedName: string | null;
+  updated_at?: string | null;
 }
 
 // A stored timestamp exactly at 00:00:00 UTC is the app's "date only" marker
@@ -157,7 +158,18 @@ function vevent(t: IcsTask, dtstamp: string, appUrl: string): string | null {
   descParts.push(`${appUrl}/tasks/${t.id}`);
   lines.push(`DESCRIPTION:${esc(descParts.join("\n"))}`);
   lines.push(`URL:${appUrl}/tasks/${t.id}`);
-  lines.push(done ? "STATUS:CONFIRMED" : "STATUS:CONFIRMED");
+  lines.push("STATUS:CONFIRMED");
+  // LAST-MODIFIED + SEQUENCE tell the calendar this event changed since it last
+  // saw it, so a rescheduled task MOVES instead of leaving a stale copy. SEQUENCE
+  // must be a monotonically increasing integer — minutes-since-epoch of the last
+  // edit does that.
+  if (t.updated_at) {
+    const mod = new Date(t.updated_at);
+    if (!Number.isNaN(mod.getTime())) {
+      lines.push(`LAST-MODIFIED:${utcStamp(mod)}`);
+      lines.push(`SEQUENCE:${Math.floor(mod.getTime() / 60000)}`);
+    }
+  }
   lines.push("END:VEVENT");
   return lines.map(fold).join("\r\n");
 }

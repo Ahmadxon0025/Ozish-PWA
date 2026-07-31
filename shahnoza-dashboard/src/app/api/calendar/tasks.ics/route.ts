@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
 
   const { data: tasks } = await db
     .from("tasks")
-    .select("id, title, status, priority, start_date, due_date, assigned_to")
+    .select("id, title, status, priority, start_date, due_date, assigned_to, updated_at")
     .neq("status", "cancelled")
     .or(orClause)
     // A task needs at least one date to be placeable on a calendar.
@@ -61,6 +61,7 @@ export async function GET(request: NextRequest) {
     start_date: t.start_date,
     due_date: t.due_date,
     assignedName: t.assigned_to ? nameById.get(t.assigned_to) ?? null : null,
+    updated_at: t.updated_at,
   }));
 
   const body = buildIcs(icsTasks, new Date());
@@ -70,8 +71,9 @@ export async function GET(request: NextRequest) {
     headers: {
       "Content-Type": "text/calendar; charset=utf-8",
       "Content-Disposition": 'inline; filename="ozish-vazifalar.ics"',
-      // Let calendar clients cache briefly; they poll on their own schedule.
-      "Cache-Control": "public, max-age=1800",
+      // Short cache so an edited task propagates as soon as the calendar app
+      // next polls (the app's own poll interval is the real bottleneck).
+      "Cache-Control": "public, max-age=300",
     },
   });
 }

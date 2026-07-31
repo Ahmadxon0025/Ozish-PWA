@@ -198,6 +198,75 @@ interface TgMessage {
   entities?: TgEntity[];
 }
 
+interface TgChannelPost {
+  message_id: number;
+  chat: { id: number };
+  text?: string;
+  caption?: string;
+  date?: number;
+  views?: number;
+  forwards?: number;
+}
+
+interface TgReactionCount {
+  chat: { id: number };
+  message_id: number;
+  reactions?: { total_count?: number }[];
+}
+
+/**
+ * Capture content-channel activity (channel posts + reaction counts) into
+ * reel_metrics for the reels analyzer. The bot must be an admin of the channel,
+ * and the webhook must allow `channel_post` + `message_reaction_count` updates.
+ * Best-effort; only the configured TELEGRAM_CONTENT_CHANNEL_ID is stored (or any
+ * channel if that env is unset). No-ops without a service-role client.
+ */
+async function captureChannelActivity(u: {
+  channel_post?: TgChannelPost;
+  edited_channel_post?: TgChannelPost;
+  message_reaction_count?: TgReactionCount;
+}): Promise<void> {
+  const { isServiceRoleConfigured } = await import("@/lib/env");
+  if (!isServiceRoleConfigured()) return;
+  const channelId = env.TELEGRAM_CONTENT_CHANNEL_ID;
+  const db = requireAdminClient();
+  const nowIso = new Date().toISOString();
+
+  const post = u.channel_post ?? u.edited_channel_post;
+  if (post) {
+    if (channelId && String(post.chat.id) !== channelId) return;
+    await db.from("reel_metrics").upsert(
+      {
+        platform: "telegram",
+        external_id: `${post.chat.id}:${post.message_id}`,
+        caption: post.text ?? post.caption ?? null,
+        published_at: post.date ? new Date(post.date * 1000).toISOString() : nowIso,
+        views: post.views ?? null,
+        forwards: post.forwards ?? null,
+        source: "api",
+        fetched_at: nowIso,
+      },
+      { onConflict: "platform,external_id" },
+    );
+    return;
+  }
+
+  const rc = u.message_reaction_count;
+  if (rc) {
+    if (channelId && String(rc.chat.id) !== channelId) return;
+    const total = (rc.reactions ?? []).reduce((s, r) => s + (r.total_count ?? 0), 0);
+    await db.from("reel_metrics").upsert(
+      {
+        platform: "telegram",
+        external_id: `${rc.chat.id}:${rc.message_id}`,
+        reactions: total,
+        fetched_at: nowIso,
+      },
+      { onConflict: "platform,external_id" },
+    );
+  }
+}
+
 /** Answer a question via the AI brain (per-chat memory) and post the reply. */
 async function answerWithBrain(
   db: AdminDb,
@@ -373,7 +442,24 @@ async function createTaskFromText(
 
 /** Process one Telegram update. Best-effort; never throws to the caller. */
 export async function handleTelegramUpdate(update: unknown): Promise<void> {
-  const u = update as { message?: TgMessage; edited_message?: TgMessage };
+  const u = update as {
+    message?: TgMessage;
+    edited_message?: TgMessage;
+    channel_post?: TgChannelPost;
+    edited_channel_post?: TgChannelPost;
+    message_reaction_count?: TgReactionCount;
+  };
+
+  // Content-channel analytics capture (reels). Handled separately from chat.
+  if (u.channel_post || u.edited_channel_post || u.message_reaction_count) {
+    try {
+      await captureChannelActivity(u);
+    } catch (err) {
+      console.error("channel capture failed:", err);
+    }
+    return;
+  }
+
   const msg = u.message ?? u.edited_message;
   if (!msg || !msg.text) return;
 

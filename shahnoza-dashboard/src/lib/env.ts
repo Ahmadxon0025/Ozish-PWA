@@ -70,6 +70,14 @@ export const env = {
   // task completion and deadline changes. Features no-op without both.
   YANDEX_API_KEY: process.env.YANDEX_API_KEY ?? "",
   YANDEX_FOLDER_ID: process.env.YANDEX_FOLDER_ID ?? "",
+  // Instagram Graph API for reels analytics. Requires an Instagram
+  // Business/Creator account linked to a Facebook Page + a long-lived token.
+  // The analyzer no-ops without both. Generate via Meta Developer app.
+  INSTAGRAM_ACCESS_TOKEN: process.env.INSTAGRAM_ACCESS_TOKEN ?? "",
+  INSTAGRAM_USER_ID: process.env.INSTAGRAM_USER_ID ?? "",
+  // Telegram content channel to auto-capture posts + reactions from (the bot
+  // must be an admin of this channel). Optional; capture no-ops without it.
+  TELEGRAM_CONTENT_CHANNEL_ID: process.env.TELEGRAM_CONTENT_CHANNEL_ID ?? "",
 } as const;
 
 export const isSupabaseConfigured = () =>
@@ -84,6 +92,10 @@ export const isAmocrmConfigured = () =>
   Boolean(env.AMOCRM_SUBDOMAIN && env.AMOCRM_CLIENT_ID && env.AMOCRM_CLIENT_SECRET);
 
 export const isAiConfigured = () => Boolean(env.ANTHROPIC_API_KEY);
+
+/** Instagram Graph API (reels insights). No-ops without token + IG user id. */
+export const isInstagramConfigured = () =>
+  Boolean(env.INSTAGRAM_ACCESS_TOKEN && env.INSTAGRAM_USER_ID);
 
 /** Speech-to-text (call-recording → transcript) via OpenAI Whisper. */
 export const isTranscribeConfigured = () => Boolean(env.OPENAI_API_KEY);

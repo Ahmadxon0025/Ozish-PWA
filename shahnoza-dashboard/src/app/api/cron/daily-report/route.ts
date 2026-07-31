@@ -186,10 +186,33 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // Weekly reels analysis on Mondays → marketing (ops) group. Syncs Instagram
+  // insights + Telegram capture, runs the AI review, stores + posts it.
+  let reelAnalysis = false;
+  if (tashkentDow() === 1 && isAiConfigured()) {
+    try {
+      const { requireAdminClient } = await import("@/lib/supabase/admin");
+      const { runWeeklyReelAnalysis } = await import("@/lib/reels/analyzer");
+      const result = await runWeeklyReelAnalysis(requireAdminClient(), new Date());
+      if (result) {
+        const { sendMessage, opsGroupId } = await import("@/lib/telegram/bot");
+        const recs = result.recommendations.map((r) => `• ${r}`).join("\n");
+        await sendMessage(
+          opsGroupId(),
+          `🎬 *REELS TAHLILI (haftalik)*\n\n${result.summary}\n\n*Keyingi qadamlar:*\n${recs}`,
+        );
+        reelAnalysis = true;
+      }
+    } catch {
+      // non-fatal
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     sent,
     financeExtras,
+    reelAnalysis,
     collection,
     reminders,
     marketing,

@@ -89,4 +89,82 @@ export const reelsRouter = createTRPCRouter({
       if (error) throw new Error(error.message);
       return { ok: true };
     }),
+
+  // ── Analytics ──────────────────────────────────────────────────────
+
+  /** Per-post metrics (Instagram + Telegram), newest first. */
+  metrics: protectedProcedure
+    .input(z.object({ reelId: z.string().uuid().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      let q = ctx.supabase
+        .from("reel_metrics")
+        .select("*")
+        .order("published_at", { ascending: false, nullsFirst: false })
+        .limit(200);
+      if (input?.reelId) q = q.eq("reel_id", input.reelId);
+      const { data } = await q;
+      return data ?? [];
+    }),
+
+  /** The most recent weekly AI analysis. */
+  latestInsight: protectedProcedure.query(async ({ ctx }) => {
+    const { data } = await ctx.supabase
+      .from("reel_insights")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return data ?? null;
+  }),
+
+  /** Manually enter/override a reel's metrics (no API needed). */
+  saveMetric: protectedProcedure
+    .input(
+      z.object({
+        reelId: z.string().uuid(),
+        platform: z.enum(["instagram", "telegram"]),
+        views: z.number().int().nullable().optional(),
+        likes: z.number().int().nullable().optional(),
+        comments: z.number().int().nullable().optional(),
+        saves: z.number().int().nullable().optional(),
+        shares: z.number().int().nullable().optional(),
+        reactions: z.number().int().nullable().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { error } = await ctx.supabase.from("reel_metrics").upsert(
+        {
+          reel_id: input.reelId,
+          platform: input.platform,
+          external_id: `manual:${input.reelId}:${input.platform}`,
+          views: input.views ?? null,
+          likes: input.likes ?? null,
+          comments: input.comments ?? null,
+          saves: input.saves ?? null,
+          shares: input.shares ?? null,
+          reactions: input.reactions ?? null,
+          source: "manual",
+          published_at: new Date().toISOString(),
+          fetched_at: new Date().toISOString(),
+        },
+        { onConflict: "platform,external_id" },
+      );
+      if (error) throw new Error(error.message);
+      return { ok: true };
+    }),
+
+  /** Run the weekly AI analysis on demand (owner/manager). */
+  runAnalysis: protectedProcedure.mutation(async ({ ctx }) => {
+    const { requireAdminClient } = await import("@/lib/supabase/admin");
+    const { runWeeklyReelAnalysis } = await import("@/lib/reels/analyzer");
+    const result = await runWeeklyReelAnalysis(requireAdminClient(), new Date());
+    if (!result) {
+      return {
+        ok: false,
+        message:
+          "Tahlil uchun ma'lumot yo'q yoki AI sozlanmagan. Reellar chop etilib, ko'rsatkichlar (Instagram token yoki qo'lda) kiritilgach ishlaydi.",
+      };
+    }
+    return { ok: true, ...result };
+  }),
 });

@@ -988,6 +988,74 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["reels"]["Insert"]>;
         Relationships: [];
       };
+      reel_metrics: {
+        Row: {
+          id: string;
+          reel_id: string | null;
+          platform: string;
+          external_id: string | null;
+          permalink: string | null;
+          caption: string | null;
+          published_at: string | null;
+          views: number | null;
+          reach: number | null;
+          likes: number | null;
+          comments: number | null;
+          shares: number | null;
+          saves: number | null;
+          reactions: number | null;
+          forwards: number | null;
+          source: string | null;
+          raw: Json | null;
+          fetched_at: string;
+        };
+        Insert: {
+          id?: string;
+          reel_id?: string | null;
+          platform: string;
+          external_id?: string | null;
+          permalink?: string | null;
+          caption?: string | null;
+          published_at?: string | null;
+          views?: number | null;
+          reach?: number | null;
+          likes?: number | null;
+          comments?: number | null;
+          shares?: number | null;
+          saves?: number | null;
+          reactions?: number | null;
+          forwards?: number | null;
+          source?: string | null;
+          raw?: Json | null;
+          fetched_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["reel_metrics"]["Insert"]>;
+        Relationships: [];
+      };
+      reel_insights: {
+        Row: {
+          id: string;
+          period_start: string | null;
+          period_end: string | null;
+          title: string | null;
+          summary: string | null;
+          recommendations: Json | null;
+          stats: Json | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          period_start?: string | null;
+          period_end?: string | null;
+          title?: string | null;
+          summary?: string | null;
+          recommendations?: Json | null;
+          stats?: Json | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["reel_insights"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {

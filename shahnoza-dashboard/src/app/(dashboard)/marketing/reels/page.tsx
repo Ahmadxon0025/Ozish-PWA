@@ -11,6 +11,7 @@ import {
   Phone,
   LayoutList,
   KanbanSquare,
+  LineChart,
 } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { PageHeader } from "@/components/layout/page-header";
@@ -36,6 +37,7 @@ import {
   type Reel,
 } from "@/components/reels/reel-shared";
 import { ReelsBoard } from "@/components/reels/reels-board";
+import { ReelsAnalysis } from "@/components/reels/reels-analysis";
 
 function ReelCard({ reel, onChanged }: { reel: Reel; onChanged: () => void }) {
   const [open, setOpen] = useState(false);
@@ -243,7 +245,7 @@ export default function ReelsPage() {
   const utils = api.useUtils();
   const reels = api.reels.list.useQuery();
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [view, setView] = useState<"list" | "board">("list");
+  const [view, setView] = useState<"list" | "board" | "analysis">("list");
   const invalidate = () => utils.reels.list.invalidate();
 
   const create = api.reels.create.useMutation({
@@ -290,6 +292,9 @@ export default function ReelsPage() {
               </Button>
               <Button variant={view === "board" ? "default" : "ghost"} size="sm" onClick={() => setView("board")}>
                 <KanbanSquare className="h-4 w-4 mr-1" /> Doska
+              </Button>
+              <Button variant={view === "analysis" ? "default" : "ghost"} size="sm" onClick={() => setView("analysis")}>
+                <LineChart className="h-4 w-4 mr-1" /> Tahlil
               </Button>
             </div>
             {view === "list" && (
@@ -342,6 +347,8 @@ export default function ReelsPage() {
             </div>
           </CardContent>
         </Card>
+      ) : view === "analysis" ? (
+        <ReelsAnalysis reels={all} />
       ) : view === "board" ? (
         <ReelsBoard
           reels={all}

@@ -6,21 +6,79 @@ type ReelUpdate = Database["public"]["Tables"]["reels"]["Update"];
 
 /** Marketing reels/content planner — the launch sequence + script/link fields. */
 export const reelsRouter = createTRPCRouter({
-  /** All reels ordered by sequence (then date) for the planner board. */
-  list: protectedProcedure.query(async ({ ctx }) => {
+  // ── Content lists (Instagram / Telegram kanal / VSL / …) ────────────
+  lists: protectedProcedure.query(async ({ ctx }) => {
     const { data } = await ctx.supabase
-      .from("reels")
+      .from("content_lists")
       .select("*")
-      .order("seq", { ascending: true, nullsFirst: false })
-      .order("scheduled_date", { ascending: true, nullsFirst: false });
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true });
     return data ?? [];
   }),
+
+  createList: protectedProcedure
+    .input(z.object({ name: z.string().min(1), emoji: z.string().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      // Append after the current last list.
+      const { data: last } = await ctx.supabase
+        .from("content_lists")
+        .select("sort_order")
+        .order("sort_order", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const { data, error } = await ctx.supabase
+        .from("content_lists")
+        .insert({
+          name: input.name,
+          emoji: input.emoji ?? "📄",
+          sort_order: (last?.sort_order ?? 0) + 1,
+          created_by: ctx.appUser.id,
+        })
+        .select("id")
+        .single();
+      if (error) throw new Error(error.message);
+      return data;
+    }),
+
+  renameList: protectedProcedure
+    .input(z.object({ id: z.string().uuid(), name: z.string().min(1), emoji: z.string().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const patch: { name: string; emoji?: string } = { name: input.name };
+      if (input.emoji !== undefined) patch.emoji = input.emoji;
+      const { error } = await ctx.supabase.from("content_lists").update(patch).eq("id", input.id);
+      if (error) throw new Error(error.message);
+      return { ok: true };
+    }),
+
+  /** Delete a list AND all its content items (cascade). */
+  deleteList: protectedProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const { error } = await ctx.supabase.from("content_lists").delete().eq("id", input.id);
+      if (error) throw new Error(error.message);
+      return { ok: true };
+    }),
+
+  /** Items in a list (or all reels when no list given), ordered by sequence. */
+  list: protectedProcedure
+    .input(z.object({ listId: z.string().uuid().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      let q = ctx.supabase
+        .from("reels")
+        .select("*")
+        .order("seq", { ascending: true, nullsFirst: false })
+        .order("scheduled_date", { ascending: true, nullsFirst: false });
+      if (input?.listId) q = q.eq("list_id", input.listId);
+      const { data } = await q;
+      return data ?? [];
+    }),
 
   /** Create a reel (defaults to both platforms). */
   create: protectedProcedure
     .input(
       z.object({
         title: z.string().min(1),
+        listId: z.string().uuid().nullable().optional(),
         seq: z.number().int().nullable().optional(),
         scheduledDate: z.string().nullable().optional(),
         stage: z.string().nullable().optional(),
@@ -34,6 +92,7 @@ export const reelsRouter = createTRPCRouter({
         .from("reels")
         .insert({
           title: input.title,
+          list_id: input.listId ?? null,
           seq: input.seq ?? null,
           scheduled_date: input.scheduledDate ?? null,
           stage: input.stage ?? null,

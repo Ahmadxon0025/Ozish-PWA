@@ -946,9 +946,30 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["owner_shares"]["Insert"]>;
         Relationships: [];
       };
+      content_lists: {
+        Row: {
+          id: string;
+          name: string;
+          emoji: string | null;
+          sort_order: number | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          emoji?: string | null;
+          sort_order?: number | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["content_lists"]["Insert"]>;
+        Relationships: [];
+      };
       reels: {
         Row: {
           id: string;
+          list_id: string | null;
           seq: number | null;
           title: string;
           scheduled_date: string | null;
@@ -968,6 +989,7 @@ export interface Database {
         };
         Insert: {
           id?: string;
+          list_id?: string | null;
           seq?: number | null;
           title: string;
           scheduled_date?: string | null;

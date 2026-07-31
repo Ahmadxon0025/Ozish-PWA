@@ -946,6 +946,48 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["owner_shares"]["Insert"]>;
         Relationships: [];
       };
+      reels: {
+        Row: {
+          id: string;
+          seq: number | null;
+          title: string;
+          scheduled_date: string | null;
+          stage: string | null;
+          cta: string | null;
+          platforms: string[] | null;
+          status: string;
+          script: string | null;
+          reference_link: string | null;
+          published_link: string | null;
+          notes: string | null;
+          is_low_prod: boolean | null;
+          production_batch: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          seq?: number | null;
+          title: string;
+          scheduled_date?: string | null;
+          stage?: string | null;
+          cta?: string | null;
+          platforms?: string[] | null;
+          status?: string;
+          script?: string | null;
+          reference_link?: string | null;
+          published_link?: string | null;
+          notes?: string | null;
+          is_low_prod?: boolean | null;
+          production_batch?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["reels"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {

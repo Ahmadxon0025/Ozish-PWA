@@ -23,6 +23,7 @@ import {
   Headphones,
   Target,
   Megaphone,
+  Clapperboard,
   type LucideIcon,
 } from "lucide-react";
 
@@ -68,6 +69,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Marketing",
     items: [
       { label: "Marketing tahlili", href: "/marketing", icon: Megaphone, roles: OWNER_ROP },
+      { label: "Reels rejasi", href: "/marketing/reels", icon: Clapperboard, roles: OWNER_ROP },
     ],
   },
   {

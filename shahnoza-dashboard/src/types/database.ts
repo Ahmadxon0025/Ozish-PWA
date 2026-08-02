@@ -161,6 +161,8 @@ export interface Database {
           outstanding_uzs: number | null;
           finished_course: boolean | null;
           course_started_at: string | null;
+          person_id: string | null;
+          funnel_id: string | null;
         };
         Insert: {
           id?: string;
@@ -200,6 +202,8 @@ export interface Database {
           outstanding_uzs?: number | null;
           finished_course?: boolean | null;
           course_started_at?: string | null;
+          person_id?: string | null;
+          funnel_id?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["leads"]["Insert"]>;
         Relationships: [];
@@ -223,6 +227,8 @@ export interface Database {
           notes: string | null;
           created_at: string;
           account_id: string | null;
+          person_id: string | null;
+          funnel_id: string | null;
         };
         Insert: {
           id?: string;
@@ -242,6 +248,8 @@ export interface Database {
           notes?: string | null;
           created_at?: string;
           account_id?: string | null;
+          person_id?: string | null;
+          funnel_id?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["sales"]["Insert"]>;
         Relationships: [];
@@ -280,6 +288,252 @@ export interface Database {
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["payments"]["Insert"]>;
+        Relationships: [];
+      };
+      funnels: {
+        Row: {
+          id: string;
+          key: string;
+          name: string;
+          temperature: string;
+          goal_metric: string;
+          description: string | null;
+          is_active: boolean;
+          position: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          key: string;
+          name: string;
+          temperature: string;
+          goal_metric: string;
+          description?: string | null;
+          is_active?: boolean;
+          position?: number;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["funnels"]["Insert"]>;
+        Relationships: [];
+      };
+      funnel_stages: {
+        Row: {
+          id: string;
+          funnel_id: string;
+          key: string;
+          name: string;
+          position: number;
+          is_conversion: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          funnel_id: string;
+          key: string;
+          name: string;
+          position?: number;
+          is_conversion?: boolean;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["funnel_stages"]["Insert"]>;
+        Relationships: [];
+      };
+      persons: {
+        Row: {
+          id: string;
+          telegram_id: string | null;
+          telegram_username: string | null;
+          phone: string | null;
+          full_name: string | null;
+          lead_id: string | null;
+          amocrm_lead_id: number | null;
+          first_funnel_id: string | null;
+          first_touch_at: string | null;
+          last_funnel_id: string | null;
+          last_touch_at: string | null;
+          start_payload: string | null;
+          ad_id: string | null;
+          utm_source: string | null;
+          utm_medium: string | null;
+          utm_campaign: string | null;
+          utm_content: string | null;
+          touched_funnels: string[] | null;
+          furthest_stage: string | null;
+          is_buyer: boolean;
+          merged_into: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          telegram_id?: string | null;
+          telegram_username?: string | null;
+          phone?: string | null;
+          full_name?: string | null;
+          lead_id?: string | null;
+          amocrm_lead_id?: number | null;
+          first_funnel_id?: string | null;
+          first_touch_at?: string | null;
+          last_funnel_id?: string | null;
+          last_touch_at?: string | null;
+          start_payload?: string | null;
+          ad_id?: string | null;
+          utm_source?: string | null;
+          utm_medium?: string | null;
+          utm_campaign?: string | null;
+          utm_content?: string | null;
+          touched_funnels?: string[] | null;
+          furthest_stage?: string | null;
+          is_buyer?: boolean;
+          merged_into?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["persons"]["Insert"]>;
+        Relationships: [];
+      };
+      funnel_events: {
+        Row: {
+          id: string;
+          person_id: string | null;
+          funnel_id: string | null;
+          stage_key: string;
+          event_type: string;
+          occurred_at: string;
+          source: string | null;
+          ad_id: string | null;
+          campaign_id: string | null;
+          asset_id: string | null;
+          amount_uzs: number | null;
+          metadata: Json | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          person_id?: string | null;
+          funnel_id?: string | null;
+          stage_key: string;
+          event_type: string;
+          occurred_at?: string;
+          source?: string | null;
+          ad_id?: string | null;
+          campaign_id?: string | null;
+          asset_id?: string | null;
+          amount_uzs?: number | null;
+          metadata?: Json | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["funnel_events"]["Insert"]>;
+        Relationships: [];
+      };
+      marketing_assets: {
+        Row: {
+          id: string;
+          key: string;
+          name: string;
+          type: string;
+          funnel_id: string | null;
+          host: string | null;
+          external_ref: string | null;
+          position: number;
+          is_active: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          key: string;
+          name: string;
+          type: string;
+          funnel_id?: string | null;
+          host?: string | null;
+          external_ref?: string | null;
+          position?: number;
+          is_active?: boolean;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["marketing_assets"]["Insert"]>;
+        Relationships: [];
+      };
+      asset_views: {
+        Row: {
+          id: string;
+          person_id: string | null;
+          asset_id: string | null;
+          opened_at: string;
+          watched_pct: number | null;
+          completed: boolean;
+          last_event_at: string | null;
+          metadata: Json | null;
+        };
+        Insert: {
+          id?: string;
+          person_id?: string | null;
+          asset_id?: string | null;
+          opened_at?: string;
+          watched_pct?: number | null;
+          completed?: boolean;
+          last_event_at?: string | null;
+          metadata?: Json | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["asset_views"]["Insert"]>;
+        Relationships: [];
+      };
+      ad_campaigns: {
+        Row: {
+          id: string;
+          platform: string;
+          level: string;
+          external_id: string | null;
+          parent_id: string | null;
+          funnel_id: string | null;
+          name: string | null;
+          is_active: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          platform: string;
+          level: string;
+          external_id?: string | null;
+          parent_id?: string | null;
+          funnel_id?: string | null;
+          name?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["ad_campaigns"]["Insert"]>;
+        Relationships: [];
+      };
+      ad_spend_daily: {
+        Row: {
+          id: string;
+          ad_entity_id: string | null;
+          funnel_id: string | null;
+          date: string;
+          spend_usd: number | null;
+          spend_uzs: number | null;
+          impressions: number | null;
+          clicks: number | null;
+          reach: number | null;
+          leads: number | null;
+          source: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          ad_entity_id?: string | null;
+          funnel_id?: string | null;
+          date: string;
+          spend_usd?: number | null;
+          spend_uzs?: number | null;
+          impressions?: number | null;
+          clicks?: number | null;
+          reach?: number | null;
+          leads?: number | null;
+          source?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["ad_spend_daily"]["Insert"]>;
         Relationships: [];
       };
       expense_categories: {

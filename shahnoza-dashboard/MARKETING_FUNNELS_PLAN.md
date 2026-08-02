@@ -105,10 +105,51 @@ Tradeoff to accept: sending a bot user to a web page is a small click-out step. 
 | Phase | Deliverable | Depends on |
 |---|---|---|
 | **A — Core spine** ✅ | `funnels`, `funnel_stages`, `persons`, `funnel_events`, `marketing_assets`, `asset_views`, `ad_campaigns`, `ad_spend_daily` + RLS + seed; `person_id`/`funnel_id` on `leads`/`sales` | **Done** |
-| **B — Keystone** | Bot reads `start` → create/stitch person → emit `bot_start`; self-serve sale → person; lesson views → `funnel_events` | B2, F1 |
+| **B — Keystone (receiving side)** ✅ | `POST /api/funnel/event` + `ingestFunnelEvent()` person-stitching service (progressive identity, payload decode, asset views, event spine) | **Done** |
+| **B — Keystone (bot side)** | The external funnel bot must CALL the endpoint on each step (see §8). This is on your bot platform, not this repo. | B2 (bot wiring), F1 |
 | **C — Cost layer** | Meta ingest (API or CSV) → tag campaign/adset/ad to funnels → CPL/ROAS | C1, C2 |
 | **D — Warm & Hot live** | Funnels 2 & 3 + cohort reporting (lagged spend→sale) | D1 |
 | **G — Reporting UI** | Per-funnel funnel chart + unit economics in the Marketing section | A + data flowing |
+
+---
+
+## 8. Funnel event ingestion — the contract (give this to whoever runs the bot)
+
+The bot is external, so the repo can't read its events directly — it **receives** them. On each meaningful step, the bot makes ONE HTTP call:
+
+```
+POST {NEXT_PUBLIC_APP_URL}/api/funnel/event
+```
+
+**Auth** (any one of these — use whatever the platform supports):
+- header `x-funnel-secret: <FUNNEL_INGEST_SECRET>`, or
+- query `?secret=<FUNNEL_INGEST_SECRET>`, or
+- body field `secret=<FUNNEL_INGEST_SECRET>`
+
+**Body** — JSON *or* form-urlencoded (no-code platforms can send either):
+
+| Field | Required | Notes |
+|---|---|---|
+| `event` | ✅ | `bot_start` \| `lesson_view` \| `lead` \| `phone_captured` \| `checkout_started` \| `call_booked` \| `call_done` \| `sale` |
+| `telegram_id` | ✅ | the person's Telegram user id (the identity anchor) |
+| `payload` | on `bot_start` | the raw `start` value, e.g. `cold_ad1234` → decodes to funnel=`cold`, ad=`1234`. (Or send `funnel=cold` explicitly.) |
+| `phone` | on `phone_captured`/`sale` | back-fills the person + becomes the amoCRM join key |
+| `full_name`, `telegram_username` | optional | |
+| `asset_key`, `watched_pct` | on `lesson_view` | ties to `marketing_assets`; watch-% powers VSL drop-off |
+| `amount_uzs` | on `sale` | cash collected |
+| `amocrm_lead_id`, `ad_id`, `campaign_id`, `utm_*`, `occurred_at`, `metadata` | optional | |
+
+**Example (the keystone call, fired the instant someone starts the bot):**
+```bash
+curl -X POST "$APP_URL/api/funnel/event" \
+  -H "content-type: application/json" \
+  -d '{"secret":"<SECRET>","event":"bot_start","telegram_id":"12345","payload":"cold_ad1234","telegram_username":"aziza"}'
+# → { ok:true, personId:"…", funnel:"cold", stageKey:"bot_start" }
+```
+
+What the endpoint does: resolves-or-creates the person by `telegram_id` (progressive identity), stamps funnel/ad from the payload, back-fills phone/CRM id when they arrive, records the event on the spine, and logs asset watch-%. A self-serve `sale` event therefore traces straight back to the `bot_start` ad.
+
+**Minimum to light up Funnel 1 today:** fire `bot_start` (with payload), `lesson_view`, and `sale`. Everything else is enrichment.
 
 ---
 
@@ -120,4 +161,4 @@ Tradeoff to accept: sending a bot user to a web page is a small click-out step. 
 - **DB types** updated in `src/types/database.ts`.
 - No app code, no bot code, no UI yet — this is the data foundation everything else reports on.
 
-**Next unblock:** confirm **B2** (does the bot read `start`?) and **F1** (content still current?), and I'll build Phase B (the keystone) so a real person flows cold-ad → bot → sale and shows up traced.
+**Update:** Phase B's **receiving side is now built** — `POST /api/funnel/event` + the `ingestFunnelEvent()` stitching service (see §8). The remaining step is on your **bot platform**: wire it to call that endpoint on `bot_start` / `lesson_view` / `sale`. Once it does, a real person flows cold-ad → bot → sale and shows up fully traced. Then Phase C (ad cost) and G (reporting UI) turn the raw events into CPL/CAC/ROAS charts.

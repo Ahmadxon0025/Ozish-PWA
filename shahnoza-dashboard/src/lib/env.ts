@@ -78,6 +78,9 @@ export const env = {
   // Telegram content channel to auto-capture posts + reactions from (the bot
   // must be an admin of this channel). Optional; capture no-ops without it.
   TELEGRAM_CONTENT_CHANNEL_ID: process.env.TELEGRAM_CONTENT_CHANNEL_ID ?? "",
+  // Shared secret the external funnel bot sends to POST /api/funnel/event.
+  // Ingestion no-ops (401) without it. Generate: openssl rand -hex 24
+  FUNNEL_INGEST_SECRET: process.env.FUNNEL_INGEST_SECRET ?? "",
 } as const;
 
 export const isSupabaseConfigured = () =>
@@ -92,6 +95,9 @@ export const isAmocrmConfigured = () =>
   Boolean(env.AMOCRM_SUBDOMAIN && env.AMOCRM_CLIENT_ID && env.AMOCRM_CLIENT_SECRET);
 
 export const isAiConfigured = () => Boolean(env.ANTHROPIC_API_KEY);
+
+/** Funnel-event ingestion endpoint. No-ops (401) without the shared secret. */
+export const isFunnelIngestConfigured = () => Boolean(env.FUNNEL_INGEST_SECRET);
 
 /** Instagram Graph API (reels insights). No-ops without token + IG user id. */
 export const isInstagramConfigured = () =>

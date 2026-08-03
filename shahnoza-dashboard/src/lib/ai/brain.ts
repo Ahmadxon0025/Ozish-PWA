@@ -5,6 +5,7 @@ import type { Database } from "@/types/database";
 import { env, isAiConfigured } from "@/lib/env";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { AI_MODEL } from "./claude";
+import { isAiUnavailableError, AI_UNAVAILABLE_UZ } from "./errors";
 import { monthRange, todayRange, yesterdayRange } from "@/lib/dates";
 import { computeCommissions } from "@/lib/business/commission";
 import { getCurrentRate } from "@/lib/business/exchange-rate";
@@ -405,13 +406,25 @@ export async function runBrain(
   let rounds = 0;
   for (let i = 0; i < MAX_ROUNDS; i++) {
     rounds++;
-    const resp = await client.messages.create({
-      model: AI_MODEL,
-      max_tokens: 1200,
-      system: SYSTEM(canWrite),
-      tools,
-      messages,
-    });
+    let resp: Anthropic.Message;
+    try {
+      resp = await client.messages.create({
+        model: AI_MODEL,
+        max_tokens: 1200,
+        system: SYSTEM(canWrite),
+        tools,
+        messages,
+      });
+    } catch (err) {
+      if (isAiUnavailableError(err)) {
+        console.error(
+          "brain AI unavailable:",
+          err instanceof Error ? err.message : err,
+        );
+        return { text: AI_UNAVAILABLE_UZ, rounds };
+      }
+      throw err;
+    }
     if (resp.stop_reason === "tool_use") {
       messages.push({ role: "assistant", content: resp.content });
       const results: Anthropic.ToolResultBlockParam[] = [];

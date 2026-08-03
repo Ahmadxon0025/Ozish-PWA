@@ -1,5 +1,6 @@
 import "server-only";
-import { AlfredChatService, type ConversationMessage } from "@/lib/alfred/chat-service";
+import { AlfredChatService, type ConversationMessage, type ChatResponse } from "@/lib/alfred/chat-service";
+import { safeAiMessage } from "@/lib/ai/errors";
 import { AlfredActionExecutor } from "@/lib/alfred/action-executor";
 import { buildWorkspaceContextForChat } from "@/lib/alfred/workspace-context";
 import { buildBusinessSnapshot } from "@/lib/alfred/workspace-data";
@@ -82,9 +83,17 @@ export async function runAlfredFromTelegram(opts: {
     : [];
 
   const chatService = new AlfredChatService();
-  const response = await chatService.chat(message, context, history, (name, input) =>
-    executeDataTool(db, name, input)
-  );
+  let response: ChatResponse;
+  try {
+    response = await chatService.chat(message, context, history, (name, input) =>
+      executeDataTool(db, name, input),
+    );
+  } catch (err) {
+    // Billing/quota/rate errors (and any AI failure) → friendly reply, not a
+    // raw provider error dumped into the chat.
+    console.error("Alfred (telegram) AI error:", err);
+    return { text: safeAiMessage(err), logIds: [] };
+  }
 
   // Persist the exchange (best-effort)
   const newMessages = [

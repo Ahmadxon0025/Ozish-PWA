@@ -1,6 +1,7 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { env, isAiConfigured, isServiceRoleConfigured } from "@/lib/env";
+import { normalizeAiError } from "./errors";
 
 // Model for all AI features. Haiku 4.5 is the cheapest tier and is plenty for
 // these short task-parsing / subtask / summary prompts. Swap to
@@ -70,6 +71,8 @@ export async function callStructured<T>(opts: {
     const parsed = JSON.parse(textOf(resp)) as T;
     ok = true;
     return parsed;
+  } catch (err) {
+    throw normalizeAiError(err);
   } finally {
     await logUsage(opts.feature, AI_MODEL, usage, opts.userId, ok);
   }
@@ -99,6 +102,8 @@ export async function callText(opts: {
     const text = textOf(resp);
     ok = true;
     return text;
+  } catch (err) {
+    throw normalizeAiError(err);
   } finally {
     await logUsage(opts.feature, AI_MODEL, usage, opts.userId, ok);
   }

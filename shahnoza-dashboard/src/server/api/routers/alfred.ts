@@ -403,10 +403,11 @@ export const alfredRouter = createTRPCRouter({
           stack: error instanceof Error ? error.stack : undefined,
           apiKeySet: !!process.env.ANTHROPIC_API_KEY,
         });
+        const { safeAiMessage } = await import("@/lib/ai/errors");
         return {
           success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
-          response: "Sorry, I encountered an error processing your message.",
+          error: safeAiMessage(error),
+          response: safeAiMessage(error),
         };
       }
     }),

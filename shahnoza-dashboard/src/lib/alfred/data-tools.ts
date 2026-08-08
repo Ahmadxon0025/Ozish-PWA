@@ -139,7 +139,7 @@ export const ALFRED_DATA_TOOLS: Anthropic.Tool[] = [
   {
     name: "export_telegram",
     description:
-      "Produce DOWNLOAD LINKS for a Telegram channel/group/bot's messages — use when the user asks to save/export/download/copy messages into a file or doc, or wants every message in a date range. Returns ready links (CSV, Word, and optionally a ZIP that also bundles posted photos/files). Does NOT load the messages into the reply, so it's cheap even for thousands of messages. Present the relevant link(s) to the user; they expire in 1 hour.",
+      "Produce DOWNLOAD LINKS that COPY a Telegram channel/group/bot's posts into a file — use when the user asks to save/export/download/copy posts into a file, doc, or PDF, or wants every post in a date range. Returns ready links: a PDF (each post's text with its PHOTOS EMBEDDED INLINE — a faithful copy, best for 'copy every post with its media'), plus Word and CSV. Set with_media:true to also get a ZIP that bundles the PDF + every raw photo/video/file posted. Does NOT load posts into the reply, so it's cheap even for thousands. Present the PDF link first (and the with_media ZIP if they wanted media); links expire in 1 hour.",
     input_schema: {
       type: "object",
       properties: {
@@ -495,16 +495,25 @@ export async function executeDataTool(
         if (!input?.target) return { error: "target kerak" };
         const { buildTelegramExportUrl } = await import("@/lib/telegram/reader-client");
         const range = { from: input?.from ?? null, to: input?.to ?? null };
-        const csv = buildTelegramExportUrl(String(input.target), { ...range, format: "csv" });
+        // pdf = faithful copy: every post's text with its photos embedded inline.
+        const pdf = buildTelegramExportUrl(String(input.target), { ...range, format: "pdf" });
         const word = buildTelegramExportUrl(String(input.target), { ...range, format: "rtf" });
-        if (!csv) return { error: "Telegram reader ulanmagan" };
+        const csv = buildTelegramExportUrl(String(input.target), { ...range, format: "csv" });
+        if (!pdf) return { error: "Telegram reader ulanmagan" };
+        // with_media → a ZIP bundling the PDF + every raw photo/video/file posted.
         const withMedia = input?.with_media
-          ? buildTelegramExportUrl(String(input.target), { ...range, format: "csv", media: true })
+          ? buildTelegramExportUrl(String(input.target), { ...range, format: "pdf", media: true })
           : null;
         return {
-          downloads: { csv, word, with_media: withMedia },
+          downloads: {
+            pdf, // recommend this for "copy every post with its images"
+            word,
+            csv,
+            with_media: withMedia,
+          },
           expires_in: "1 soat",
-          note: "Havolalar 1 soatdan keyin ishlamaydi — kerak bo'lsa qayta so'rang.",
+          note:
+            "PDF — har bir post matni + rasmlari ichida (aniq nusxa). with_media — PDF + barcha rasm/video/fayllar ZIP ichida. Havolalar 1 soatdan keyin ishlamaydi.",
         };
       }
 

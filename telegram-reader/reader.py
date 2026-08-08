@@ -201,6 +201,115 @@ def _render(msgs, fmt: str) -> tuple[bytes, str, str]:
     return ("\n".join(lines)).encode("utf-8"), "text/plain; charset=utf-8", "telegram_export.txt"
 
 
+# ------------------------ PDF (faithful copy w/ images) ---------------------
+
+DEJAVU_REG = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+DEJAVU_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+
+
+def _pdf_text(s: str, unicode_ok: bool) -> str:
+    """Guard the text for the active font. With the DejaVu unicode font we pass
+    text through untouched (Uzbek/Cyrillic render fine). Without it, drop to a
+    latin-1-safe fallback so a core font never raises on non-latin glyphs."""
+    s = s or ""
+    if unicode_ok:
+        return s
+    return s.encode("latin-1", "replace").decode("latin-1")
+
+
+def _normalize_jpeg(path: str, maxdim: int = 1400) -> str | None:
+    """Re-encode any downloaded image to a bounded RGB JPEG that fpdf embeds
+    cleanly (avoids CMYK/alpha/huge-file surprises). Returns the new path."""
+    try:
+        from PIL import Image
+
+        img = Image.open(path).convert("RGB")
+        if max(img.size) > maxdim:
+            r = maxdim / float(max(img.size))
+            img = img.resize((int(img.size[0] * r), int(img.size[1] * r)))
+        out = path + ".jpg"
+        img.save(out, format="JPEG", quality=82)
+        return out
+    except Exception:
+        return None
+
+
+async def _render_pdf(msgs, title: str | None) -> bytes:
+    """Build a single PDF that reproduces the channel: each post's date/sender +
+    text, with its photos embedded INLINE (a faithful copy). Non-image media
+    (video/file) is noted as a line. Chronological. Bounded by MAX_MEDIA_*."""
+    from fpdf import FPDF
+
+    pdf = FPDF(format="A4")
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.set_margins(15, 15, 15)
+    pdf.add_page()
+
+    unicode_ok = os.path.exists(DEJAVU_REG)
+    if unicode_ok:
+        pdf.add_font("DejaVu", "", DEJAVU_REG)
+        pdf.add_font("DejaVu", "B", DEJAVU_BOLD if os.path.exists(DEJAVU_BOLD) else DEJAVU_REG)
+        family = "DejaVu"
+    else:
+        family = "Helvetica"
+
+    usable = pdf.w - pdf.l_margin - pdf.r_margin
+
+    if title:
+        pdf.set_font(family, "B", 15)
+        pdf.multi_cell(usable, 8, _pdf_text(str(title), unicode_ok))
+        pdf.ln(2)
+
+    tmpdir = tempfile.mkdtemp()
+    imgs = 0
+    total = 0
+    try:
+        for m in msgs:
+            d = _to_dict(m)
+            pdf.set_font(family, "B", 10)
+            pdf.set_text_color(90, 90, 90)
+            head = f"[{d['date'][:16]}] {d['sender'] or ''}".strip()
+            pdf.multi_cell(usable, 5, _pdf_text(head, unicode_ok))
+            pdf.set_text_color(0, 0, 0)
+
+            if d["text"]:
+                pdf.set_font(family, "", 11)
+                pdf.multi_cell(usable, 6, _pdf_text(d["text"], unicode_ok))
+
+            if m.media:
+                is_img = bool(getattr(m, "photo", None)) or (
+                    getattr(m, "file", None)
+                    and (m.file.mime_type or "").startswith("image/")
+                )
+                if is_img and imgs < MAX_MEDIA_FILES and total < MAX_MEDIA_BYTES:
+                    try:
+                        raw = await client.download_media(m, file=os.path.join(tmpdir, str(m.id)))
+                        jpg = _normalize_jpeg(raw) if raw and os.path.exists(raw) else None
+                        if jpg:
+                            pdf.ln(1)
+                            pdf.image(jpg, w=min(usable, 120))  # keep within one page
+                            total += os.path.getsize(jpg)
+                            imgs += 1
+                        for p in (raw, jpg):
+                            if p and os.path.exists(p):
+                                os.remove(p)
+                    except Exception:
+                        pass
+                elif not is_img:
+                    label = getattr(getattr(m, "file", None), "name", None) or (
+                        type(m.media).__name__
+                    )
+                    pdf.set_font(family, "", 9)
+                    pdf.set_text_color(120, 120, 120)
+                    pdf.multi_cell(usable, 5, _pdf_text(f"[media: {label}]", unicode_ok))
+                    pdf.set_text_color(0, 0, 0)
+
+            pdf.ln(3)
+        return bytes(pdf.output())
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
 @app.get("/telegram/export")
 async def export(
     target: str = Query(...),
@@ -212,11 +321,48 @@ async def export(
     sig: str = Query(...),
 ):
     _verify(target, frm, to, fmt, media, exp, sig)
-    fmt = fmt if fmt in ("txt", "csv", "rtf", "json") else "csv"
+    fmt = fmt if fmt in ("txt", "csv", "rtf", "json", "pdf") else "csv"
     from_d = _parse_day(frm)
     to_d = _parse_day(to, end=True)
-    _, _title, msgs = await _fetch(target, from_d, to_d, MAX_MESSAGES)
+    _, title, msgs = await _fetch(target, from_d, to_d, MAX_MESSAGES)
     msgs = [m for m in msgs if (m.message or m.media)]
+
+    # PDF: a faithful copy — each post's text with its photos embedded inline.
+    if fmt == "pdf":
+        pdf_bytes = await _render_pdf(msgs, title)
+        if media != "1":
+            return Response(
+                content=pdf_bytes,
+                media_type="application/pdf",
+                headers={"Content-Disposition": 'attachment; filename="telegram_export.pdf"'},
+            )
+        # media=1 → ZIP: the PDF + every raw file (incl. videos/docs that can't embed)
+        import zipfile
+
+        tmpdir = tempfile.mkdtemp()
+        zip_path = os.path.join(tmpdir, "telegram_export.zip")
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
+            z.writestr("telegram_export.pdf", pdf_bytes)
+            count = 0
+            total = 0
+            for m in msgs:
+                if not m.media or count >= MAX_MEDIA_FILES or total >= MAX_MEDIA_BYTES:
+                    continue
+                try:
+                    path = await client.download_media(m, file=os.path.join(tmpdir, str(m.id)))
+                    if path and os.path.exists(path):
+                        z.write(path, arcname=f"media/{os.path.basename(path)}")
+                        total += os.path.getsize(path)
+                        count += 1
+                        os.remove(path)
+                except Exception:
+                    pass
+        return FileResponse(
+            zip_path,
+            filename="telegram_export.zip",
+            media_type="application/zip",
+            background=BackgroundTask(lambda: shutil.rmtree(tmpdir, ignore_errors=True)),
+        )
 
     if media != "1":
         content, mtype, fname = _render(msgs, fmt)

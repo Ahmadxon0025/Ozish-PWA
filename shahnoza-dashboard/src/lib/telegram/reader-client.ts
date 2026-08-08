@@ -141,7 +141,7 @@ export async function readTelegramImages(
   }
 }
 
-export type ExportFormat = "txt" | "csv" | "rtf" | "json";
+export type ExportFormat = "txt" | "csv" | "rtf" | "json" | "pdf";
 
 /**
  * Build a signed, self-contained download URL the user's BROWSER hits directly

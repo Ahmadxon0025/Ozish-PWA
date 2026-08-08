@@ -81,6 +81,11 @@ export const env = {
   // Shared secret the external funnel bot sends to POST /api/funnel/event.
   // Ingestion no-ops (401) without it. Generate: openssl rand -hex 24
   FUNNEL_INGEST_SECRET: process.env.FUNNEL_INGEST_SECRET ?? "",
+  // External MTProto reader service (Telethon/GramJS user session) that lets
+  // Alfred read arbitrary Telegram channels/groups/bots. Runs as a separate
+  // long-running service — NOT this serverless app. Reader no-ops without both.
+  TELEGRAM_READER_URL: process.env.TELEGRAM_READER_URL ?? "",
+  TELEGRAM_READER_SECRET: process.env.TELEGRAM_READER_SECRET ?? "",
 } as const;
 
 export const isSupabaseConfigured = () =>
@@ -98,6 +103,10 @@ export const isAiConfigured = () => Boolean(env.ANTHROPIC_API_KEY);
 
 /** Funnel-event ingestion endpoint. No-ops (401) without the shared secret. */
 export const isFunnelIngestConfigured = () => Boolean(env.FUNNEL_INGEST_SECRET);
+
+/** External Telegram reader (Alfred's read_telegram tool). No-ops without both. */
+export const isTelegramReaderConfigured = () =>
+  Boolean(env.TELEGRAM_READER_URL && env.TELEGRAM_READER_SECRET);
 
 /** Instagram Graph API (reels insights). No-ops without token + IG user id. */
 export const isInstagramConfigured = () =>

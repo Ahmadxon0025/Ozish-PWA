@@ -114,6 +114,26 @@ export const ALFRED_DATA_TOOLS: Anthropic.Tool[] = [
       "Per-person task counts: open tasks, done in the last 30 days. Use for workload and performance questions.",
     input_schema: { type: "object", properties: {} },
   },
+  {
+    name: "read_telegram",
+    description:
+      "Read recent messages from a Telegram channel, group, or bot chat so you can summarize or analyze it (e.g. a competitor's channel or bot, a news channel, your own channels). Use whenever the user asks to analyze/summarize/check/compare a Telegram channel or bot. Pass its @username, a t.me/... link, or a numeric chat id. Returns the latest messages as text — then summarize what matters. Read-only.",
+    input_schema: {
+      type: "object",
+      properties: {
+        target: {
+          type: "string",
+          description:
+            "The channel/group/bot to read: @username, a t.me/... link, or a numeric chat id.",
+        },
+        limit: {
+          type: "number",
+          description: "How many recent messages to read (default 30, max 100).",
+        },
+      },
+      required: ["target"],
+    },
+  },
 ];
 
 function cap(limit: unknown, def = 30): number {
@@ -408,6 +428,23 @@ export async function executeDataTool(
             open_tasks: openCount.get(u.id) ?? 0,
             done_last_30d: doneCount.get(u.id) ?? 0,
           })),
+        };
+      }
+
+      case "read_telegram": {
+        if (!input?.target) {
+          return { error: "target kerak (kanal @username, t.me havolasi yoki id)" };
+        }
+        const { readTelegramMessages } = await import("@/lib/telegram/reader-client");
+        const res = await readTelegramMessages(
+          String(input.target),
+          Number(input?.limit) || 30,
+        );
+        if (!res.ok) return { error: res.error ?? "Telegramdan o'qib bo'lmadi" };
+        return {
+          title: res.title ?? null,
+          count: res.messages?.length ?? 0,
+          messages: res.messages ?? [],
         };
       }
 

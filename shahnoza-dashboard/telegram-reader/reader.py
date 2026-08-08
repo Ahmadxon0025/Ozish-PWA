@@ -310,6 +310,131 @@ async def _render_pdf(msgs, title: str | None) -> bytes:
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 
+# ------------------ HTML (looks like an exported Telegram chat) --------------
+
+_TG_MONTHS = [
+    "", "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+]
+
+_HTML_HEAD = """<!doctype html><html><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>{{TITLE}}</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; background:#0e1621;
+    font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; color:#e9edf0; }
+  .chat { max-width:640px; margin:0 auto; padding:16px 12px 48px; }
+  .title { text-align:center; color:#7d8e9e; font-weight:600; padding:8px 0 18px; font-size:16px; }
+  .daysep { text-align:center; margin:16px 0 10px; }
+  .daysep span { background:rgba(0,0,0,.35); color:#c9d6e2; font-size:13px; padding:4px 12px; border-radius:12px; }
+  .msg { display:flex; flex-direction:column; align-items:flex-start; margin:3px 0; }
+  .bubble { background:#182533; border-radius:12px; padding:8px 10px 6px; max-width:480px;
+    box-shadow:0 1px 1px rgba(0,0,0,.2); overflow:hidden; }
+  .text { white-space:pre-wrap; overflow-wrap:anywhere; font-size:15px; line-height:1.35; }
+  .text a { color:#62bcf9; }
+  .text b, .text strong { font-weight:700; }
+  .text blockquote { border-left:3px solid #62bcf9; margin:6px 0; padding:2px 0 2px 10px; color:#cdd8e2; }
+  .text code, .text pre { background:rgba(0,0,0,.3); border-radius:4px; padding:0 4px; font-family:monospace; }
+  .photo { display:block; max-width:480px; width:100%; border-radius:10px; margin-bottom:6px; }
+  .media { background:rgba(255,255,255,.06); border-radius:8px; padding:10px; margin-bottom:6px;
+    color:#c9d6e2; font-size:14px; }
+  .time { text-align:right; color:#6d7d8c; font-size:12px; margin-top:2px; }
+  .buttons { max-width:480px; margin:2px 0 8px; display:flex; flex-direction:column; gap:2px; }
+  .brow { display:flex; gap:2px; }
+  .btn { flex:1; text-align:center; background:rgba(24,37,51,.9); color:#62bcf9; text-decoration:none;
+    padding:9px 8px; border-radius:8px; font-size:14px; font-weight:500;
+    border:1px solid rgba(98,188,249,.18); }
+</style></head><body><div class="chat">"""
+
+
+async def _render_html(msgs, title: str | None) -> bytes:
+    """Reproduce the chat as a Telegram-styled HTML page: bubbles, inline photos,
+    real inline buttons, bold/links/quotes (via entities), and day separators."""
+    import html as _h
+    from telethon.extensions import html as tg_html
+
+    def esc(s: object) -> str:
+        return _h.escape(str(s) if s is not None else "")
+
+    parts = [_HTML_HEAD.replace("{{TITLE}}", esc(title or "Telegram"))]
+    if title:
+        parts.append(f'<div class="title">{esc(title)}</div>')
+
+    tmpdir = tempfile.mkdtemp()
+    imgs = 0
+    total = 0
+    last_day = None
+    try:
+        for m in msgs:
+            if m.date:
+                dkey = m.date.strftime("%Y-%m-%d")
+                if dkey != last_day:
+                    last_day = dkey
+                    sep = f"{_TG_MONTHS[m.date.month]} {m.date.day}"
+                    parts.append(f'<div class="daysep"><span>{esc(sep)}</span></div>')
+
+            try:
+                body = tg_html.unparse(m.message or "", m.entities or [])
+            except Exception:
+                body = esc(m.message or "")
+
+            media_html = ""
+            if m.media and imgs < MAX_MEDIA_FILES and total < MAX_MEDIA_BYTES:
+                is_img = bool(getattr(m, "photo", None)) or (
+                    getattr(m, "file", None)
+                    and (m.file.mime_type or "").startswith("image/")
+                )
+                if is_img:
+                    try:
+                        raw = await client.download_media(m, file=os.path.join(tmpdir, str(m.id)))
+                        if raw and os.path.exists(raw):
+                            enc = _resize_b64(raw)
+                            if enc:
+                                data, mt = enc
+                                media_html = f'<img class="photo" src="data:{mt};base64,{data}"/>'
+                                total += os.path.getsize(raw)
+                                imgs += 1
+                            os.remove(raw)
+                    except Exception:
+                        pass
+                else:
+                    label = getattr(getattr(m, "file", None), "name", None) or type(m.media).__name__
+                    media_html = f'<div class="media">📎 {esc(label)}</div>'
+
+            time_s = m.date.strftime("%H:%M") if m.date else ""
+            bubble = '<div class="bubble">' + media_html
+            if body.strip():
+                bubble += f'<div class="text">{body}</div>'
+            bubble += f'<div class="time">{esc(time_s)}</div></div>'
+
+            btn_html = ""
+            try:
+                rows = m.buttons or []
+            except Exception:
+                rows = []
+            if rows:
+                brows = []
+                for row in rows:
+                    cells = []
+                    for b in row:
+                        label = esc(getattr(b, "text", "") or "")
+                        url = getattr(b, "url", None)
+                        if url:
+                            cells.append(f'<a class="btn" href="{esc(url)}" target="_blank" rel="noopener">{label}</a>')
+                        else:
+                            cells.append(f'<div class="btn">{label}</div>')
+                    brows.append('<div class="brow">' + "".join(cells) + "</div>")
+                btn_html = '<div class="buttons">' + "".join(brows) + "</div>"
+
+            parts.append(f'<div class="msg">{bubble}{btn_html}</div>')
+
+        parts.append("</div></body></html>")
+        return "".join(parts).encode("utf-8")
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
 @app.get("/telegram/export")
 async def export(
     target: str = Query(...),
@@ -321,28 +446,35 @@ async def export(
     sig: str = Query(...),
 ):
     _verify(target, frm, to, fmt, media, exp, sig)
-    fmt = fmt if fmt in ("txt", "csv", "rtf", "json", "pdf") else "csv"
+    fmt = fmt if fmt in ("txt", "csv", "rtf", "json", "pdf", "html") else "csv"
     from_d = _parse_day(frm)
     to_d = _parse_day(to, end=True)
     _, title, msgs = await _fetch(target, from_d, to_d, MAX_MESSAGES)
     msgs = [m for m in msgs if (m.message or m.media)]
 
-    # PDF: a faithful copy — each post's text with its photos embedded inline.
-    if fmt == "pdf":
-        pdf_bytes = await _render_pdf(msgs, title)
+    # Rich formats reproduce the chat with inline media:
+    #   html = styled like an exported Telegram chat (bubbles, buttons, photos)
+    #   pdf  = a print-friendly document with photos inline
+    if fmt in ("html", "pdf"):
+        if fmt == "html":
+            rendered = await _render_html(msgs, title)
+            rtype, rname = "text/html; charset=utf-8", "telegram_export.html"
+        else:
+            rendered = await _render_pdf(msgs, title)
+            rtype, rname = "application/pdf", "telegram_export.pdf"
         if media != "1":
             return Response(
-                content=pdf_bytes,
-                media_type="application/pdf",
-                headers={"Content-Disposition": 'attachment; filename="telegram_export.pdf"'},
+                content=rendered,
+                media_type=rtype,
+                headers={"Content-Disposition": f'attachment; filename="{rname}"'},
             )
-        # media=1 → ZIP: the PDF + every raw file (incl. videos/docs that can't embed)
+        # media=1 → ZIP: the rendered file + every raw file (incl. videos/docs)
         import zipfile
 
         tmpdir = tempfile.mkdtemp()
         zip_path = os.path.join(tmpdir, "telegram_export.zip")
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
-            z.writestr("telegram_export.pdf", pdf_bytes)
+            z.writestr(rname, rendered)
             count = 0
             total = 0
             for m in msgs:

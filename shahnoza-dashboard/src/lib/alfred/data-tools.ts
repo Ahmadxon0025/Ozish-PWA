@@ -139,7 +139,7 @@ export const ALFRED_DATA_TOOLS: Anthropic.Tool[] = [
   {
     name: "export_telegram",
     description:
-      "Produce DOWNLOAD LINKS that COPY a Telegram channel/group/bot's posts into a file — use when the user asks to save/export/download/copy posts into a file, doc, or PDF, or wants every post in a date range. Returns ready links: a PDF (each post's text with its PHOTOS EMBEDDED INLINE — a faithful copy, best for 'copy every post with its media'), plus Word and CSV. Set with_media:true to also get a ZIP that bundles the PDF + every raw photo/video/file posted. Does NOT load posts into the reply, so it's cheap even for thousands. Present the PDF link first (and the with_media ZIP if they wanted media); links expire in 1 hour.",
+      "Produce DOWNLOAD LINKS that COPY a Telegram channel/group/bot's posts into a file — use when the user asks to save/export/download/copy posts into a file, doc, or PDF, or wants it to LOOK LIKE Telegram, or wants every post in a date range. Returns ready links: telegram_view (an HTML page that looks EXACTLY like the Telegram chat — bubbles, inline photos, buttons, bold/quotes; opens in a browser — RECOMMEND THIS FIRST), plus PDF (print-friendly doc with photos inline), Word, and CSV. Set with_media:true to also get a ZIP that bundles the Telegram-styled page + every raw photo/video/file posted. Does NOT load posts into the reply, so it's cheap even for thousands. Present telegram_view first (and the with_media ZIP if they wanted media); links expire in 1 hour.",
     input_schema: {
       type: "object",
       properties: {
@@ -495,25 +495,29 @@ export async function executeDataTool(
         if (!input?.target) return { error: "target kerak" };
         const { buildTelegramExportUrl } = await import("@/lib/telegram/reader-client");
         const range = { from: input?.from ?? null, to: input?.to ?? null };
-        // pdf = faithful copy: every post's text with its photos embedded inline.
+        // html = looks exactly like the Telegram chat (bubbles, inline photos,
+        // buttons, bold/quotes) — the recommended, most faithful export.
+        const telegram_view = buildTelegramExportUrl(String(input.target), { ...range, format: "html" });
+        // pdf = print-friendly document with photos inline.
         const pdf = buildTelegramExportUrl(String(input.target), { ...range, format: "pdf" });
         const word = buildTelegramExportUrl(String(input.target), { ...range, format: "rtf" });
         const csv = buildTelegramExportUrl(String(input.target), { ...range, format: "csv" });
-        if (!pdf) return { error: "Telegram reader ulanmagan" };
-        // with_media → a ZIP bundling the PDF + every raw photo/video/file posted.
+        if (!telegram_view) return { error: "Telegram reader ulanmagan" };
+        // with_media → a ZIP bundling the styled HTML + every raw photo/video/file.
         const withMedia = input?.with_media
-          ? buildTelegramExportUrl(String(input.target), { ...range, format: "pdf", media: true })
+          ? buildTelegramExportUrl(String(input.target), { ...range, format: "html", media: true })
           : null;
         return {
           downloads: {
-            pdf, // recommend this for "copy every post with its images"
+            telegram_view, // RECOMMEND FIRST: opens looking just like Telegram
+            pdf,
             word,
             csv,
             with_media: withMedia,
           },
           expires_in: "1 soat",
           note:
-            "PDF — har bir post matni + rasmlari ichida (aniq nusxa). with_media — PDF + barcha rasm/video/fayllar ZIP ichida. Havolalar 1 soatdan keyin ishlamaydi.",
+            "telegram_view — Telegram ko'rinishida (rasm, tugma, bold hammasi joyida; brauzerda ochiladi). PDF — chop etish uchun hujjat. with_media — Telegram ko'rinishi + barcha rasm/video/fayllar ZIP ichida. Havolalar 1 soatdan keyin ishlamaydi.",
         };
       }
 

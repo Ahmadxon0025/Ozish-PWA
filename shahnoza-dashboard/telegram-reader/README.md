@@ -31,7 +31,8 @@ copy **`api_id`** (a number) and **`api_hash`** (a long string). Keep them secre
 Railway is the easiest (Render works the same way; both ~$5/mo, small free trial):
 
 1. Go to https://railway.app → **New Project → Deploy from GitHub repo** → pick
-   **`Ozish-PWA`**.
+   the **deploy repo `shahnoza-dashboard`** (this folder is mirrored there from
+   the dashboard's `telegram-reader/` on every push).
 2. In the service **Settings → Root Directory**, set it to **`telegram-reader`**
    (so it deploys *this* folder, not the whole repo). It auto-detects the
    Dockerfile.

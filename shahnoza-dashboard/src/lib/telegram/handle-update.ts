@@ -1277,6 +1277,51 @@ export async function handleTelegramUpdate(update: unknown): Promise<void> {
     chatType === "private" ||
     ((chatType === "group" || chatType === "supergroup") &&
       !financeSide.has(String(chatId)));
+  // --- Natural Telegram read/export (no "alfred" prefix needed) ---------------
+  // A Telegram @target / t.me link + a read-or-export verb (tahlil, o'qi,
+  // ko'chir, eksport, yuklab…) means "analyze/copy this channel", NOT a to-do.
+  // Route it to the Alfred agent (which has read_telegram/export_telegram)
+  // instead of letting the task parser turn it into a task.
+  if (
+    isAiConfigured() &&
+    captureChat &&
+    !msg.reply_to_message &&
+    !msg.from?.is_bot &&
+    !text.startsWith("/") &&
+    (/@[A-Za-z][A-Za-z0-9_]{3,}\b/.test(text) || /t\.me\/\S+/i.test(text)) &&
+    (/(tahlil|eksport|export|yuklab|skachat|download)/i.test(text) ||
+      /o['’ʻ`]?q(i|ib|ing)\b/i.test(text) ||
+      /ko['’ʻ`]?chir/i.test(text))
+  ) {
+    try {
+      const { runAlfredFromTelegram } = await import("@/lib/alfred/telegram-bridge");
+      const result = await runAlfredFromTelegram({
+        db,
+        telegramUserId: fromId,
+        chatId,
+        message: text,
+      });
+      const confirmId = await sendMessage(chatId, result.text, {
+        replyToMessageId: msg.message_id,
+      });
+      if (confirmId && result.logIds.length > 0) {
+        await db
+          .from("alfred_action_log")
+          .update({
+            telegram_chat_id: String(chatId),
+            telegram_confirm_message_id: String(confirmId),
+          })
+          .in("id", result.logIds);
+      }
+    } catch (error) {
+      console.error("Alfred telegram (tg auto-route) error:", error);
+      await sendMessage(chatId, "❌ Alfred xatoga uchradi. Keyinroq urinib ko'ring.", {
+        replyToMessageId: msg.message_id,
+      });
+    }
+    return;
+  }
+
   if (
     isAiConfigured() &&
     captureChat &&

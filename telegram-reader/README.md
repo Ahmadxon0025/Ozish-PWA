@@ -13,6 +13,11 @@ Alfred (dashboard, Vercel)  ──POST /telegram/read──▶  this service (al
 
 You do **4 things**: get 2 credentials → deploy → log in once → paste 2 values into the dashboard. ~15 minutes, no coding.
 
+**What Alfred can do once this is live:**
+- *Read/analyze* a channel/group/bot — summarize, compare, extract offers/prices (`read_telegram`, optional `from`/`to` dates).
+- *Export/download* messages to a file — **CSV, Word (.rtf), or JSON**, any date range, delivered as a 1-hour signed download link (`export_telegram`). The browser downloads **straight from this service**, so big exports skip the dashboard's serverless limits.
+- *Download posted media* — add `with_media` and the export is a **ZIP** bundling the text file + the photos/files posted (capped at 500 files / 200 MB per export).
+
 ---
 
 ## Step 1 — Get your Telegram API credentials (2 min)

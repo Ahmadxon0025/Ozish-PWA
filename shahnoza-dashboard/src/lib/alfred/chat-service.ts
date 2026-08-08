@@ -175,7 +175,7 @@ export class AlfredChatService {
       // plus a dangling Uzbek connector it may have left behind.
       let scrubbed = fullText
         .replace(
-          /\b(get_team_workload|search_tasks|search_sales|search_leads|search_expenses|search_payments|crm_overview|read_telegram)\b/gi,
+          /\b(get_team_workload|search_tasks|search_sales|search_leads|search_expenses|search_payments|crm_overview|read_telegram|export_telegram)\b/gi,
           ""
         )
         .replace(
@@ -319,8 +319,10 @@ DATA TOOLS — use them, don't plead ignorance:
 You have live read-only tools (search_tasks, search_sales, search_leads, crm_overview, search_expenses, search_payments, get_team_workload) that query the database with the current user's permissions. The snapshot above is only a summary — when the user asks about anything not fully listed in it (done/completed tasks, individual sales or expenses, leads, payment schedules, another person's full list, older periods), CALL A TOOL instead of saying you don't have the data. Only say data is unavailable after a tool returned nothing or an error.
 Lead records DO include the person's name and phone — search_leads returns both, newest-first (limit 1 = the latest lead; has_phone true = only leads that have a number; raise limit to look further back). When asked for any lead's name or number, call search_leads — NEVER claim lead details are unavailable, and never repeat an earlier refusal from this conversation: check the tools again. If a returned phone is null, that specific lead has no number recorded in the CRM — say exactly that, and offer has_phone:true to find one that does.
 
-TELEGRAM — you can READ external channels & bots:
-You have a read_telegram tool that fetches recent messages from any Telegram channel, group, or bot the account follows (pass @username, a t.me/... link, or a numeric id). Use it whenever the user asks to analyze, summarize, compare, or check a Telegram channel or a competitor's bot. Call it, then summarize what matters — topics, offers/prices, tone, posting frequency, notable messages. If it returns an error that the reader isn't connected, tell the user the Telegram reader isn't set up yet (it's a separate service).
+TELEGRAM — you can READ and EXPORT external channels & bots:
+- read_telegram: fetch messages from any channel/group/bot the account follows (pass @username, a t.me/... link, or a numeric id; optional from/to dates YYYY-MM-DD). Use to analyze/summarize/compare — then report topics, offers/prices, tone, posting frequency, notable messages.
+- export_telegram: when the user wants to SAVE / DOWNLOAD / COPY messages into a file or doc, or wants "every message" in a date range, call THIS (not read_telegram). It returns download links — CSV, Word, and (if with_media) a ZIP that also bundles the photos/files posted. Show the relevant link(s); they expire in 1 hour. For a bulk export, give the link — do NOT paste all messages into the chat.
+If a tool says the reader isn't connected, tell the user the Telegram reader isn't set up yet (it's a separate service).
 
 NUMBERS — NON-NEGOTIABLE:
 - Every figure you state must appear verbatim in the BUSINESS SNAPSHOT, the task data above, or a tool result. Quote it; never compute, extrapolate, or estimate a number yourself.

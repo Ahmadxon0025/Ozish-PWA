@@ -117,7 +117,7 @@ export const ALFRED_DATA_TOOLS: Anthropic.Tool[] = [
   {
     name: "read_telegram",
     description:
-      "Read recent messages from a Telegram channel, group, or bot chat so you can summarize or analyze it (e.g. a competitor's channel or bot, a news channel, your own channels). Use whenever the user asks to analyze/summarize/check/compare a Telegram channel or bot. Pass its @username, a t.me/... link, or a numeric chat id. Returns the latest messages as text — then summarize what matters. Read-only.",
+      "Read messages from a Telegram channel, group, or bot chat so you can summarize or analyze it (e.g. a competitor's channel or bot, a news channel, your own channels). Use whenever the user asks to analyze/summarize/check/compare a Telegram channel or bot. Pass its @username, a t.me/... link, or a numeric chat id. Returns messages (newest span) as text — then summarize what matters. For a date range use from/to. Read-only. NOTE: for DOWNLOADING/EXPORTING many messages to a file, use export_telegram instead (this tool loads messages into the reply and is for analysis, not bulk export).",
     input_schema: {
       type: "object",
       properties: {
@@ -128,7 +128,31 @@ export const ALFRED_DATA_TOOLS: Anthropic.Tool[] = [
         },
         limit: {
           type: "number",
-          description: "How many recent messages to read (default 30, max 100).",
+          description: "How many messages to read (default 30, max 200 for analysis).",
+        },
+        from: { type: "string", description: "Only messages on/after this date (YYYY-MM-DD)." },
+        to: { type: "string", description: "Only messages on/before this date (YYYY-MM-DD)." },
+      },
+      required: ["target"],
+    },
+  },
+  {
+    name: "export_telegram",
+    description:
+      "Produce DOWNLOAD LINKS for a Telegram channel/group/bot's messages — use when the user asks to save/export/download/copy messages into a file or doc, or wants every message in a date range. Returns ready links (CSV, Word, and optionally a ZIP that also bundles posted photos/files). Does NOT load the messages into the reply, so it's cheap even for thousands of messages. Present the relevant link(s) to the user; they expire in 1 hour.",
+    input_schema: {
+      type: "object",
+      properties: {
+        target: {
+          type: "string",
+          description: "The channel/group/bot: @username, t.me/... link, or numeric id.",
+        },
+        from: { type: "string", description: "Start date (YYYY-MM-DD), optional." },
+        to: { type: "string", description: "End date (YYYY-MM-DD), optional." },
+        with_media: {
+          type: "boolean",
+          description:
+            "true = also download photos/files posted in the messages, delivered as a ZIP.",
         },
       },
       required: ["target"],
@@ -436,15 +460,33 @@ export async function executeDataTool(
           return { error: "target kerak (kanal @username, t.me havolasi yoki id)" };
         }
         const { readTelegramMessages } = await import("@/lib/telegram/reader-client");
-        const res = await readTelegramMessages(
-          String(input.target),
-          Number(input?.limit) || 30,
-        );
+        const res = await readTelegramMessages(String(input.target), {
+          limit: Math.min(Number(input?.limit) || 30, 200),
+          from: input?.from ?? null,
+          to: input?.to ?? null,
+        });
         if (!res.ok) return { error: res.error ?? "Telegramdan o'qib bo'lmadi" };
         return {
           title: res.title ?? null,
           count: res.messages?.length ?? 0,
           messages: res.messages ?? [],
+        };
+      }
+
+      case "export_telegram": {
+        if (!input?.target) return { error: "target kerak" };
+        const { buildTelegramExportUrl } = await import("@/lib/telegram/reader-client");
+        const range = { from: input?.from ?? null, to: input?.to ?? null };
+        const csv = buildTelegramExportUrl(String(input.target), { ...range, format: "csv" });
+        const word = buildTelegramExportUrl(String(input.target), { ...range, format: "rtf" });
+        if (!csv) return { error: "Telegram reader ulanmagan" };
+        const withMedia = input?.with_media
+          ? buildTelegramExportUrl(String(input.target), { ...range, format: "csv", media: true })
+          : null;
+        return {
+          downloads: { csv, word, with_media: withMedia },
+          expires_in: "1 soat",
+          note: "Havolalar 1 soatdan keyin ishlamaydi — kerak bo'lsa qayta so'rang.",
         };
       }
 

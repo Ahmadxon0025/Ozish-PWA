@@ -1,11 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Filter, TrendingUp, Users, DollarSign, Info } from "lucide-react";
+import { Filter, TrendingUp, Users, DollarSign, Info, Plus, Trash2 } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
@@ -14,6 +17,17 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogTrigger,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+} from "@/components/ui/dialog";
+import { toast } from "@/hooks/use-toast";
 
 const PERIODS = [
   { value: "7", label: "7 kun" },
@@ -127,8 +141,132 @@ function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; va
   );
 }
 
+const tashkentToday = () =>
+  new Date(Date.now() + 5 * 3600 * 1000).toISOString().slice(0, 10);
+
+/** Manual ad-spend entry (Phase C default) — lights up CPL / ROAS / cost-per-buyer. */
+function SpendDialog({ onSaved }: { onSaved: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [funnelKey, setFunnelKey] = useState<"cold" | "warm" | "hot">("cold");
+  const [date, setDate] = useState(tashkentToday());
+  const [amount, setAmount] = useState("");
+  const add = api.marketing.addSpend.useMutation({
+    onSuccess: () => {
+      toast({ title: "Sarf saqlandi", variant: "success" });
+      setAmount("");
+      onSaved();
+      setOpen(false);
+    },
+    onError: (e) => toast({ title: "Xato", description: e.message, variant: "destructive" }),
+  });
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline">
+          <Plus className="h-4 w-4" /> Reklama sarfi
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Reklama sarfini kiritish</DialogTitle>
+          <DialogDescription>
+            Voronka bo&apos;yicha sarf (so&apos;m). Xuddi shu voronka + sana qayta kiritilsa,
+            eskisi almashtiriladi (ikki marta hisoblanmaydi).
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label>Voronka</Label>
+            <Select value={funnelKey} onValueChange={(v) => setFunnelKey(v as "cold" | "warm" | "hot")}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="cold">Cold — self-serve</SelectItem>
+                <SelectItem value="warm">Warm — self-serve</SelectItem>
+                <SelectItem value="hot">Hot — sales call</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Sana</Label>
+              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Sarf (so&apos;m)</Label>
+              <Input
+                type="number"
+                inputMode="numeric"
+                min="0"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="masalan 500000"
+              />
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button variant="ghost">Bekor</Button>
+          </DialogClose>
+          <Button
+            disabled={!amount || add.isPending}
+            onClick={() =>
+              add.mutate({ funnelKey, date, amountUzs: Number(amount) })
+            }
+          >
+            {add.isPending ? "Saqlanmoqda…" : "Saqlash"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Editable list of recent spend entries (delete to correct mistakes). */
+function RecentSpend() {
+  const utils = api.useUtils();
+  const q = api.marketing.recentSpend.useQuery();
+  const del = api.marketing.deleteSpend.useMutation({
+    onSuccess: () => {
+      utils.marketing.recentSpend.invalidate();
+      utils.marketing.funnelReport.invalidate();
+    },
+    onError: (e) => toast({ title: "Xato", description: e.message, variant: "destructive" }),
+  });
+  const rows = q.data ?? [];
+  if (rows.length === 0) return null;
+  return (
+    <Card>
+      <CardContent className="p-5">
+        <h3 className="mb-3 text-sm font-semibold">Reklama sarfi — oxirgi yozuvlar</h3>
+        <div className="space-y-1">
+          {rows.map((r) => (
+            <div key={r.id} className="flex items-center gap-3 text-sm">
+              <span className="w-24 shrink-0 text-muted-foreground">{r.date}</span>
+              <span className="min-w-0 flex-1 truncate">{r.funnel}</span>
+              <span className="font-medium">
+                {Math.round(r.spendUzs).toLocaleString("ru-RU")} so&apos;m
+              </span>
+              <button
+                onClick={() => del.mutate({ id: r.id })}
+                className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-destructive"
+                aria-label="O'chirish"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function FunnelsPage() {
   const [days, setDays] = useState("30");
+  const utils = api.useUtils();
   const report = useReport(Number(days));
   const data = report.data;
   const empty = data && data.totalEvents === 0;
@@ -139,18 +277,21 @@ export default function FunnelsPage() {
         title="Voronkalar"
         description="Har bir voronka bo'yicha bosqichma-bosqich yo'qotish, xaridor va daromad — hodisalar botdan kelib to'ladi."
         actions={
-          <Select value={days} onValueChange={setDays}>
-            <SelectTrigger className="w-32">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {PERIODS.map((p) => (
-                <SelectItem key={p.value} value={p.value}>
-                  {p.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2">
+            <SpendDialog onSaved={() => utils.marketing.funnelReport.invalidate()} />
+            <Select value={days} onValueChange={setDays}>
+              <SelectTrigger className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PERIODS.map((p) => (
+                  <SelectItem key={p.value} value={p.value}>
+                    {p.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         }
       />
 
@@ -182,6 +323,7 @@ export default function FunnelsPage() {
           {(data?.funnels ?? []).map((f) => (
             <FunnelCard key={f.key} f={f} />
           ))}
+          <RecentSpend />
         </div>
       )}
     </div>

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, roleProcedure } from "@/server/api/trpc";
 
 // Funnel + cost data is manager/owner territory (ROAS touches spend).
@@ -111,5 +112,81 @@ export const marketingRouter = createTRPCRouter({
         funnels: out,
         totalEvents: (events ?? []).length,
       };
+    }),
+
+  /**
+   * Record ad spend for a funnel on a date (manual entry — the Phase C default;
+   * Meta API sync can populate the same table later). Idempotent per
+   * funnel+date for manual rows: re-entering a day replaces it, never
+   * double-counts. Turns on the CPL / cost-per-buyer / ROAS metrics.
+   */
+  addSpend: managerProcedure
+    .input(
+      z.object({
+        funnelKey: z.enum(["cold", "warm", "hot"]),
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        amountUzs: z.number().nonnegative(),
+        amountUsd: z.number().nonnegative().optional(),
+        impressions: z.number().int().nonnegative().optional(),
+        clicks: z.number().int().nonnegative().optional(),
+        leads: z.number().int().nonnegative().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { data: f } = await ctx.supabase
+        .from("funnels")
+        .select("id")
+        .eq("key", input.funnelKey)
+        .maybeSingle();
+      if (!f) throw new TRPCError({ code: "BAD_REQUEST", message: "Voronka topilmadi" });
+      // Replace any existing MANUAL row (ad_entity_id null) for this funnel+date.
+      await ctx.supabase
+        .from("ad_spend_daily")
+        .delete()
+        .eq("funnel_id", f.id)
+        .is("ad_entity_id", null)
+        .eq("date", input.date);
+      const { error } = await ctx.supabase.from("ad_spend_daily").insert({
+        funnel_id: f.id,
+        ad_entity_id: null,
+        date: input.date,
+        spend_uzs: input.amountUzs,
+        spend_usd: input.amountUsd ?? null,
+        impressions: input.impressions ?? null,
+        clicks: input.clicks ?? null,
+        leads: input.leads ?? null,
+        source: "manual",
+      });
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      return { ok: true };
+    }),
+
+  /** Recent manual spend rows, for the editable list under the funnels. */
+  recentSpend: managerProcedure.query(async ({ ctx }) => {
+    const [{ data: rows }, { data: funnels }] = await Promise.all([
+      ctx.supabase
+        .from("ad_spend_daily")
+        .select("id, funnel_id, date, spend_uzs, source")
+        .order("date", { ascending: false })
+        .limit(40),
+      ctx.supabase.from("funnels").select("id, name"),
+    ]);
+    const nameById = new Map((funnels ?? []).map((f) => [f.id, f.name]));
+    return (rows ?? []).map((r) => ({
+      id: r.id,
+      date: r.date,
+      funnel: r.funnel_id ? nameById.get(r.funnel_id) ?? "—" : "—",
+      spendUzs: Number(r.spend_uzs ?? 0),
+      source: r.source ?? "manual",
+    }));
+  }),
+
+  /** Remove a spend row. */
+  deleteSpend: managerProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const { error } = await ctx.supabase.from("ad_spend_daily").delete().eq("id", input.id);
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      return { ok: true };
     }),
 });

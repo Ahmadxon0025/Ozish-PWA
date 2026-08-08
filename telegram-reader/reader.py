@@ -36,10 +36,10 @@ from pydantic import BaseModel
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 
-API_ID = int(os.environ["TELEGRAM_API_ID"])
-API_HASH = os.environ["TELEGRAM_API_HASH"]
-SESSION = os.environ["TELEGRAM_SESSION_STRING"]
-SECRET = os.environ["TELEGRAM_READER_SECRET"]
+API_ID = int(os.environ.get("TELEGRAM_API_ID") or "0")
+API_HASH = os.environ.get("TELEGRAM_API_HASH", "")
+SESSION = os.environ.get("TELEGRAM_SESSION_STRING", "")
+SECRET = os.environ.get("TELEGRAM_READER_SECRET", "")
 
 # Safety caps so one export can't run away (flood limits / memory / disk).
 MAX_MESSAGES = 5000
@@ -114,9 +114,15 @@ def _to_dict(m) -> dict:
 
 @app.on_event("startup")
 async def _startup() -> None:
-    await client.connect()
-    if not await client.is_user_authorized():
-        print("WARNING: session not authorized — re-run make_session.py.")
+    # Boot even if not fully configured (health stays up + Railway shell is
+    # reachable to run make_session.py). Reads just fail until env is set.
+    try:
+        await client.connect()
+        if not await client.is_user_authorized():
+            print("WARNING: session not set/authorized — run make_session.py "
+                  "and set TELEGRAM_SESSION_STRING.")
+    except Exception as e:  # noqa: BLE001
+        print(f"startup connect failed (set the env vars): {e}")
 
 
 @app.get("/")

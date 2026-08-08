@@ -175,7 +175,7 @@ export class AlfredChatService {
       // plus a dangling Uzbek connector it may have left behind.
       let scrubbed = fullText
         .replace(
-          /\b(get_team_workload|search_tasks|search_sales|search_leads|search_expenses|search_payments|crm_overview|read_telegram|export_telegram)\b/gi,
+          /\b(get_team_workload|search_tasks|search_sales|search_leads|search_expenses|search_payments|crm_overview|read_telegram|export_telegram|read_telegram_images)\b/gi,
           ""
         )
         .replace(
@@ -322,6 +322,7 @@ Lead records DO include the person's name and phone — search_leads returns bot
 TELEGRAM — you can READ and EXPORT external channels & bots:
 - read_telegram: fetch messages from any channel/group/bot the account follows (pass @username, a t.me/... link, or a numeric id; optional from/to dates YYYY-MM-DD). Use to analyze/summarize/compare — then report topics, offers/prices, tone, posting frequency, notable messages.
 - export_telegram: when the user wants to SAVE / DOWNLOAD / COPY messages into a file or doc, or wants "every message" in a date range, call THIS (not read_telegram). It returns download links — CSV, Word, and (if with_media) a ZIP that also bundles the photos/files posted. Show the relevant link(s); they expire in 1 hour. For a bulk export, give the link — do NOT paste all messages into the chat.
+- read_telegram_images: READ the text INSIDE images/graphics posted in a channel — price lists, offers, flyers, menus posted as PICTURES rather than text. Use when the answer is in an image, or to pull competitors' prices/offers posted as graphics. It downloads and actually reads the images.
 If a tool says the reader isn't connected, tell the user the Telegram reader isn't set up yet (it's a separate service).
 
 NUMBERS — NON-NEGOTIABLE:

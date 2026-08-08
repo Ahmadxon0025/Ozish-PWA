@@ -108,3 +108,50 @@ export async function callText(opts: {
     await logUsage(opts.feature, AI_MODEL, usage, opts.userId, ok);
   }
 }
+
+/** One vision call — read/extract from images (e.g. OCR a posted price list). */
+export async function callVision(opts: {
+  system: string;
+  user: string;
+  images: { media_type: string; data: string }[];
+  feature: string;
+  userId?: string | null;
+  maxTokens?: number;
+}): Promise<string> {
+  if (!isAiConfigured()) {
+    throw new Error("AI sozlanmagan (ANTHROPIC_API_KEY yo'q).");
+  }
+  let usage: Anthropic.Usage | undefined;
+  let ok = false;
+  try {
+    const imageBlocks = opts.images.slice(0, 12).map(
+      (im): Anthropic.ImageBlockParam => ({
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: im.media_type as
+            | "image/jpeg"
+            | "image/png"
+            | "image/gif"
+            | "image/webp",
+          data: im.data,
+        },
+      }),
+    );
+    const textBlock: Anthropic.TextBlockParam = { type: "text", text: opts.user };
+    const resp = await client().messages.create({
+      model: AI_MODEL,
+      max_tokens: opts.maxTokens ?? 1500,
+      system: opts.system,
+      messages: [{ role: "user", content: [...imageBlocks, textBlock] }],
+    });
+    usage = resp.usage;
+    const text = textOf(resp);
+    ok = true;
+    return text;
+  } catch (err) {
+    throw normalizeAiError(err);
+  } finally {
+    await logUsage(opts.feature, AI_MODEL, usage, opts.userId, ok);
+  }
+}

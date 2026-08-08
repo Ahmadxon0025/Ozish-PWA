@@ -82,6 +82,65 @@ export async function readTelegramMessages(
   }
 }
 
+export interface TelegramImage {
+  id: number;
+  date: string;
+  caption: string;
+  media_type: string;
+  data: string; // base64
+}
+
+/** Fetch recent images (base64, resized) so Claude can READ what's inside them. */
+export async function readTelegramImages(
+  target: string,
+  opts: { limit?: number; from?: string | null; to?: string | null } = {},
+): Promise<{ ok: boolean; title?: string | null; images?: TelegramImage[]; error?: string }> {
+  if (!isTelegramReaderConfigured()) {
+    return { ok: false, error: "Telegram reader ulanmagan (TELEGRAM_READER_URL/SECRET yo'q)." };
+  }
+  const limit = Math.min(Math.max(1, Math.floor(Number(opts.limit) || 6)), 12);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 60_000);
+  try {
+    const res = await fetch(
+      `${env.TELEGRAM_READER_URL.replace(/\/$/, "")}/telegram/images`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-reader-secret": env.TELEGRAM_READER_SECRET,
+        },
+        body: JSON.stringify({
+          target: String(target).trim(),
+          limit,
+          from_date: opts.from ?? null,
+          to_date: opts.to ?? null,
+        }),
+        signal: controller.signal,
+      },
+    );
+    if (!res.ok) return { ok: false, error: `Reader xatosi (${res.status})` };
+    const data = (await res.json()) as {
+      ok?: boolean;
+      error?: string;
+      title?: string | null;
+      images?: TelegramImage[];
+    };
+    if (data?.ok === false) return { ok: false, error: data.error || "Reader xatosi" };
+    return { ok: true, title: data?.title ?? null, images: data?.images ?? [] };
+  } catch (err) {
+    return {
+      ok: false,
+      error:
+        err instanceof Error && err.name === "AbortError"
+          ? "Reader javob bermadi (timeout)"
+          : "Reader ulanmadi",
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export type ExportFormat = "txt" | "csv" | "rtf" | "json";
 
 /**

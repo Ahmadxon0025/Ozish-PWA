@@ -18,6 +18,7 @@ Env vars (set on your host):
   TELEGRAM_API_ID, TELEGRAM_API_HASH, TELEGRAM_SESSION_STRING, TELEGRAM_READER_SECRET
 """
 
+import base64
 import csv
 import hashlib
 import hmac
@@ -54,6 +55,13 @@ class ReadReq(BaseModel):
     limit: int = 30
     from_date: str | None = None  # YYYY-MM-DD (inclusive)
     to_date: str | None = None    # YYYY-MM-DD (inclusive)
+
+
+class ImagesReq(BaseModel):
+    target: str
+    limit: int = 6                # keep vision cost bounded
+    from_date: str | None = None
+    to_date: str | None = None
 
 
 def _parse_day(s: str | None, end: bool = False) -> datetime | None:
@@ -240,3 +248,78 @@ async def export(
         media_type="application/zip",
         background=BackgroundTask(lambda: shutil.rmtree(tmpdir, ignore_errors=True)),
     )
+
+
+# --------------------------- images (for OCR) -------------------------------
+
+
+def _resize_b64(path: str) -> tuple[str, str] | None:
+    """Open an image, downscale to <=1568px (Anthropic's optimal), JPEG+base64."""
+    try:
+        from PIL import Image
+
+        img = Image.open(path).convert("RGB")
+        maxdim = 1568
+        if max(img.size) > maxdim:
+            ratio = maxdim / float(max(img.size))
+            img = img.resize((int(img.size[0] * ratio), int(img.size[1] * ratio)))
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=85)
+        return base64.b64encode(buf.getvalue()).decode(), "image/jpeg"
+    except Exception:
+        return None
+
+
+@app.post("/telegram/images")
+async def images(req: ImagesReq, x_reader_secret: str = Header(default="")) -> dict:
+    """Return recent images (base64, resized) so Claude can READ what's inside
+    them — price lists, offers, flyers that channels post as pictures."""
+    if not hmac.compare_digest(x_reader_secret, SECRET):
+        raise HTTPException(status_code=401, detail="unauthorized")
+    try:
+        limit = max(1, min(int(req.limit or 6), 12))
+        frm = _parse_day(req.from_date)
+        to = _parse_day(req.to_date, end=True)
+        entity = await client.get_entity(req.target.strip())
+        title = getattr(entity, "title", None) or getattr(entity, "username", None)
+        kwargs = {}
+        if to:
+            kwargs["offset_date"] = to
+        out = []
+        tmpdir = tempfile.mkdtemp()
+        try:
+            async for m in client.iter_messages(entity, limit=500, **kwargs):
+                if frm and m.date and m.date < frm:
+                    break
+                if len(out) >= limit:
+                    break
+                is_img = bool(getattr(m, "photo", None)) or (
+                    getattr(m, "file", None)
+                    and (m.file.mime_type or "").startswith("image/")
+                )
+                if not is_img:
+                    continue
+                path = await client.download_media(m, file=os.path.join(tmpdir, str(m.id)))
+                if not path or not os.path.exists(path):
+                    continue
+                enc = _resize_b64(path)
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
+                if enc:
+                    data, mt = enc
+                    out.append(
+                        {
+                            "id": m.id,
+                            "date": m.date.isoformat() if m.date else "",
+                            "caption": m.message or "",
+                            "media_type": mt,
+                            "data": data,
+                        }
+                    )
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+        return {"ok": True, "title": title, "images": out}
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "error": str(e)}

@@ -158,6 +158,24 @@ export const ALFRED_DATA_TOOLS: Anthropic.Tool[] = [
       required: ["target"],
     },
   },
+  {
+    name: "read_telegram_images",
+    description:
+      "READ THE TEXT INSIDE images/graphics posted in a Telegram channel/group/bot — price lists, offers, flyers, menus posted as PICTURES rather than text. Use when the answer lives in an image, or to pull competitors' prices/offers that are posted as graphics. It downloads recent images and actually reads them. Pass @username/link/id; optional from/to dates and limit (max 12 images).",
+    input_schema: {
+      type: "object",
+      properties: {
+        target: {
+          type: "string",
+          description: "The channel/group/bot: @username, t.me/... link, or numeric id.",
+        },
+        limit: { type: "number", description: "How many recent images to read (default 6, max 12)." },
+        from: { type: "string", description: "Only images on/after this date (YYYY-MM-DD)." },
+        to: { type: "string", description: "Only images on/before this date (YYYY-MM-DD)." },
+      },
+      required: ["target"],
+    },
+  },
 ];
 
 function cap(limit: unknown, def = 30): number {
@@ -488,6 +506,34 @@ export async function executeDataTool(
           expires_in: "1 soat",
           note: "Havolalar 1 soatdan keyin ishlamaydi — kerak bo'lsa qayta so'rang.",
         };
+      }
+
+      case "read_telegram_images": {
+        if (!input?.target) return { error: "target kerak" };
+        const { readTelegramImages } = await import("@/lib/telegram/reader-client");
+        const res = await readTelegramImages(String(input.target), {
+          limit: Math.min(Number(input?.limit) || 6, 12),
+          from: input?.from ?? null,
+          to: input?.to ?? null,
+        });
+        if (!res.ok) return { error: res.error ?? "Rasmlarni o'qib bo'lmadi" };
+        if (!res.images || res.images.length === 0) {
+          return { title: res.title ?? null, images_read: 0, extracted: "Rasm topilmadi." };
+        }
+        const { callVision } = await import("@/lib/ai/claude");
+        try {
+          const extracted = await callVision({
+            feature: "telegram_image_ocr",
+            system:
+              "Siz rasmlardagi matnni aniq o'qiysiz. Har bir rasmdagi barcha matn, taklif, narx va shartlarni ro'yxat qilib chiqaring. Faqat rasmda ko'ringan ma'lumot — hech narsa o'ylab qo'shmang.",
+            user: `${res.images.length} ta rasm berildi. Har biridagi matn/narx/takliflarni tartib bilan yozing.`,
+            images: res.images.map((im) => ({ media_type: im.media_type, data: im.data })),
+            maxTokens: 1500,
+          });
+          return { title: res.title ?? null, images_read: res.images.length, extracted };
+        } catch (e) {
+          return { error: e instanceof Error ? e.message : "Rasmni o'qishda xatolik" };
+        }
       }
 
       default:

@@ -176,6 +176,8 @@ function FlowCanvas() {
     }
   }, [nodes.length, fit]);
 
+  // Wheel = zoom toward the cursor. Re-run when the viewport mounts (it only
+  // renders once the graph has loaded), else the listener never attaches.
   useEffect(() => {
     const vp = viewportRef.current;
     if (!vp) return;
@@ -185,7 +187,7 @@ function FlowCanvas() {
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
       const prev = zoomRef.current;
-      const next = clamp(prev * (e.deltaY < 0 ? 1.1 : 1 / 1.1), MIN_ZOOM, MAX_ZOOM);
+      const next = clamp(prev * (e.deltaY < 0 ? 1.12 : 1 / 1.12), MIN_ZOOM, MAX_ZOOM);
       if (next === prev) return;
       const k = next / prev;
       const p = panRef.current;
@@ -194,7 +196,7 @@ function FlowCanvas() {
     };
     vp.addEventListener("wheel", onWheel, { passive: false });
     return () => vp.removeEventListener("wheel", onWheel);
-  }, []);
+  }, [isLoading]);
 
   const zoomBy = (factor: number) => {
     const vp = viewportRef.current;

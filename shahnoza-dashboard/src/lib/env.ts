@@ -47,6 +47,9 @@ export const env = {
   TELEGRAM_OPS_GROUP_ID: process.env.TELEGRAM_OPS_GROUP_ID ?? "",
   // Secret token Telegram echoes back on every webhook call (X-Telegram-Bot-Api-Secret-Token).
   TELEGRAM_WEBHOOK_SECRET: process.env.TELEGRAM_WEBHOOK_SECRET ?? "",
+  // Funnel bot ("Shahnoza Soliyeva | BOT") — a SEPARATE bot from the finance/Alfred one.
+  FUNNEL_BOT_TOKEN: process.env.FUNNEL_BOT_TOKEN ?? "",
+  FUNNEL_BOT_WEBHOOK_SECRET: process.env.FUNNEL_BOT_WEBHOOK_SECRET ?? "",
   AMOCRM_SUBDOMAIN: process.env.AMOCRM_SUBDOMAIN ?? "",
   AMOCRM_CLIENT_ID: process.env.AMOCRM_CLIENT_ID ?? "",
   AMOCRM_CLIENT_SECRET: process.env.AMOCRM_CLIENT_SECRET ?? "",
@@ -95,6 +98,8 @@ export const isServiceRoleConfigured = () =>
   Boolean(env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY);
 
 export const isTelegramConfigured = () => Boolean(env.TELEGRAM_BOT_TOKEN);
+
+export const isFunnelBotConfigured = () => Boolean(env.FUNNEL_BOT_TOKEN);
 
 export const isAmocrmConfigured = () =>
   Boolean(env.AMOCRM_SUBDOMAIN && env.AMOCRM_CLIENT_ID && env.AMOCRM_CLIENT_SECRET);

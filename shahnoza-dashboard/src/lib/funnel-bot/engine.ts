@@ -209,6 +209,18 @@ async function notifySales(text: string) {
 // ─────────────────────────── inbound resume points ───────────────────────
 
 async function startFlow(db: Loose, sub: Subscriber) {
+  // Debounce: queued /start floods (e.g. a webhook outage backlog flushing)
+  // must not send N welcomes. One fresh run per minute per subscriber.
+  const { data: recent } = await db
+    .from("funnel_bot_runs")
+    .select("created_at")
+    .eq("subscriber_id", sub.id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (recent?.created_at && Date.now() - new Date(recent.created_at).getTime() < 60_000) {
+    return;
+  }
   // one active run per subscriber — retire any previous one
   await db.from("funnel_bot_runs").update({ status: "stopped" }).eq("subscriber_id", sub.id).in("status", ["running", "waiting", "delayed"]);
   const { data } = await db

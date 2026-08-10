@@ -10,8 +10,10 @@ export function AlfredButton() {
   const pathname = usePathname();
 
   // /brain hosts Alfred full-page — a second floating entry point there
-  // just collides with the embedded panel's composer.
-  if (pathname === "/brain") return null;
+  // just collides with the embedded panel's composer. The funnel-bot canvas
+  // is an immersive builder — its own zoom/add controls live bottom-right, so
+  // hide the global FABs there too.
+  if (pathname === "/brain" || pathname === "/marketing/funnel-bot/flow") return null;
 
   return (
     <>

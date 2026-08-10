@@ -441,7 +441,7 @@ function FlowCanvas() {
 
           {/* add-step (custom flows) */}
           {!isBuiltin ? (
-            <div className="absolute right-4 top-4">
+            <div className="absolute right-4 top-4" onPointerDown={(e) => e.stopPropagation()}>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className="flex h-12 w-12 items-center justify-center rounded-full bg-[#2f80ed] text-white shadow-lg hover:brightness-110 transition-all" title="Qadam qo'shish">
@@ -456,13 +456,16 @@ function FlowCanvas() {
             </div>
           ) : null}
 
-          {/* zoom toolbar */}
-          <div className="absolute bottom-4 right-4 flex flex-col gap-1.5">
-            <button onClick={() => zoomBy(1.2)} className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-slate-600 shadow hover:bg-slate-50" title="Kattalashtirish"><Plus className="h-4 w-4" /></button>
-            <button onClick={() => zoomBy(1 / 1.2)} className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-slate-600 shadow hover:bg-slate-50" title="Kichraytirish"><Minus className="h-4 w-4" /></button>
-            <button onClick={fit} className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-slate-600 shadow hover:bg-slate-50" title="Ekranga moslash"><Maximize2 className="h-4 w-4" /></button>
-            <button onClick={resetPositions} className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-slate-600 shadow hover:bg-slate-50" title="Joylashuvni tiklash"><RotateCcw className="h-4 w-4" /></button>
-            <div className="rounded-lg bg-white px-1 py-0.5 text-center text-[10px] tabular-nums text-slate-500 shadow">{Math.round(zoom * 100)}%</div>
+          {/* zoom toolbar (stopPropagation so a tap here never starts a pan) */}
+          <div
+            className="absolute bottom-4 right-4 z-10 flex flex-col gap-1.5"
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <button onClick={() => zoomBy(1.25)} className="flex h-10 w-10 items-center justify-center rounded-lg bg-white text-slate-700 shadow-md ring-1 ring-black/5 hover:bg-slate-50 active:scale-95" title="Kattalashtirish"><Plus className="h-5 w-5" /></button>
+            <div className="rounded-lg bg-white px-1 py-1 text-center text-[11px] font-medium tabular-nums text-slate-600 shadow-md ring-1 ring-black/5">{Math.round(zoom * 100)}%</div>
+            <button onClick={() => zoomBy(1 / 1.25)} className="flex h-10 w-10 items-center justify-center rounded-lg bg-white text-slate-700 shadow-md ring-1 ring-black/5 hover:bg-slate-50 active:scale-95" title="Kichraytirish"><Minus className="h-5 w-5" /></button>
+            <button onClick={fit} className="mt-1 flex h-10 w-10 items-center justify-center rounded-lg bg-white text-slate-700 shadow-md ring-1 ring-black/5 hover:bg-slate-50 active:scale-95" title="Ekranga moslash"><Maximize2 className="h-4 w-4" /></button>
+            <button onClick={resetPositions} className="flex h-10 w-10 items-center justify-center rounded-lg bg-white text-slate-700 shadow-md ring-1 ring-black/5 hover:bg-slate-50 active:scale-95" title="Joylashuvni tiklash"><RotateCcw className="h-4 w-4" /></button>
           </div>
         </div>
       )}

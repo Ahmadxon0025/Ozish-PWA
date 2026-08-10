@@ -2,9 +2,54 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, roleProcedure } from "@/server/api/trpc";
 import { requireAdminClient } from "@/lib/supabase/admin";
-import { FLOW } from "@/lib/funnel-bot/flow";
+import { FLOW, FLOW_KEY, type FlowStep } from "@/lib/funnel-bot/flow";
 
-const SUB_STATUSES = ["active", "lead", "call_requested", "replied", "cold", "stopped"] as const;
+const SUB_STATUSES = ["active", "lead", "call_requested", "replied", "nurtured", "cold", "stopped"] as const;
+
+// ── Multi-flow (user-created automations) ──────────────────────────────────
+const flowButtonZ = z.object({
+  text: z.string().min(1).max(64),
+  next: z.string().max(64).optional(),
+  url: z.string().max(2000).optional(),
+  segment: z.enum(["tajriba", "vaqt", "pul", "ishonch"]).optional(),
+});
+const mediaSlotZ = z.object({ key: z.string().min(1).max(64), kind: z.enum(["photo", "video", "voice", "document"]) });
+const stepId = z.string().min(1).max(64);
+const flowStepZ = z.discriminatedUnion("type", [
+  z.object({ id: stepId, type: z.literal("message"), text: z.string().max(4000), media: mediaSlotZ.optional(), urlButtons: z.array(flowButtonZ).max(6).optional(), next: stepId }),
+  z.object({ id: stepId, type: z.literal("continue"), text: z.string().max(4000), media: mediaSlotZ.optional(), label: z.string().max(64).optional(), next: stepId }),
+  z.object({ id: stepId, type: z.literal("buttons"), text: z.string().max(4000), media: mediaSlotZ.optional(), buttons: z.array(flowButtonZ).min(1).max(8) }),
+  z.object({ id: stepId, type: z.literal("ask_phone"), text: z.string().max(4000), buttonText: z.string().min(1).max(64), next: stepId }),
+  z.object({ id: stepId, type: z.literal("ask_text"), text: z.string().max(4000), field: z.literal("city"), next: stepId }),
+  z.object({ id: stepId, type: z.literal("delay"), minutes: z.number().int().min(0).max(100000), next: stepId }),
+  z.object({ id: stepId, type: z.literal("action"), action: z.enum(["mark_lead", "mark_call_requested", "mark_cold", "notify_sales"]), next: stepId.optional() }),
+  z.object({ id: stepId, type: z.literal("end"), text: z.string().max(4000).optional(), status: z.string().max(32).optional() }),
+]);
+
+/** Check a custom flow's graph: unique ids, every `next` resolves. */
+function validateFlowGraph(steps: FlowStep[]): string | null {
+  const ids = new Set<string>();
+  for (const s of steps) {
+    if (ids.has(s.id)) return `Qadam ID takrorlangan: ${s.id}`;
+    ids.add(s.id);
+  }
+  for (const s of steps) {
+    const nexts: Array<string | undefined> = [];
+    if ("next" in s) nexts.push(s.next);
+    if (s.type === "buttons") for (const b of s.buttons) nexts.push(b.next);
+    for (const n of nexts) if (n && !ids.has(n)) return `"${s.id}" qadam mavjud bo'lmagan "${n}" ga ishora qiladi`;
+  }
+  return null;
+}
+
+/** Resolve a flow's steps: built-in key → code, custom key → jsonb. */
+async function flowStepsFor(db: any, flowKey?: string | null): Promise<{ key: string; steps: FlowStep[]; builtin: boolean }> {
+  const key = flowKey || FLOW_KEY;
+  if (key === FLOW_KEY) return { key, steps: FLOW, builtin: true };
+  const { data } = await db.from("funnel_bot_flows").select("steps, is_builtin").eq("key", key).maybeSingle();
+  if (!data || data.is_builtin) return { key: FLOW_KEY, steps: FLOW, builtin: true };
+  return { key, steps: (Array.isArray(data.steps) ? data.steps : []) as FlowStep[], builtin: false };
+}
 
 // Funnel + cost data is manager/owner territory (ROAS touches spend).
 const managerProcedure = roleProcedure("super_admin", "owner", "sales_manager");
@@ -250,12 +295,14 @@ export const marketingRouter = createTRPCRouter({
       };
     });
 
-    const engaged = sent["s5"] ?? 0; // reached the origin story = past the "did you watch?" gate
+    const engaged = sent["m5"] ?? 0; // reached the origin story (day 1)
+    const sales = sent["m25"] ?? 0; // reached the sales act (act 2)
+    const finished = sent["m40"] ?? 0; // got the final message
     const stages = [
       { key: "started", label: "Boshladi", count: total },
-      { key: "engaged", label: "Qiziqdi", count: engaged },
-      { key: "lead", label: "Lead (raqam)", count: leads },
-      { key: "call", label: "Qo'ng'iroq so'radi", count: calls },
+      { key: "engaged", label: "Qiziqdi (1-kun)", count: engaged },
+      { key: "sales", label: "Sotuv bosqichi", count: sales },
+      { key: "finished", label: "Oxirigacha yetdi", count: finished },
     ].map((s) => ({ ...s, pct: total > 0 ? Math.round((s.count / total) * 100) : 0 }));
 
     return { total, leads, calls, byStatus, bySegment, stages, steps };
@@ -266,8 +313,9 @@ export const marketingRouter = createTRPCRouter({
    * a positioned node (longest-path columns) with live sent/clicked/CTR, plus
    * the edges (branches labelled by button text, delays by minutes).
    */
-  funnelBotGraph: managerProcedure.query(async () => {
+  funnelBotGraph: managerProcedure.input(z.object({ flowKey: z.string().max(64).optional() }).optional()).query(async ({ input }) => {
     const db = requireAdminClient() as any;
+    const { steps: FLOW_STEPS, builtin } = await flowStepsFor(db, input?.flowKey);
     const { data: logs } = await db.from("funnel_bot_log").select("step_id, direction, kind").limit(20000);
     const sent: Record<string, number> = {};
     const advanced: Record<string, number> = {};
@@ -279,7 +327,7 @@ export const marketingRouter = createTRPCRouter({
 
     type Edge = { from: string; to: string; label: string };
     const edges: Edge[] = [];
-    for (const st of FLOW) {
+    for (const st of FLOW_STEPS) {
       if (st.type === "buttons") {
         for (const b of (st as { buttons: Array<{ text: string; next?: string }> }).buttons) {
           if (b.next) edges.push({ from: st.id, to: b.next, label: b.text });
@@ -296,7 +344,7 @@ export const marketingRouter = createTRPCRouter({
       }
     }
 
-    const ids = FLOW.map((s) => s.id);
+    const ids = FLOW_STEPS.map((s) => s.id);
     const adj: Record<string, string[]> = {};
     const indeg: Record<string, number> = {};
     ids.forEach((i) => (indeg[i] = 0));
@@ -331,7 +379,7 @@ export const marketingRouter = createTRPCRouter({
       });
     }
 
-    const nodes = FLOW.map((st) => {
+    const nodes = FLOW_STEPS.map((st) => {
       const hasText = "text" in st && typeof (st as { text?: unknown }).text === "string";
       const interactive = st.type === "continue" || st.type === "buttons";
       const s = sent[st.id] ?? 0;
@@ -347,7 +395,7 @@ export const marketingRouter = createTRPCRouter({
         ctr: interactive && s > 0 ? Math.round((a / s) * 100) : null,
       };
     });
-    return { nodes, edges };
+    return { nodes, edges, builtin };
   }),
 
   /** Audience list — filterable subscribers of the funnel bot. */
@@ -458,8 +506,9 @@ export const marketingRouter = createTRPCRouter({
    * plus any dashboard override. Structure comes from code; content comes from
    * the funnel_bot_step_overrides / funnel_bot_media tables.
    */
-  funnelBotFlow: managerProcedure.query(async () => {
+  funnelBotFlow: managerProcedure.input(z.object({ flowKey: z.string().max(64).optional() }).optional()).query(async ({ input }) => {
     const db = requireAdminClient() as any;
+    const { steps: FLOW_STEPS } = await flowStepsFor(db, input?.flowKey);
     let overrides: Array<{ step_id: string; text: string | null; minutes: number | null; buttons?: Record<string, string> | null }> = [];
     let media: Array<{ media_key: string; file_id: string | null; url: string | null }> = [];
     try {
@@ -482,7 +531,7 @@ export const marketingRouter = createTRPCRouter({
     const ovById = new Map(overrides.map((o) => [o.step_id, o]));
     const medByKey = new Map(media.map((m) => [m.media_key, m]));
 
-    return FLOW.map((st) => {
+    return FLOW_STEPS.map((st) => {
       const o = ovById.get(st.id);
       const hasText = "text" in st && typeof (st as { text?: unknown }).text === "string";
       const mediaSlot = "media" in st ? (st as { media?: { key: string; kind: string } }).media : undefined;
@@ -575,6 +624,158 @@ export const marketingRouter = createTRPCRouter({
       const { error } = await db
         .from("funnel_bot_step_overrides")
         .upsert({ step_id: input.stepId, buttons, updated_at: new Date().toISOString() }, { onConflict: "step_id" });
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      return { ok: true };
+    }),
+
+  // ───────────────── Automations (multi-flow) ─────────────────
+
+  /** The bot's username (for building t.me deep links). Best-effort. */
+  funnelBotInfo: managerProcedure.query(async () => {
+    try {
+      const { getFunnelBot } = await import("@/lib/funnel-bot/telegram");
+      const bot = getFunnelBot();
+      if (!bot) return { username: null };
+      const me = await bot.api.getMe();
+      return { username: me.username ?? null };
+    } catch {
+      return { username: null };
+    }
+  }),
+
+  /** All automations (flows) with ChatPlace-style stats: contacts + conversion. */
+  funnelBotFlows: managerProcedure.query(async () => {
+    const db = requireAdminClient() as any;
+    let flows: Array<{ key: string; name: string; status: string; is_builtin: boolean; steps: unknown; created_at: string }> = [];
+    try {
+      const { data } = await db.from("funnel_bot_flows").select("key, name, status, is_builtin, steps, created_at").order("created_at", { ascending: true });
+      flows = data ?? [];
+    } catch {
+      /* table not applied yet → show only the built-in flow */
+    }
+    if (!flows.some((f) => f.is_builtin)) {
+      flows.unshift({ key: FLOW_KEY, name: "Lead-magnit voronka (asosiy)", status: "live", is_builtin: true, steps: [], created_at: "" });
+    }
+    const { data: runs } = await db.from("funnel_bot_runs").select("flow_key, status, subscriber_id").limit(20000);
+    const contactsBy = new Map<string, Set<string>>();
+    const doneBy = new Map<string, Set<string>>();
+    for (const r of (runs ?? []) as Array<{ flow_key: string; status: string; subscriber_id: string }>) {
+      addToSet(contactsBy, r.flow_key, r.subscriber_id);
+      if (r.status === "done") addToSet(doneBy, r.flow_key, r.subscriber_id);
+    }
+    return flows.map((f) => {
+      const contacts = contactsBy.get(f.key)?.size ?? 0;
+      const done = doneBy.get(f.key)?.size ?? 0;
+      return {
+        key: f.key,
+        name: f.name,
+        status: f.status,
+        isBuiltin: f.is_builtin,
+        stepCount: f.is_builtin ? FLOW.length : Array.isArray(f.steps) ? (f.steps as unknown[]).length : 0,
+        contacts,
+        conversion: contacts > 0 ? Math.round((done / contacts) * 100) : 0,
+      };
+    });
+  }),
+
+  /** One automation with its raw step graph (canvas editing needs this). */
+  funnelBotFlowRaw: managerProcedure
+    .input(z.object({ flowKey: z.string().max(64).optional() }).optional())
+    .query(async ({ input }) => {
+      const db = requireAdminClient() as any;
+      const key = input?.flowKey || FLOW_KEY;
+      if (key === FLOW_KEY) {
+        return { key, name: "Lead-magnit voronka (asosiy)", status: "live", isBuiltin: true, entry: FLOW[0]!.id, steps: FLOW };
+      }
+      let row: { key: string; name: string; status: string; entry_step: string | null; steps: unknown; is_builtin: boolean } | null = null;
+      try {
+        const { data } = await db.from("funnel_bot_flows").select("key, name, status, entry_step, steps, is_builtin").eq("key", key).maybeSingle();
+        row = data ?? null;
+      } catch {
+        /* table missing */
+      }
+      if (!row || row.is_builtin) {
+        return { key: FLOW_KEY, name: "Lead-magnit voronka (asosiy)", status: "live", isBuiltin: true, entry: FLOW[0]!.id, steps: FLOW };
+      }
+      const steps = (Array.isArray(row.steps) ? row.steps : []) as FlowStep[];
+      return { key: row.key, name: row.name, status: row.status, isBuiltin: false, entry: row.entry_step ?? steps[0]?.id ?? "", steps };
+    }),
+
+  /** Create a new automation with a starter chain; returns its key. */
+  createFlow: managerProcedure
+    .input(z.object({ name: z.string().min(2).max(60) }))
+    .mutation(async ({ input }) => {
+      const db = requireAdminClient() as any;
+      const slug =
+        input.name
+          .toLowerCase()
+          .replace(/['ʼ`]/g, "")
+          .replace(/[^a-z0-9]+/g, "_")
+          .replace(/^_+|_+$/g, "")
+          .slice(0, 40) || "voronka";
+      const key = `${slug}_${Math.random().toString(36).slice(2, 6)}`;
+      const steps: FlowStep[] = [
+        { id: "a1", type: "message", text: "Assalomu alaykum, [ism]! 👋", next: "d1" },
+        { id: "d1", type: "delay", minutes: 60, next: "a2" },
+        { id: "a2", type: "message", text: "Bu — yangi voronkangizning ikkinchi xabari. Matnni bosib tahrirlang.", next: "end" },
+        { id: "end", type: "end" },
+      ];
+      const { error } = await db.from("funnel_bot_flows").insert({ key, name: input.name, status: "draft", entry_step: "a1", steps });
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: `SQL 0051 qo'llanganmi? ${error.message}` });
+      return { key };
+    }),
+
+  /** Save a custom flow's whole step graph (canvas edits: add/edit/delete). */
+  updateFlowSteps: managerProcedure
+    .input(z.object({ key: z.string().max(64), steps: z.array(flowStepZ).min(1).max(300), entryStep: z.string().max(64).optional() }))
+    .mutation(async ({ input }) => {
+      const db = requireAdminClient() as any;
+      const problem = validateFlowGraph(input.steps as FlowStep[]);
+      if (problem) throw new TRPCError({ code: "BAD_REQUEST", message: problem });
+      const { data: row } = await db.from("funnel_bot_flows").select("is_builtin").eq("key", input.key).maybeSingle();
+      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Voronka topilmadi" });
+      if (row.is_builtin) throw new TRPCError({ code: "BAD_REQUEST", message: "Asosiy voronka kodda — matn/vaqtni qadam panelidan tahrirlang" });
+      const entry = input.entryStep && input.steps.some((s) => s.id === input.entryStep) ? input.entryStep : input.steps[0]!.id;
+      const { error } = await db
+        .from("funnel_bot_flows")
+        .update({ steps: input.steps, entry_step: entry, updated_at: new Date().toISOString() })
+        .eq("key", input.key);
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      return { ok: true };
+    }),
+
+  /** Rename / go-live / archive / delete an automation (custom flows only for destructive ops). */
+  renameFlow: managerProcedure
+    .input(z.object({ key: z.string().max(64), name: z.string().min(2).max(60) }))
+    .mutation(async ({ input }) => {
+      const db = requireAdminClient() as any;
+      const { error } = await db.from("funnel_bot_flows").update({ name: input.name, updated_at: new Date().toISOString() }).eq("key", input.key);
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      return { ok: true };
+    }),
+
+  setFlowStatus: managerProcedure
+    .input(z.object({ key: z.string().max(64), status: z.enum(["draft", "live", "archived"]) }))
+    .mutation(async ({ input }) => {
+      const db = requireAdminClient() as any;
+      const { data: row } = await db.from("funnel_bot_flows").select("is_builtin").eq("key", input.key).maybeSingle();
+      if (row?.is_builtin && input.status !== "live") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Asosiy voronka doim yoniq — /start unga tushadi" });
+      }
+      const { error } = await db.from("funnel_bot_flows").update({ status: input.status, updated_at: new Date().toISOString() }).eq("key", input.key);
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      return { ok: true };
+    }),
+
+  deleteFlow: managerProcedure
+    .input(z.object({ key: z.string().max(64) }))
+    .mutation(async ({ input }) => {
+      const db = requireAdminClient() as any;
+      const { data: row } = await db.from("funnel_bot_flows").select("is_builtin").eq("key", input.key).maybeSingle();
+      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Voronka topilmadi" });
+      if (row.is_builtin) throw new TRPCError({ code: "BAD_REQUEST", message: "Asosiy voronkani o'chirib bo'lmaydi" });
+      // active runs on this flow will finish gracefully (unknown step → done)
+      const { error } = await db.from("funnel_bot_flows").delete().eq("key", input.key);
       if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
       return { ok: true };
     }),

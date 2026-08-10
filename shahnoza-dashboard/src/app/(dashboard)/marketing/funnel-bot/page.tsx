@@ -117,8 +117,8 @@ export default function FunnelBotPage() {
             </Card>
           </div>
 
-          <Link href="/marketing/funnel-bot/flow" className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline">
-            To'liq voronka xaritasini ko'rish <ArrowRight className="h-4 w-4" />
+          <Link href="/marketing/funnel-bot/flows" className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline">
+            Avtomatlashtirishlar va voronka xaritasi <ArrowRight className="h-4 w-4" />
           </Link>
         </>
       )}

@@ -1,11 +1,17 @@
 /**
- * The Shahnoza lead-magnet funnel — 40-message, two-act drip, as a typed graph.
- * Act 1 (s1–s20): warm-up (origin, proof, objections) → phone + poll.
- * Act 2 (s21–s40): sells the course (modules, bonus stack, tariffs, scarcity,
- * guarantee) → call. PRICE IS NEVER SENT — it is only revealed on the call.
+ * The Shahnoza lead-magnet funnel — 40 messages, AUTO-SEND timed drip.
  *
- * Media (photos/voice/video) are SLOTS with stable keys — empty for now; fill
- * MEDIA below (Telegram file_id or a public URL) and the bot sends them.
+ * Design (per the master script):
+ *   • Every message auto-sends on a timer — no "continue" taps, no branching.
+ *   • The ONLY buttons are outbound links: the free lesson, the channel, and the
+ *     call/DM to the admin (@shahnoza_soliyeva_admin1). Buttons never advance the
+ *     flow — the timer does.
+ *   • The bot NEVER asks for a phone. Leads come from channel joins, admin DMs,
+ *     and any reply (a reply stops the drip and hands the person to a human).
+ *
+ * Media (photos/voice/video) are SLOTS with stable keys — empty for now. Fill
+ * MEDIA below or from the dashboard (Telegram file_id or a public URL) and the
+ * bot sends them; until then each step sends its text (so the funnel runs today).
  * `[ism]` in any text is replaced with the subscriber's first name at send time.
  */
 
@@ -41,144 +47,205 @@ export type FlowStep =
   // terminal
   | { id: string; type: "end"; text?: string; status?: string };
 
-const CONTINUE = "Davom etish →";
+/** The admin the "book a call" buttons open. */
+const ADMIN = "https://t.me/shahnoza_soliyeva_admin1";
 
 /** Fill these when you have the media (Telegram file_id after first upload, or a
  *  public URL). Leave a key out and the bot just sends that step's text. */
 export const MEDIA: Record<string, { fileId?: string; url?: string }> = {
-  // lesson_free: { url: "https://..." },
-  // parizoda: { fileId: "AgAC..." },
+  // vsl_short_thumb: { url: "https://..." },
+  // shahnoza_welcome_vid: { fileId: "BAAC..." },
 };
 
 export const FLOW_KEY = "lead_magnet_v1";
 
+// Timers (minutes): 1 min = 1 · 1 soat = 60 · 1 kun = 1440 · 2 kun = 2880.
 export const FLOW: FlowStep[] = [
-  // ─────────────────────────── ACT 1 — WARM-UP ───────────────────────────
+  // 1 · delivery + lesson button (t+0)
   {
-    id: "s1",
+    id: "m1",
     type: "message",
-    text: `Assalomu alaykum, [ism]! 🌿\nBepul darsingiz tayyor — bolalar massaji orqali, oilangiz yonida turib, halol daromadga chiqish yo'li.`,
-    media: { key: "lesson_free", kind: "video" },
+    text: `Assalomu alaykum, [ism]! 🌿\nSizga "Hamshiralikdan halol daromadga" bepul darsini yuboryapman 💰\n45 daqiqaga jamlangan to'liq yo'l xaritasi:\n❤️ nega maoshingiz 3 millionda qotib qolgan\n🔍 mijozni qayerdan topish\n🧩 vaqt emas, natija sotish modeli\n🚀 tajriba/blog/pul — shart emas\n🗓 birinchi mijozgacha aniq qadamlar\nDarsni ko'ring 👇`,
+    media: { key: "vsl_short_thumb", kind: "photo" },
     urlButtons: [{ text: "🎥 Bepul darsni ko'rish", url: "" }],
-    next: "s1_wait",
+    next: "w2",
   },
-  { id: "s1_wait", type: "delay", minutes: 90, next: "s2" },
-  {
-    id: "s2",
-    type: "buttons",
-    text: `[ism], darsni ko'rib ulgurdingizmi? 🙂`,
-    buttons: [
-      { text: "Ha ✅", next: "s3" },
-      { text: "Hali yo'q ⏳", next: "s2_no" },
-    ],
-  },
-  {
-    id: "s2_no",
-    type: "message",
-    text: `Zarari yo'q — 45 daqiqa, bola uxlaganda ko'ring 👇`,
-    urlButtons: [{ text: "🎥 Ochish", url: "" }],
-    next: "s2_no_wait",
-  },
-  { id: "s2_no_wait", type: "delay", minutes: 1440, next: "s2_reminder" },
-  {
-    id: "s2_reminder",
-    type: "buttons",
-    text: `[ism], darsni ko'rdingizmi? Ko'rib bo'lsangiz, keyingi qadamga o'tamiz 👇`,
-    buttons: [{ text: "Ko'rdim ✅", next: "s3" }],
-  },
-  {
-    id: "s3",
-    type: "ask_phone",
-    text: `Zo'r! Yo'lni ko'rdingiz. Shaxsan yordam beray — raqamingizni qoldiring, bepul yo'l-xaritasi va "Birinchi mijozgacha 10 kun" qo'llanmam beraman 👇`,
-    buttonText: "📱 Raqamni qoldirish",
-    next: "s4",
-  },
-  { id: "s4", type: "message", text: `Rahmat, [ism]! Tez orada bog'lanamiz. Hozircha bir necha narsa aytib beray 👇`, next: "s5" },
-  {
-    id: "s5",
-    type: "continue",
-    text: `[ism], o'zim haqimda ochig'ini aytay. 2011-yil, oddiy hamshira edim — 1 million 700 ming oylik. Bir kuni esimda: oyim oxirida qo'limda pul qolmagan, bolamga kerakli narsani ololmaganman. O'sha kuni yig'laganman. "Shuncha o'qidim, oliy toifali hamshiraman — nega ahvolim shu?" deb. O'shanda tushundim: ayb menda emas edi. Ayb — tizimda. Poliklinika sizning vaqtingizni arzon sotib oladi, bilimingizni emas. Qancha ishlamang, o'zgarmaydi. Men o'sha kuni qaror qildim — bu tizimdan chiqaman, deb. Va chiqdim. Endi sizni ham chiqaraman.`,
-    next: "s6",
-  },
-  { id: "s6", type: "continue", text: `Parizoda ham shu yerda edi — hamshira, 3 million, ijarada. Bir yilda oyiga 10 million, o'z uyi. Farqi yo'q edi — yo'lni topdi.`, media: { key: "parizoda", kind: "photo" }, next: "s7" },
-  {
-    id: "s7",
-    type: "continue",
-    text: `[ism], endi eng muhim haqiqatni aytaman. Parizoda omad topmadi. Iqtidori ham sizdan ortiq emas edi. U shunchaki bitta narsani — TIZIMNI topdi.\n\nPoliklinikada siz VAQTINGIZNI sotasiz. Vaqt esa dunyodagi eng arzon narsa — kuniga 24 soat, tamom. Mutaxassis esa vaqtini emas — NATIJASINI sotadi. Bir seans 150 ming so'm. Ona sizning soatingiz uchun emas, farzandi tuzalishiga yordam bergani uchun to'laydi. Va natijaning shifti yo'q.\n\nXuddi shu qo'l. Xuddi shu bilim. Xuddi shu siz. Biri — poliklinikada 3 million. Biri — o'z ishida 10 million. Farq malakada emas — MODELDA. Va men sizga aynan o'sha modelni beraman.`,
-    next: "s8",
-  },
-  {
-    id: "s8",
-    type: "buttons",
-    text: `[ism], ayting-chi, hozir sizni nima ko'proq to'xtatyapti?`,
-    buttons: [
-      { text: "Tajribam yo'q", segment: "tajriba", next: "s8_city" },
-      { text: "Vaqtim", segment: "vaqt", next: "s8_city" },
-      { text: "Pulim", segment: "pul", next: "s8_city" },
-      { text: "Ishonmayman", segment: "ishonch", next: "s8_city" },
-    ],
-  },
-  { id: "s8_city", type: "ask_text", field: "city", text: `Rahmat! Va bitta iltimos — shahringizni yozib qoldiring 👇 (qaysi shahardan ekaningizni bilsam, sizga yaqinroq misollar keltiraman)`, next: "s9" },
-  { id: "s9", type: "continue", text: `Nilufar — bog'cha hamshirasi, savollari javobsiz qolardi. Bugun o'z markazi, 20 million. Farqi: yolg'iz qolmadi, kurator har qadamda.`, media: { key: "nilufar", kind: "photo" }, next: "s10" },
-  { id: "s10", type: "continue", text: `Ma'mura — eri xorijda, depressiyada, 0 daromad. Bugun o'z markazi, 15 million. Holati emas — yo'li o'zgardi.`, media: { key: "mamura", kind: "photo" }, next: "s11" },
-  { id: "s11", type: "continue", text: `"Tajribam yo'q"? Ra'no 55 yoshda 0 dan 15 millionga. Muslima 18 yoshda 0 dan 10 millionga. Sizda tibbiy poydevor bor — yarim yo'ldan boshlaysiz.`, media: { key: "rano_muslima", kind: "photo" }, next: "s12" },
-  {
-    id: "s12",
-    type: "continue",
-    text: `[ism], bir daqiqa ko'zingizni yumib, tasavvur qiling. 90 kundan keyingi ertalab. Budilnik yo'q. Boshqa birovning smenasiga yugurmaysiz. Bolangizni o'zingiz uyg'otasiz, maktabga kuzatasiz — shoshilmasdan.\n\nTelefoningizga xabar keladi: "Assalomu alaykum opa, ertaga farzandimni seansga yozsam bo'ladimi?" Bu — sizning mijozingiz. Kunduzi 2-3 seans qilasiz. Oy oxirida uyga o'z pulingizni o'zingiz kiritasiz. Erdan so'ramasdan.\n\nBolangiz "onam mutaxassis" deb faxrlanadi. Mana shu — men sizga bermoqchi bo'lgan hayot. Va bu xayol emas — Parizoda, Nilufar, Ma'mura buni yashayapti.`,
-    next: "s12b",
-  },
-  { id: "s12b", type: "continue", text: `[ism], ertaga ertalab sizga bitta shogirdimning O'Z OVOZIDAGI xabarini yuboraman — u qanday boshlaganini o'zi aytib beradi. Uni albatta eshiting, sizga juda tanish tuyuladi. Hozircha — davom etamiz 👇`, next: "s13" },
-  { id: "s13", type: "continue", text: `Iroda — 0 daromad, farzandlari kichik edi. Bugun uydan chiqmay o'z bemor bazasi, 20 million. Kichik bola to'siq emas.`, media: { key: "iroda", kind: "photo" }, next: "s13b" },
-  { id: "s13b", type: "continue", text: `[ism], mana — va'da qilganimdek. Nilufardan kelgan ovozli xabar 👆 Eshitdingizmi? U ham xuddi siz kabi ikkilangan edi. Farq — bitta qaror qildi.`, media: { key: "nilufar_voice", kind: "voice" }, next: "s14" },
-  { id: "s14", type: "continue", text: `"Vaqtim yo'q" — har dars 15-20 daqiqa, telefonda, o'z tezligingizda. Bu kasb vaqtni oiladan olmaydi — uyda, bola yonida ishlaysiz.`, next: "s15" },
-  { id: "s15", type: "continue", text: `Muhlisahon — oilasi buzilish arafasida edi. Bugun massajist, 10 million, oilasini saqladi, mijoz duosini oladi.`, media: { key: "muhlisahon", kind: "photo" }, next: "s16" },
-  { id: "s16", type: "continue", text: `"Erim ruxsat bermasa?" Bu kasb oiladan uzoqlashtirmaydi — uyda ishlaysiz. Ko'p eri boshda ikkilangan, keyin eng katta tarafdori bo'lgan. Qo'ng'iroqqa eringiz bilan chiqing — o'zim gaplashaman.`, next: "s17" },
-  { id: "s17", type: "continue", text: `Dilnoza narxini oshira olmasdi, 500 ming edi. Bugun bosh master, 15 million. Gap ko'p ishlashda emas — to'g'ri qilishda.`, media: { key: "dilnoza", kind: "photo" }, next: "s18" },
-  { id: "s18", type: "continue", text: `"Pulim yetmasa?" — bo'lib to'lash bor, ko'p shogird birinchi mijozidan qopladi. "Halolmi?" — ha: bola sog'lig'iga xizmat, ona duosi, halol pul.`, next: "s19" },
-  { id: "s19", type: "continue", text: `[ism], sizga 14 shogird hikoyasini ko'rsatyapman — hamshira, uy bekasi, talaba edi. Bugun o'z daromadi bor. Keyingisi siz bo'lishingiz mumkin.`, next: "s20" },
-  { id: "s20", type: "continue", label: "Ko'rsating →", text: `Endi eng muhimi — sizga bu tizim aynan nimadan iboratligini, nima olishingizni ko'rsatay 👇`, next: "s21" },
+  { id: "w2", type: "delay", minutes: 5, next: "m2" },
 
-  // ─────────────────────────── ACT 2 — SELLS ───────────────────────────
-  { id: "s21", type: "continue", text: `[ism], shu yergacha keldingiz — demak, jiddiysiz. Ko'p odam "kurs sotib olaman" deb o'ylaydi: video ko'radi, daftar to'ldiradi, keyin… hech narsa o'zgarmaydi. Chunki ular BILIM oldi, lekin YO'L olmadi.\n\nMen sizga to'liq tizim beraman: bilim + kim yoningizda turadi + mijozni qanday topasiz + qanday pul ishlaysiz. Bosqichma-bosqich, boshidan oxirigacha. Keling, ichida nima borligini ko'rsatay 👇`, next: "s22" },
-  { id: "s22", type: "continue", text: `1-modul — Anatomik diagnostika. Bolalar anatomiyasi, muammoni uy sharoitida aniqlash, tekis oyoq, bo'yin qiyshiqligi. Siz muammoni erta ko'radigan mutaxassisga aylanasiz.`, next: "s23" },
-  { id: "s23", type: "continue", text: `2-modul — Kompleks fizioterapiya. Faqat massaj emas: LFK, elektroforez, parafin. Har qanday yoshdagi bolaga professional seans o'tkazasiz.`, next: "s24" },
-  { id: "s24", type: "continue", text: `3-modul — Kamyob mutaxassislik + marketing. Logopedik massaj, gidromassaj, kam vaznli chaqaloqlar — talab eng yuqori yo'nalishlar. VA mijoz topish, narx qo'yish, sotish. Kursni tugatib — bitta texnika emas, butun kasb egasi bo'lasiz.`, next: "s25" },
-  { id: "s25", type: "continue", text: `Endi bonuslar. 🎁 1-chi: shaxsiy kurator. Har vazifangizni 48 soatda tekshiradi. Massajingizni videoga olib yuborasiz — biz aniq to'g'rilaymiz. Yolg'iz qolmaysiz.`, next: "s26" },
-  { id: "s26", type: "continue", text: `🎁 2-chi: "Birinchi mijozgacha 15 kun" tizimi — kundan-kunga aniq nima qilish. Parizoda, Nilufar, Ma'mura — hammasi shu tizimdan o'tdi.`, next: "s27" },
-  { id: "s27", type: "continue", text: `🎁 3-chi: tayyor marketing. 30 kunlik Instagram reja + 20 professional shablon + narx qo'yish darsi. Birinchi kundan professional ko'rinasiz.`, next: "s28" },
-  { id: "s28", type: "continue", text: `🎁 4-chi: professional sertifikat — onalar va shifokorlar oldida ishonch, narxingizni oshirish huquqi. + Umrbod hamjamiyat + yangi darslar bepul + haftalik jonli savol-javob men bilan.`, next: "s29" },
-  { id: "s29", type: "continue", text: `[ism], bir nafasda hammasini birga ko'ring. Siz olasiz:\n✓ Butun bir kasb — 3 modul, 20 dars\n✓ Shaxsiy kurator — har qadamda yoningizda\n✓ "Birinchi mijozgacha 15 kun" tizimi\n✓ Tayyor marketing — Instagram reja + 20 shablon + narx qo'yish\n✓ Professional sertifikat\n✓ Umrbod hamjamiyat + yangi darslar bepul + haftalik jonli efir\n\nBu — kurs emas. Bu — yangi hayotning to'liq kaliti.`, next: "s30" },
-  { id: "s30", type: "continue", text: `Va risk menda, sizda emas:\n🛡 14 kun yoqmasa — 100% pul qaytadi.\n🛡 90 kun ichida vazifani qilib ham birinchi mijoz topilmasa — topilguncha bepul ishlayman.`, next: "s31" },
-  { id: "s31", type: "continue", text: `Uch yo'l bor, o'zingizga mosini tanlaysiz:\nBAZA — "o'z bolam uchun"\nKASB — "professional kasb egasi" ⭐ (to'liq tizim, barcha bonuslar)\nBIZNES — "o'z markazim" (KASB + men bilan shaxsiy ish + jonli amaliyot)\n\nQaysi biri sizga mos — qo'ng'iroqda, holatingizga qarab birga tanlaymiz.`, next: "s32" },
-  { id: "s32", type: "continue", text: `Hisob oddiy: bir seans 150 ming × kuniga 3 = oyiga 9 million+. Ko'p shogird birinchi oydayoq to'lovni qopladi. Kasb o'zini oqlaydi.`, next: "s33" },
-  { id: "s33", type: "continue", text: `To'lov haqida ham o'ylaganmiz: Uzum Nasiya orqali bo'lib to'lash mumkin. Katta summani birdan chiqarish shart emas. Batafsil — qo'ng'iroqda.`, next: "s34" },
-  { id: "s34", type: "continue", text: `Hali ikkilanyapsizmi? Muqaddas maktab oshpazi edi — bugun 20 million. Nazokathon 19 yoshli talaba — bugun 20 million, oliygohni o'zi to'laydi. Ular ham xuddi shu tizimdan o'tdi.`, media: { key: "muqaddas_nazokat", kind: "photo" }, next: "s35" },
-  { id: "s35", type: "continue", text: `[ism], ochiq aytaman: men hammaga o'rgatmayman. Menga jiddiy, natija ko'rsatadigan odam kerak. Qo'ng'iroqda men ham sizni tekshiraman — tayyormisiz, bu yo'l sizga mosmi.`, next: "s36" },
-  { id: "s36", type: "continue", text: `Va o'rinlar cheklangan — kurator har o'quvchini sifatli kuzatishi kerak, yuzlab odamni bo'lmaydi. Guruh to'lganda, keyingi oqim keyinroq.`, next: "s37" },
+  // 2 · welcome + channel button (+5 min)
   {
-    id: "s37",
-    type: "buttons",
-    text: `Endi bitta qadam qoldi: qo'ng'iroq. Bepul, bosimsiz. Sizga qaysi tarif mosligini, narx va Nasiya shartlarini o'sha yerda gaplashamiz. Hech narsa olmasangiz ham — 17 yillik mutaxassisdan bepul yo'l-xaritasi. Tayyor bo'lsangiz 👇`,
-    buttons: [{ text: "Suhbatga yozilish →", next: "s37_action" }],
+    id: "m2",
+    type: "message",
+    text: `Mana, siz shu yerdasiz 🚀\nSizni tabriklayman, [ism] — eng to'g'ri vaqtda, eng to'g'ri joyda turibsiz. Eng birinchilar orasidasiz.\nMen — Shahnoza Soliyeva, oliy toifali hamshira, 17 yillik tajriba. So'nggi yilda 14 nafar oddiy hamshirani — sizga o'xshagan ayollarni — o'z daromadiga olib chiqdim. Parizoda 10 million, Nilufar 20 million, Iroda 20 million…\nEndi eng muhimi 👇\nMen maxsus kanal ochdim — u yerda har kuni:\n✅ Real shogirdlarim natijalari (o'z ovozi, o'z yuzi bilan)\n✅ Bepul mini-darslar — boshqa hech qayerda yo'q\n✅ Bu oqimga kim qo'shilayotgani, nechta o'rin qolgani\n✅ Va eng qimmatli: mening 10 millionlik shogirdim yo'lini to'liq bosqichma-bosqich\nBu kanal — sizning yangi hayotingiz boshlanadigan joy. Bepul darsni ko'rgach, ALBATTA qo'shiling — chunki eng muhim narsalarni o'sha yerda beraman.\nPastdagi tugmani bosing 👇`,
+    media: { key: "shahnoza_welcome_vid", kind: "video" },
+    urlButtons: [{ text: "📢 KANALGA QO'SHILISH — bepul", url: "" }],
+    next: "w3",
   },
-  { id: "s37_action", type: "action", action: "mark_call_requested", next: "s37_notify" },
-  { id: "s37_notify", type: "action", action: "notify_sales", next: "s38" },
-  {
-    id: "s38",
-    type: "buttons",
-    text: `Zo'r! Sizga qachon qulay?`,
-    buttons: [
-      { text: "Bugun kechqurun", next: "s39" },
-      { text: "Ertaga", next: "s39" },
-    ],
-  },
-  { id: "s39", type: "message", text: `⚠️ Eslatma: to'lov faqat rasmiy kanal orqali. Firibgarlar bizning nomdan yozishi mumkin — begona kartaga to'lov qilmang.`, next: "s40" },
-  { id: "s40", type: "end", status: "call_requested", text: `Rahmat, [ism]! Belgilangan vaqtda bog'lanamiz. Savolingiz bo'lsa — shu yerga yozing. Sizga omad! 🌿` },
+  { id: "w3", type: "delay", minutes: 30, next: "m3" },
+
+  // 3 · nudge to watch (+30 min)
+  { id: "m3", type: "message", text: `[ism], darsni ochdingizmi? Iltimos, oxirigacha ko'ring — eng muhim qism (Parizoda birinchi mijozini qanday topgani) aynan oxirida. Ko'pchilik shu daqiqada "men ham qila olarkanman" deb tushunadi.`, next: "w4" },
+  { id: "w4", type: "delay", minutes: 120, next: "m4" },
+
+  // 4 · reply-bait: objection + city (+2 soat)
+  { id: "m4", type: "message", text: `[ism], ayting-chi — hozir sizni nima ko'proq to'xtatyapti? Pastga yozing: tajribami, vaqtmi, pulmi, ishonchmi? O'qib, javob beraman. Va shahringizni ham yozing 🙂`, next: "w5" },
+  { id: "w5", type: "delay", minutes: 60, next: "m5" },
+
+  // 5 · origin voice 1 (+1 soat)
+  { id: "m5", type: "message", text: `[ism], o'zim haqimda ochig'ini aytay. 2011-yil, oddiy hamshira, 1 million 700 ming. Bir kuni oy oxirida qo'limda pul qolmagan, bolamga kerakli narsani ololmaganman. O'sha kuni yig'laganman.`, media: { key: "origin_voice_1", kind: "voice" }, next: "w6" },
+  { id: "w6", type: "delay", minutes: 1, next: "m6" },
+
+  // 6 · origin voice 2 (+1 min)
+  { id: "m6", type: "message", text: `"Shuncha o'qidim, oliy toifali hamshiraman — nega ahvolim shu?" derdim. O'shanda tushundim: ayb menda emas — TIZIMDA. Poliklinika vaqtingizni arzon sotib oladi, bilimingizni emas. Men o'sha kuni qaror qildim: chiqaman. Va chiqdim. Sizni ham chiqaraman.`, media: { key: "origin_voice_2", kind: "voice" }, next: "w7" },
+  { id: "w7", type: "delay", minutes: 240, next: "m7" },
+
+  // 7 · Parizoda (+4 soat)
+  { id: "m7", type: "message", text: `Parizoda ham shu yerda edi — hamshira, 3 million, ijarada. Bir yilda oyiga 10 million, o'z uyi. Farqi yo'q edi — yo'lni topdi.`, media: { key: "parizoda_photo", kind: "photo" }, next: "w8" },
+  { id: "w8", type: "delay", minutes: 180, next: "m8" },
+
+  // 8 · the mechanism (+3 soat)
+  { id: "m8", type: "message", text: `[ism], Parizoda omad topmadi — TIZIMNI topdi. Poliklinikada VAQTINGIZNI sotasiz — kuniga 24 soat, tamom. Mutaxassis NATIJASINI sotadi. Bir seans 150 ming: ona farzandi tuzalishiga yordam bergani uchun to'laydi, soatingizga emas. Shu qo'l, shu bilim — biri 3, biri 10 million. Farq MODELDA.`, media: { key: "mexanizm_video", kind: "video" }, next: "w9" },
+  { id: "w9", type: "delay", minutes: 1, next: "m9" },
+
+  // 9 · it's learnable (+1 min)
+  { id: "m9", type: "message", text: `Va bu model o'rganiladi. Men uni 14 hamshiraga o'rgatdim. Ular ham xuddi sizdek boshlagan. Endi navbat sizda.`, next: "w10" },
+  { id: "w10", type: "delay", minutes: 1440, next: "m10" },
+
+  // 10 · Nilufar (+1 kun)
+  { id: "m10", type: "message", text: `Nilufar — bog'cha hamshirasi, savollari javobsiz qolardi. Bugun o'z markazi, 20 million. Yolg'iz qolmadi — kurator har qadamda.`, media: { key: "nilufar_media", kind: "video" }, next: "w11" },
+  { id: "w11", type: "delay", minutes: 240, next: "m11" },
+
+  // 11 · Ma'mura (+4 soat)
+  { id: "m11", type: "message", text: `Ma'mura — eri xorijda, depressiyada, 0 daromad. Bugun o'z markazi, 15 million. Holati emas — yo'li o'zgardi.`, media: { key: "mamura_photo", kind: "photo" }, next: "w12" },
+  { id: "w12", type: "delay", minutes: 360, next: "m12" },
+
+  // 12 · no experience (+6 soat)
+  { id: "m12", type: "message", text: `"Tajribam yo'q"? Ra'no 55 yoshda 0 dan 15 millionga. Muslima 18 yoshda 0 dan 10 millionga. Sizda tibbiy poydevor bor — yarim yo'ldan boshlaysiz.`, next: "w13" },
+  { id: "w13", type: "delay", minutes: 1440, next: "m13" },
+
+  // 13 · future pacing voice (+1 kun)
+  { id: "m13", type: "message", text: `[ism], ko'zingizni yuming. 90 kundan keyingi ertalab. Budilnik yo'q. Bolangizni o'zingiz uyg'otasiz. Telefonga: "Opa, farzandimni seansga yozsam?" — sizning mijozingiz. Oy oxirida uyga o'z pulingizni kiritasiz, erdan so'ramasdan. Bolangiz "onam mutaxassis" deb faxrlanadi.`, media: { key: "futurepace_voice", kind: "voice" }, next: "w14" },
+  { id: "w14", type: "delay", minutes: 1, next: "m14" },
+
+  // 14 · not a dream (+1 min)
+  { id: "m14", type: "message", text: `Bu xayol emas, [ism]. Parizoda, Nilufar, Ma'mura shu hayotni yashayapti. Sizdan farqi — ular bir yil oldin QAROR qildi.`, next: "w15" },
+  { id: "w15", type: "delay", minutes: 360, next: "m15" },
+
+  // 15 · Iroda + Muhlisahon (+6 soat)
+  { id: "m15", type: "message", text: `Iroda — 0 daromad, bolalari kichik. Bugun uydan chiqmay 20 million. Muhlisahon — oilasi buzilish arafasida edi, bugun 10 million, oilasini saqladi.`, media: { key: "iroda_muhlisahon_photo", kind: "photo" }, next: "w16" },
+  { id: "w16", type: "delay", minutes: 1440, next: "m16" },
+
+  // 16 · no time (+1 kun)
+  { id: "m16", type: "message", text: `"Vaqtim yo'q"? Har dars 15-20 daqiqa, telefonda, bola uxlaganda. Bu kasb vaqtni oiladan olmaydi — uyda, bola yonida ishlaysiz.`, next: "w17" },
+  { id: "w17", type: "delay", minutes: 240, next: "m17" },
+
+  // 17 · husband's permission (+4 soat)
+  { id: "m17", type: "message", text: `"Erim ruxsat bermasa?" Bu kasb oiladan uzoqlashtirmaydi — uyda ishlaysiz. Ko'p eri boshda ikkilangan, keyin eng katta tarafdori bo'lgan. Xohlasangiz, qo'ng'iroqqa eringiz bilan chiqing.`, next: "w18" },
+  { id: "w18", type: "delay", minutes: 1440, next: "m18" },
+
+  // 18 · Dilnoza + Muqaddas (+1 kun)
+  { id: "m18", type: "message", text: `Dilnoza — 500 ming edi, bugun bosh master, 15 million. Muqaddas — maktab oshpazi edi, bugun 20 million. Har xil hayot, bir xil natija — tizim bir.`, media: { key: "dilnoza_muqaddas_photo", kind: "photo" }, next: "w19" },
+  { id: "w19", type: "delay", minutes: 360, next: "m19" },
+
+  // 19 · money + halal (+6 soat)
+  { id: "m19", type: "message", text: `"Pulim yetmasa?" — bo'lib to'lash bor, ko'p shogird birinchi mijozidan qopladi. "Halolmi?" — ha: bola sog'lig'iga xizmat, ona duosi, halol pul.`, next: "w20" },
+  { id: "w20", type: "delay", minutes: 1440, next: "m20" },
+
+  // 20 · Nazokathon + Nigora voice (+1 kun)
+  { id: "m20", type: "message", text: `Nazokathon — 19 yoshli talaba, 0 dan 20 millionga, oliygohni o'zi to'laydi. Nigora — 500 mingdan 15 millionga. Yosh, tajriba — to'siq emas.`, media: { key: "nazokathon_voice", kind: "voice" }, next: "w21" },
+  { id: "w21", type: "delay", minutes: 240, next: "m21" },
+
+  // 21 · free roadmap on the call (+4 soat)
+  { id: "m21", type: "message", text: `[ism], siz hali qadam bosmadingiz — shuning uchun aytaman. Qo'ng'iroqda BEPUL yo'l-xaritasi beraman: holatingizga qarab qaysi qadamdan boshlashni aniqlaymiz. 17 yillik mutaxassisdan bepul maslahat.`, next: "w22" },
+  { id: "w22", type: "delay", minutes: 1440, next: "m22" },
+
+  // 22 · 12+ proof recap (+1 kun)
+  { id: "m22", type: "message", text: `[ism], sizga 12 dan ortiq shogird hikoyasini ko'rsatdim. Parizoda, Nilufar, Ma'mura, Ra'no, Muslima, Iroda, Dilnoza, Muqaddas, Nazokathon… hamshira, uy bekasi, talaba edi. Bugun — o'z daromadi. Keyingisi SIZ bo'lasiz.`, next: "w23" },
+  { id: "w23", type: "delay", minutes: 360, next: "m23" },
+
+  // 23 · urgency 1 (+6 soat)
+  { id: "m23", type: "message", text: `[ism], ochiq gaplashaman: keyingi guruh tez orada yopiladi. Kurator har o'quvchini sifatli kuzatishi kerak — shuning uchun o'rin cheklangan. Ulgurmasangiz, keyingi oqim bir necha oydan keyin.`, next: "w24" },
+  { id: "w24", type: "delay", minutes: 1440, next: "m24" },
+
+  // 24 · Muhlisa + Nazokat (+1 kun)
+  { id: "m24", type: "message", text: `Muhlisa — 0 dan 20 millionga. Nazokat — do'kon sotuvchisi edi, bugun 10 million. Ular kutmadi — boshladi. Kutgan har oy — yo'qotilgan daromad.`, media: { key: "muhlisa_nazokat_photo", kind: "photo" }, next: "w24b" },
+  { id: "w24b", type: "delay", minutes: 360, next: "m24b" },
+
+  // 24b · money-math voice (+6 soat)
+  { id: "m24b", type: "message", text: `Salom, [ism]. Ko'p so'raladigan savol: "aslida oyiga qancha bo'ladi?" Hisoblaymiz. Bir seans o'rtacha 150 ming. Kuniga atigi 3 ta — har biri 1.5 soat, oilangizga ham vaqt qoladi. Kuniga 450 ming. Oyiga 9 milliondan oshadi. Bu — sehr emas, oddiy matematika. Va ko'p mijozlar oylik emas, kurs bo'yicha keladi — ya'ni doimiy. Buni qanday qurishni to'liq o'rgataman.`, media: { key: "audio_money_math", kind: "voice" }, next: "w25" },
+  { id: "w25", type: "delay", minutes: 1440, next: "m25" },
+
+  // 25 · knowledge vs path (+1 kun)
+  { id: "m25", type: "message", text: `[ism], shu yergacha keldingiz — jiddiysiz. Endi ichini ko'rsatay. Ko'p odam "kurs oldim" deb o'ylaydi, keyin hech narsa o'zgarmaydi — chunki BILIM oldi, YO'L olmadi. Men sizga to'liq YO'L beraman.`, next: "w26" },
+  { id: "w26", type: "delay", minutes: 120, next: "m26" },
+
+  // 26 · modules (+2 soat)
+  { id: "m26", type: "message", text: `3 modul, 20 dars:\n1️⃣ Anatomik diagnostika — muammoni aniqlash, shifokorga yo'naltirish\n2️⃣ Kompleks fizioterapiya — massaj, LFK, elektroforez, parafin\n3️⃣ Kamyob mutaxassislik + marketing — mijoz topish, narx qo'yish, sotish\nKursni tugatib — BUTUN KASB egasi bo'lasiz.`, media: { key: "modules_video", kind: "video" }, next: "w27" },
+  { id: "w27", type: "delay", minutes: 240, next: "m27" },
+
+  // 27 · bonus stack (+4 soat)
+  { id: "m27", type: "message", text: `Va faqat kurs emas:\n🎁 Shaxsiy kurator — har vazifani 48 soatda tekshiradi\n🎁 "Birinchi mijozgacha 15 kun" tizimi\n🎁 Tayyor marketing — Instagram reja + 20 shablon + narx qo'yish\n🎁 Professional sertifikat\n🎁 Umrbod hamjamiyat + jonli efirlar`, next: "w28" },
+  { id: "w28", type: "delay", minutes: 1440, next: "m28" },
+
+  // 28 · guarantee (+1 kun)
+  { id: "m28", type: "message", text: `[ism], bir nafasda: butun kasb + kurator + mijoz tizimi + marketing + sertifikat. Va risk MENDA:\n🛡 14 kun yoqmasa — 100% qaytadi.\n🛡 90 kun mijoz topilmasa — bepul ishlayman. O'z vaqtimni garovga qo'yaman.`, next: "w28b" },
+  { id: "w28b", type: "delay", minutes: 240, next: "m28b" },
+
+  // 28b · first-client voice (+4 soat)
+  { id: "m28b", type: "message", text: `[ism], eng ko'p qo'rquv: "mijozni qayerdan topaman?" Ochig'ini aytaman — ular allaqachon oldingizdan o'tyapti. Parizoda birinchi mijozini qayerdan topgan bilasizmi? Qo'shnisining bolasidan. Nilufar — bog'chadagi onalardan. Ma'mura — Instagram orqali, bir hafta ichida. Sirr — kutmaslikda, boshlashda. Kursda aynan shu 15 kunlik tizimni beraman: kundan-kunga kim bilan gaplashish, nima yozish. Birinchi mijozgacha aniq yo'l.`, media: { key: "audio_first_client", kind: "voice" }, next: "w29" },
+  { id: "w29", type: "delay", minutes: 1440, next: "m29" },
+
+  // 29 · three tiers (+1 kun)
+  { id: "m29", type: "message", text: `▪️ BAZA — o'z bolam uchun\n▪️ KASB — professional kasb egasi ⭐ (to'liq tizim)\n▪️ BIZNES — o'z markazim (KASB + shaxsiy ish)\nQaysi biri sizga mos — qo'ng'iroqda birga tanlaymiz.`, next: "w30" },
+  { id: "w30", type: "delay", minutes: 1440, next: "m30" },
+
+  // 30 · the math + Nasiya (+1 kun)
+  { id: "m30", type: "message", text: `Hisob: bir seans 150 ming × kuniga 3 = oyiga 9 million+. Ko'p shogird birinchi oydayoq to'lovni qopladi. Uzum Nasiya orqali bo'lib to'lash mumkin — batafsil qo'ng'iroqda.`, next: "w31" },
+  { id: "w31", type: "delay", minutes: 240, next: "m31" },
+
+  // 31 · selective (+4 soat)
+  { id: "m31", type: "message", text: `[ism], ochiq aytaman: men HAMMAGA o'rgatmayman. Menga jiddiy, natija ko'rsatadigan odam kerak. Qo'ng'iroqda men ham sizni tekshiraman.`, next: "w32" },
+  { id: "w32", type: "delay", minutes: 1440, next: "m32" },
+
+  // 32 · urgency 2 (+1 kun)
+  { id: "m32", type: "message", text: `[ism], bu oqimda o'rin sanoqli qoldi. To'lganda eshik yopiladi. Bu — soxta shoshirish emas: kurator sifatli ishlashi uchun chinakam cheklov.`, next: "w33" },
+  { id: "w33", type: "delay", minutes: 360, next: "m33" },
+
+  // 33 · social proof of momentum (+6 soat)
+  { id: "m33", type: "message", text: `Hozir ham ariza qoldirayotganlar bor. Har kuni yangi hamshira bu yo'lga qo'shilyapti. Siz esa hali o'ylaysizmi? Har o'tgan kun — Parizoda allaqachon bosgan qadam.`, next: "w34" },
+  { id: "w34", type: "delay", minutes: 1440, next: "m34" },
+
+  // 34 · halal voice (+1 kun)
+  { id: "m34", type: "message", text: `[ism], bu kasb nafaqat daromad — savob. Har bola tuzalishiga yordam berganingizda, onaning duosini olasiz. Halol pul, halol duo. Bundan yaxshi kasb bormi?`, media: { key: "halol_voice", kind: "voice" }, next: "w35" },
+  { id: "w35", type: "delay", minutes: 240, next: "m35" },
+
+  // 35 · CTA + call button (+4 soat)
+  { id: "m35", type: "message", text: `[ism], bitta qadam qoldi. Bepul, bosimsiz suhbat — sizga qaysi tarif, narx, Nasiya shartlarini aytaman. Hech narsa olmasangiz ham — bepul yo'l-xarita.`, urlButtons: [{ text: "📞 Bepul suhbatga yozilish", url: ADMIN }], next: "w36" },
+  { id: "w36", type: "delay", minutes: 1440, next: "m36" },
+
+  // 36 · two roads + call button (+1 kun)
+  { id: "m36", type: "message", text: `[ism], ikki yo'l: bu xabarni yopib, ertaga o'sha 3 millionga qaytish — yoki bir gaplashib, bir yildan keyin "hayotim shundan o'zgargan" deyish. Parizoda ikkinchisini tanladi.`, urlButtons: [{ text: "📞 Bepul suhbatga yozilish", url: ADMIN }], next: "w37" },
+  { id: "w37", type: "delay", minutes: 360, next: "m37" },
+
+  // 37 · urgency 3 video + call button (+6 soat)
+  { id: "m37", type: "message", text: `[ism], ochiq: guruh to'lyapti. Agar bu oqimni o'tkazib yuborsangiz — keyingisi oylar keyin, va narx ham o'zgarishi mumkin. Hozir gaplashsak, eng yaxshi shartlarni beraman.`, media: { key: "urgency_final_video", kind: "video" }, urlButtons: [{ text: "📞 Hoziroq yozilish", url: ADMIN }], next: "w38" },
+  { id: "w38", type: "delay", minutes: 1440, next: "m38" },
+
+  // 38 · Ra'no + call button (+1 kun)
+  { id: "m38", type: "message", text: `[ism], Ra'no 55 yoshda qo'rqqan, boshlagan — bugun 15 million. Yosh emas, qaror muhim. Sizning navbatingiz. Bugun bir qaror — bir yildan keyin boshqa hayot.`, media: { key: "rano_photo", kind: "photo" }, urlButtons: [{ text: "📞 Bepul suhbatga yozilish", url: ADMIN }], next: "w39" },
+  { id: "w39", type: "delay", minutes: 1440, next: "m39" },
+
+  // 39 · anti-fraud notice (+1 kun)
+  { id: "m39", type: "message", text: `⚠️ Eslatma: to'lov faqat rasmiy kanal orqali. Firibgarlar nomimizdan yozishi mumkin — begona kartaga to'lov qilmang. Faqat @shahnoza_soliyeva_admin1.`, next: "w40" },
+  { id: "w40", type: "delay", minutes: 2880, next: "m40" },
+
+  // 40 · soft close + retarget (+2 kun)
+  { id: "m40", type: "message", text: `[ism], balki hozir vaqti emas — mayli. Bepul dars va yo'l-xarita sizniki. Tayyor bo'lganingizda shu yerga yozing. Sizni kutamiz. Omad! 🌿`, urlButtons: [{ text: "📞 Tayyor bo'ldim, yozaman", url: ADMIN }], next: "m_end" },
+  { id: "m_end", type: "end", status: "nurtured" },
 ];
 
 const BY_ID: Record<string, FlowStep> = Object.fromEntries(FLOW.map((s) => [s.id, s]));
 export function getStep(id: string): FlowStep | undefined {
   return BY_ID[id];
 }
-export const ENTRY_STEP = "s1";
+export const ENTRY_STEP = "m1";

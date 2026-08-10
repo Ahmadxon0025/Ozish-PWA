@@ -3,7 +3,8 @@ import { requireAdminClient } from "@/lib/supabase/admin";
 import { ingestFunnelEvent } from "@/lib/marketing/ingest";
 import { sendMessage as sendViaMainBot } from "@/lib/telegram/bot";
 import { env } from "@/lib/env";
-import { FLOW_KEY, ENTRY_STEP, getStep, type FlowStep } from "./flow";
+import { FLOW_KEY, type FlowStep } from "./flow";
+import { getFlowDef, getStepIn, resolveStartKey, setFlowReg, loadFlowReg } from "./flows";
 import { sendRich, personalize, answerCallback, InlineKeyboard, Keyboard } from "./telegram";
 import { ovText, ovMinutes, ovButtonUrl, setFlowOv, loadFlowOv } from "./overrides";
 
@@ -118,8 +119,8 @@ function buildInline(step: FlowStep): InlineKeyboard | undefined {
 /** Walk the flow from `stepId`, sending steps until we hit a wait/delay/end. */
 async function runFrom(db: Loose, sub: Subscriber, run: Run, stepId: string | null) {
   let cur = stepId;
-  for (let guard = 0; guard < 60 && cur; guard++) {
-    const step = getStep(cur);
+  for (let guard = 0; guard < 120 && cur; guard++) {
+    const step = getStepIn(run.flow_key, cur);
     if (!step) {
       await setRunState(db, run.id, null, "done");
       return;
@@ -211,7 +212,8 @@ async function notifySales(text: string) {
 
 // ─────────────────────────── inbound resume points ───────────────────────
 
-async function startFlow(db: Loose, sub: Subscriber) {
+async function startFlow(db: Loose, sub: Subscriber, flowKey: string = FLOW_KEY) {
+  const def = getFlowDef(flowKey) ?? getFlowDef(FLOW_KEY)!;
   // Debounce: queued /start floods (e.g. a webhook outage backlog flushing)
   // must not send N welcomes. One fresh run per minute per subscriber.
   const { data: recent } = await db
@@ -228,16 +230,16 @@ async function startFlow(db: Loose, sub: Subscriber) {
   await db.from("funnel_bot_runs").update({ status: "stopped" }).eq("subscriber_id", sub.id).in("status", ["running", "waiting", "delayed"]);
   const { data } = await db
     .from("funnel_bot_runs")
-    .insert({ subscriber_id: sub.id, flow_key: FLOW_KEY, current_step: ENTRY_STEP, status: "running" })
+    .insert({ subscriber_id: sub.id, flow_key: def.key, current_step: def.entry, status: "running" })
     .select()
     .single();
   const run = data as Run;
-  if (run) await runFrom(db, sub, run, ENTRY_STEP);
+  if (run) await runFrom(db, sub, run, def.entry);
 }
 
 async function onButtonTap(db: Loose, sub: Subscriber, run: Run, stepId: string, idx: number) {
   if (run.current_step !== stepId) return; // stale tap (already moved on)
-  const step = getStep(stepId);
+  const step = getStepIn(run.flow_key, stepId);
   if (!step) return;
   let next: string | undefined;
   if (step.type === "continue") {
@@ -260,14 +262,14 @@ async function onPhone(db: Loose, sub: Subscriber, run: Run | null, phone: strin
   } catch {
     /* best-effort */
   }
-  const step = run ? getStep(run.current_step ?? "") : undefined;
+  const step = run ? getStepIn(run.flow_key, run.current_step ?? "") : undefined;
   if (run && step?.type === "ask_phone") {
     await runFrom(db, { ...sub, phone }, run, step.next);
   }
 }
 
 async function onText(db: Loose, sub: Subscriber, run: Run | null, text: string) {
-  const step = run ? getStep(run.current_step ?? "") : undefined;
+  const step = run ? getStepIn(run.flow_key, run.current_step ?? "") : undefined;
   if (run && step?.type === "ask_text") {
     await updateSubscriber(db, sub.id, { [step.field]: text });
     await log(db, sub.id, step.id, "in", "reply", step.field);
@@ -289,6 +291,7 @@ async function onText(db: Loose, sub: Subscriber, run: Run | null, text: string)
 export async function handleUpdate(update: Loose): Promise<void> {
   const db = requireAdminClient() as Loose;
   setFlowOv(await loadFlowOv(db)); // latest dashboard edits (text/timing/media)
+  setFlowReg(await loadFlowReg(db)); // all flows (built-in + user-created)
   try {
     if (update.callback_query) {
       const cq = update.callback_query;
@@ -334,7 +337,7 @@ export async function handleUpdate(update: Loose): Promise<void> {
       } catch {
         /* best-effort attribution */
       }
-      await startFlow(db, sub);
+      await startFlow(db, sub, resolveStartKey(payload)); // deep link picks the funnel
       return;
     }
 
@@ -354,6 +357,7 @@ export async function handleUpdate(update: Loose): Promise<void> {
 export async function processDueSteps(limit = 100): Promise<number> {
   const db = requireAdminClient() as Loose;
   setFlowOv(await loadFlowOv(db)); // latest dashboard edits (text/timing/media)
+  setFlowReg(await loadFlowReg(db)); // all flows (built-in + user-created)
   const nowIso = new Date().toISOString();
   const { data: due } = await db
     .from("funnel_bot_schedule")

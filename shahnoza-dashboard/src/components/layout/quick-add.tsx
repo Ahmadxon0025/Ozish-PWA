@@ -2,7 +2,6 @@
 
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import {
   Plus,
   ListTodo,
@@ -182,11 +181,6 @@ export function QuickAdd() {
   const close = () => setMenu(false);
   const me = api.users.me.useQuery();
   const isOwner = me.data && OWNER_ONLY.includes(me.data.role as UserRole);
-  const pathname = usePathname();
-
-  // The funnel-bot canvas is an immersive builder with its own bottom-right
-  // zoom/add controls — the global + would overlap and steal the click.
-  if (pathname === "/marketing/funnel-bot/flow") return null;
 
   return (
     <>

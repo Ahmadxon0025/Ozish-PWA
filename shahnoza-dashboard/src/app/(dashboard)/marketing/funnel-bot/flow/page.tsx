@@ -370,7 +370,7 @@ function FlowCanvas() {
       ) : (
         <div
           ref={viewportRef}
-          className="relative overflow-hidden rounded-xl border bg-[#eef1f5] touch-none select-none"
+          className="relative cursor-grab overflow-hidden rounded-xl border bg-[#eef1f5] touch-none select-none active:cursor-grabbing"
           style={{ height: "68vh" }}
           onPointerDown={onBgDown}
           onPointerMove={onMove}
@@ -456,9 +456,10 @@ function FlowCanvas() {
             </div>
           ) : null}
 
-          {/* zoom toolbar (stopPropagation so a tap here never starts a pan) */}
+          {/* zoom toolbar — bottom-LEFT so it never collides with the draggable
+              Alfred button; stopPropagation so a tap here never starts a pan */}
           <div
-            className="absolute bottom-4 right-4 z-10 flex flex-col gap-1.5"
+            className="absolute bottom-4 left-4 z-10 flex flex-col gap-1.5"
             onPointerDown={(e) => e.stopPropagation()}
           >
             <button onClick={() => zoomBy(1.25)} className="flex h-10 w-10 items-center justify-center rounded-lg bg-white text-slate-700 shadow-md ring-1 ring-black/5 hover:bg-slate-50 active:scale-95" title="Kattalashtirish"><Plus className="h-5 w-5" /></button>

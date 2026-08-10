@@ -7,7 +7,6 @@ import { cn } from "@/lib/utils";
 const TABS = [
   { href: "/marketing/funnel-bot", label: "Tahlil" },
   { href: "/marketing/funnel-bot/flow", label: "Xarita" },
-  { href: "/marketing/funnel-bot/editor", label: "Muharrir" },
   { href: "/marketing/funnel-bot/contacts", label: "Kontaktlar" },
   { href: "/marketing/funnel-bot/inbox", label: "Suhbatlar" },
   { href: "/marketing/funnel-bot/broadcasts", label: "Xabar yuborish" },

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, roleProcedure } from "@/server/api/trpc";
 import { requireAdminClient } from "@/lib/supabase/admin";
-import { FLOW, FLOW_KEY, type FlowStep } from "@/lib/funnel-bot/flow";
+import { FLOW, FLOW_KEY, ENTRY_STEP, type FlowStep } from "@/lib/funnel-bot/flow";
 
 const SUB_STATUSES = ["active", "lead", "call_requested", "replied", "nurtured", "cold", "stopped"] as const;
 
@@ -45,10 +45,36 @@ function validateFlowGraph(steps: FlowStep[]): string | null {
 /** Resolve a flow's steps: built-in key → code, custom key → jsonb. */
 async function flowStepsFor(db: any, flowKey?: string | null): Promise<{ key: string; steps: FlowStep[]; builtin: boolean }> {
   const key = flowKey || FLOW_KEY;
-  if (key === FLOW_KEY) return { key, steps: FLOW, builtin: true };
-  const { data } = await db.from("funnel_bot_flows").select("steps, is_builtin").eq("key", key).maybeSingle();
-  if (!data || data.is_builtin) return { key: FLOW_KEY, steps: FLOW, builtin: true };
-  return { key, steps: (Array.isArray(data.steps) ? data.steps : []) as FlowStep[], builtin: false };
+  let row: { steps: unknown; is_builtin: boolean } | null = null;
+  try {
+    const { data } = await db.from("funnel_bot_flows").select("steps, is_builtin").eq("key", key).maybeSingle();
+    row = data ?? null;
+  } catch {
+    /* table not applied yet */
+  }
+  // A converted (editable) flow lives in the DB (is_builtin=false, has steps).
+  if (row && !row.is_builtin && Array.isArray(row.steps) && row.steps.length) {
+    return { key, steps: row.steps as FlowStep[], builtin: false };
+  }
+  if (key === FLOW_KEY) return { key: FLOW_KEY, steps: FLOW, builtin: true };
+  return { key: FLOW_KEY, steps: FLOW, builtin: true };
+}
+
+/** Deep-clone the code flow and bake current text/minutes/button overrides in. */
+function bakeFlowSteps(overrides: Array<{ step_id: string; text: string | null; minutes: number | null; buttons?: Record<string, string> | null }>): FlowStep[] {
+  const ovById = new Map(overrides.map((o) => [o.step_id, o]));
+  const steps = JSON.parse(JSON.stringify(FLOW)) as FlowStep[];
+  for (const s of steps) {
+    const o = ovById.get(s.id);
+    if (!o) continue;
+    if (o.text != null && "text" in s) (s as { text: string }).text = o.text;
+    if (o.minutes != null && s.type === "delay") s.minutes = o.minutes;
+    if (o.buttons) {
+      const arr = s.type === "message" ? s.urlButtons : s.type === "buttons" ? s.buttons : undefined;
+      if (arr) for (const [i, url] of Object.entries(o.buttons)) { const b = arr[Number(i)]; if (b) b.url = url; }
+    }
+  }
+  return steps;
 }
 
 // Funnel + cost data is manager/owner territory (ROAS touches spend).
@@ -653,7 +679,7 @@ export const marketingRouter = createTRPCRouter({
     } catch {
       /* table not applied yet → show only the built-in flow */
     }
-    if (!flows.some((f) => f.is_builtin)) {
+    if (!flows.some((f) => f.key === FLOW_KEY)) {
       flows.unshift({ key: FLOW_KEY, name: "Lead-magnit voronka (asosiy)", status: "live", is_builtin: true, steps: [], created_at: "" });
     }
     const { data: runs } = await db.from("funnel_bot_runs").select("flow_key, status, subscriber_id").limit(20000);
@@ -671,7 +697,7 @@ export const marketingRouter = createTRPCRouter({
         name: f.name,
         status: f.status,
         isBuiltin: f.is_builtin,
-        stepCount: f.is_builtin ? FLOW.length : Array.isArray(f.steps) ? (f.steps as unknown[]).length : 0,
+        stepCount: Array.isArray(f.steps) && f.steps.length ? (f.steps as unknown[]).length : FLOW.length,
         contacts,
         conversion: contacts > 0 ? Math.round((done / contacts) * 100) : 0,
       };
@@ -684,9 +710,6 @@ export const marketingRouter = createTRPCRouter({
     .query(async ({ input }) => {
       const db = requireAdminClient() as any;
       const key = input?.flowKey || FLOW_KEY;
-      if (key === FLOW_KEY) {
-        return { key, name: "Lead-magnit voronka (asosiy)", status: "live", isBuiltin: true, entry: FLOW[0]!.id, steps: FLOW };
-      }
       let row: { key: string; name: string; status: string; entry_step: string | null; steps: unknown; is_builtin: boolean } | null = null;
       try {
         const { data } = await db.from("funnel_bot_flows").select("key, name, status, entry_step, steps, is_builtin").eq("key", key).maybeSingle();
@@ -694,11 +717,44 @@ export const marketingRouter = createTRPCRouter({
       } catch {
         /* table missing */
       }
-      if (!row || row.is_builtin) {
-        return { key: FLOW_KEY, name: "Lead-magnit voronka (asosiy)", status: "live", isBuiltin: true, entry: FLOW[0]!.id, steps: FLOW };
+      // A converted/custom flow (editable) lives in the DB.
+      if (row && !row.is_builtin && Array.isArray(row.steps) && row.steps.length) {
+        const steps = row.steps as FlowStep[];
+        return { key: row.key, name: row.name, status: row.status, isBuiltin: false, entry: row.entry_step ?? steps[0]?.id ?? "", steps };
       }
-      const steps = (Array.isArray(row.steps) ? row.steps : []) as FlowStep[];
-      return { key: row.key, name: row.name, status: row.status, isBuiltin: false, entry: row.entry_step ?? steps[0]?.id ?? "", steps };
+      // Still code-managed (not converted yet).
+      if (key === FLOW_KEY) {
+        return { key: FLOW_KEY, name: row?.name ?? "Lead-magnit voronka (asosiy)", status: row?.status ?? "live", isBuiltin: true, entry: ENTRY_STEP, steps: FLOW };
+      }
+      return { key: FLOW_KEY, name: "Lead-magnit voronka (asosiy)", status: "live", isBuiltin: true, entry: ENTRY_STEP, steps: FLOW };
+    }),
+
+  /** Convert the code-managed main funnel into a fully-editable DB flow. Copies
+   *  the 40 steps exactly (baking in current text/timing/button edits), so the
+   *  live bot keeps running identically — then every block becomes add/removable. */
+  convertFlowToEditable: managerProcedure
+    .input(z.object({ key: z.string().max(64) }))
+    .mutation(async ({ input }) => {
+      const db = requireAdminClient() as any;
+      if (input.key !== FLOW_KEY) return { ok: true, already: true }; // custom flows are already editable
+      const { data: row } = await db.from("funnel_bot_flows").select("is_builtin").eq("key", FLOW_KEY).maybeSingle();
+      if (row && row.is_builtin === false) return { ok: true, already: true }; // already converted
+      let overrides: Array<{ step_id: string; text: string | null; minutes: number | null; buttons?: Record<string, string> | null }> = [];
+      try {
+        const { data } = await db.from("funnel_bot_step_overrides").select("step_id, text, minutes, buttons");
+        overrides = data ?? [];
+      } catch {
+        /* no overrides table → bake plain code */
+      }
+      const steps = bakeFlowSteps(overrides);
+      const { error } = await db.from("funnel_bot_flows").upsert(
+        { key: FLOW_KEY, name: "Lead-magnit voronka (asosiy)", status: "live", entry_step: ENTRY_STEP, steps, is_builtin: false, updated_at: new Date().toISOString() },
+        { onConflict: "key" },
+      );
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: `SQL 0051 qo'llanganmi? ${error.message}` });
+      // Single source of truth = steps now; drop the baked text/timing/button overrides (media stays keyed).
+      try { await db.from("funnel_bot_step_overrides").delete().in("step_id", steps.map((s) => s.id)); } catch { /* best-effort */ }
+      return { ok: true, already: false };
     }),
 
   /** Create a new automation with a starter chain; returns its key. */
@@ -734,7 +790,7 @@ export const marketingRouter = createTRPCRouter({
       if (problem) throw new TRPCError({ code: "BAD_REQUEST", message: problem });
       const { data: row } = await db.from("funnel_bot_flows").select("is_builtin").eq("key", input.key).maybeSingle();
       if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Voronka topilmadi" });
-      if (row.is_builtin) throw new TRPCError({ code: "BAD_REQUEST", message: "Asosiy voronka kodda — matn/vaqtni qadam panelidan tahrirlang" });
+      if (row.is_builtin) throw new TRPCError({ code: "BAD_REQUEST", message: "Avval «Bloklarni tahrirlash»ni yoqing" });
       const entry = input.entryStep && input.steps.some((s) => s.id === input.entryStep) ? input.entryStep : input.steps[0]!.id;
       const { error } = await db
         .from("funnel_bot_flows")
@@ -758,8 +814,7 @@ export const marketingRouter = createTRPCRouter({
     .input(z.object({ key: z.string().max(64), status: z.enum(["draft", "live", "archived"]) }))
     .mutation(async ({ input }) => {
       const db = requireAdminClient() as any;
-      const { data: row } = await db.from("funnel_bot_flows").select("is_builtin").eq("key", input.key).maybeSingle();
-      if (row?.is_builtin && input.status !== "live") {
+      if (input.key === FLOW_KEY && input.status !== "live") {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Asosiy voronka doim yoniq — /start unga tushadi" });
       }
       const { error } = await db.from("funnel_bot_flows").update({ status: input.status, updated_at: new Date().toISOString() }).eq("key", input.key);
@@ -771,9 +826,9 @@ export const marketingRouter = createTRPCRouter({
     .input(z.object({ key: z.string().max(64) }))
     .mutation(async ({ input }) => {
       const db = requireAdminClient() as any;
+      if (input.key === FLOW_KEY) throw new TRPCError({ code: "BAD_REQUEST", message: "Asosiy voronkani o'chirib bo'lmaydi" });
       const { data: row } = await db.from("funnel_bot_flows").select("is_builtin").eq("key", input.key).maybeSingle();
       if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Voronka topilmadi" });
-      if (row.is_builtin) throw new TRPCError({ code: "BAD_REQUEST", message: "Asosiy voronkani o'chirib bo'lmaydi" });
       // active runs on this flow will finish gracefully (unknown step → done)
       const { error } = await db.from("funnel_bot_flows").delete().eq("key", input.key);
       if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });

@@ -89,6 +89,7 @@ function FlowCanvas() {
 
   const updateSteps = api.marketing.updateFlowSteps.useMutation();
   const setStatus = api.marketing.setFlowStatus.useMutation();
+  const convertFlow = api.marketing.convertFlowToEditable.useMutation();
 
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -339,6 +340,23 @@ function FlowCanvas() {
     toast({ title: "Havola nusxalandi", description: link, variant: "success" });
   }
 
+  async function makeEditable() {
+    if (!raw) return;
+    if (!window.confirm("Bu voronkani to'liq tahrirlash rejimiga o'tkazamizmi? Barcha xabarlar aynan ko'chiriladi — bot xuddi shunday ishlashda davom etadi, lekin har bir blokni (rasm/video/ovoz/tugma) qo'shish va o'chirish mumkin bo'ladi.")) return;
+    try {
+      await convertFlow.mutateAsync({ key: raw.key });
+      await Promise.all([
+        utils.marketing.funnelBotFlowRaw.invalidate(),
+        utils.marketing.funnelBotFlow.invalidate(),
+        utils.marketing.funnelBotGraph.invalidate(),
+        utils.marketing.funnelBotFlows.invalidate(),
+      ]);
+      toast({ title: "Tahrirlash yoqildi ✓", description: "Endi bloklarni qo'shing/o'chiring.", variant: "success" });
+    } catch (e) {
+      toast({ title: "Xatolik", description: e instanceof Error ? e.message : "", variant: "destructive" });
+    }
+  }
+
   const selectedStats = selected ? statsById.get(selected) : null;
   const selectedRaw = selected ? rawById.get(selected) : undefined;
   const selectedOv = selected ? ovById.get(selected) : undefined;
@@ -360,6 +378,11 @@ function FlowCanvas() {
           <Badge variant="secondary" className="text-[10px]">QORALAMA</Badge>
         ) : null}
         <div className="ml-auto flex items-center gap-2">
+          {isBuiltin ? (
+            <Button size="sm" onClick={makeEditable} disabled={convertFlow.isPending}>
+              <Zap className="h-3.5 w-3.5 mr-1.5" /> {convertFlow.isPending ? "Yoqilmoqda…" : "Bloklarni tahrirlash"}
+            </Button>
+          ) : null}
           <Button variant="outline" size="sm" onClick={copyLink}><Copy className="h-3.5 w-3.5 mr-1.5" /> Havola</Button>
           {!isBuiltin && raw ? (
             <Button size="sm" variant={raw.status === "live" ? "outline" : "default"} onClick={toggleLive} disabled={setStatus.isPending}>
@@ -490,6 +513,8 @@ function FlowCanvas() {
           ) : !isBuiltin && selectedRaw && raw ? (
             <CustomEditPanel
               step={selectedRaw}
+              ov={selectedOv}
+              flowKey={flowKey}
               busy={updateSteps.isPending}
               onSave={async (updated) => {
                 const steps = (structuredClone(raw.steps) as FlowStep[]).map((s) => (s.id === updated.id ? updated : s));
@@ -757,21 +782,35 @@ function BuiltinEditPanel({ step, flowKey }: { step: OvStep; flowKey?: string })
 
 // ───────────────────────── custom flow edit panel ─────────────────────────
 
+type MediaKind = "photo" | "video" | "voice";
+const CAN_MEDIA = (t: string) => t === "message" || t === "continue" || t === "buttons";
+
 function CustomEditPanel({
-  step, busy, onSave, onDelete,
+  step, ov, flowKey, busy, onSave, onDelete,
 }: {
   step: FlowStep;
+  ov: OvStep | undefined;
+  flowKey?: string;
   busy: boolean;
   onSave: (updated: FlowStep) => Promise<void>;
   onDelete: () => void;
 }) {
+  const utils = api.useUtils();
+  const saveMedia = api.marketing.saveMedia.useMutation();
+  const stepMedia = "media" in step ? step.media : undefined;
+  const mediaKey = stepMedia?.key ?? `${step.id}_m`;
+
   const [text, setText] = useState("text" in step && typeof step.text === "string" ? step.text : "");
   const [minutes, setMinutes] = useState<string>(step.type === "delay" ? String(step.minutes) : "0");
   const [btns, setBtns] = useState<Array<{ text: string; url: string }>>(() =>
     step.type === "message" ? (step.urlButtons ?? []).map((b) => ({ text: b.text, url: b.url ?? "" })) : [],
   );
+  const [mediaKind, setMediaKind] = useState<MediaKind | null>((stepMedia?.kind as MediaKind) ?? null);
+  const [mediaUrl, setMediaUrl] = useState(ov?.mediaUrl ?? "");
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement | null>(null);
 
-  function buildUpdated(): FlowStep {
+  function buildUpdated(mediaOverride?: { key: string; kind: MediaKind } | null): FlowStep {
     const s = structuredClone(step) as FlowStep;
     if ("text" in s && typeof (s as { text?: string }).text === "string") (s as { text: string }).text = text;
     if (s.type === "delay") s.minutes = Math.max(0, Number(minutes) || 0);
@@ -779,8 +818,54 @@ function CustomEditPanel({
       const cleaned = btns.filter((b) => b.text.trim());
       s.urlButtons = cleaned.length ? cleaned.map((b) => ({ text: b.text.trim(), url: b.url.trim() })) : undefined;
     }
+    if (CAN_MEDIA(s.type)) {
+      const m = mediaOverride === undefined ? (mediaKind ? { key: mediaKey, kind: mediaKind } : undefined) : (mediaOverride ?? undefined);
+      const anyS = s as { media?: { key: string; kind: string } };
+      if (m) anyS.media = m; else delete anyS.media;
+    }
     return s;
   }
+
+  async function onUpload(file: File) {
+    if (file.size > FUNNEL_MEDIA_MAX_BYTES) {
+      toast({ title: "Fayl juda katta", description: "Maksimum 20 MB.", variant: "destructive" });
+      return;
+    }
+    const kind = mediaKind ?? "photo";
+    setUploading(true);
+    try {
+      const supabase = createClient();
+      const path = `${mediaKey}/${crypto.randomUUID()}-${safeName(file.name)}`;
+      const up = await supabase.storage.from(FUNNEL_MEDIA_BUCKET).upload(path, file, { upsert: true, contentType: file.type || undefined });
+      if (up.error) {
+        toast({ title: "Yuklashda xato", description: /bucket not found/i.test(up.error.message) ? "0052 SQL qo'llanmagan." : up.error.message, variant: "destructive" });
+        return;
+      }
+      const url = supabase.storage.from(FUNNEL_MEDIA_BUCKET).getPublicUrl(path).data.publicUrl;
+      setMediaUrl(url);
+      setMediaKind(kind);
+      await saveMedia.mutateAsync({ key: mediaKey, url, fileId: null });
+      await onSave(buildUpdated({ key: mediaKey, kind }));
+      toast({ title: "Media yuklandi ✓", variant: "success" });
+      void utils.marketing.funnelBotFlow.invalidate({ flowKey });
+    } catch (e) {
+      toast({ title: "Yuklashda xato", description: e instanceof Error ? e.message : "", variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function removeMedia() {
+    setMediaKind(null);
+    setMediaUrl("");
+    await onSave(buildUpdated(null));
+  }
+
+  const MEDIA_BTN: Array<{ kind: MediaKind; label: string }> = [
+    { kind: "photo", label: "Rasm" },
+    { kind: "video", label: "Video" },
+    { kind: "voice", label: "Ovoz" },
+  ];
 
   return (
     <div className="space-y-4">
@@ -800,6 +885,45 @@ function CustomEditPanel({
               <button key={m} onClick={() => setMinutes(String(m))} className="rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground">{fmtMin(m)}</button>
             ))}
           </div>
+        </div>
+      ) : null}
+
+      {CAN_MEDIA(step.type) ? (
+        <div>
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1"><ImageIcon className="h-3.5 w-3.5" /> Media bloki</div>
+          {!mediaKind ? (
+            <div className="flex gap-1.5">
+              {MEDIA_BTN.map((m) => (
+                <Button key={m.kind} type="button" variant="outline" size="sm" onClick={() => setMediaKind(m.kind)}>
+                  <Plus className="h-3.5 w-3.5 mr-1" /> {m.label}
+                </Button>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-md border p-2.5 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium">{MEDIA_LABEL[mediaKind]}</span>
+                <Button type="button" variant="ghost" size="sm" className="h-7 text-destructive hover:text-destructive" onClick={removeMedia} disabled={uploading || busy}>
+                  <Trash2 className="h-3.5 w-3.5 mr-1" /> Blokni olib tashlash
+                </Button>
+              </div>
+              {mediaUrl && /^https?:\/\//i.test(mediaUrl) ? (
+                mediaKind === "photo" ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={mediaUrl} alt="" className="max-h-40 w-full rounded object-contain" />
+                ) : mediaKind === "video" ? (
+                  <video src={mediaUrl} controls className="max-h-40 w-full rounded" />
+                ) : (
+                  <audio src={mediaUrl} controls className="w-full" />
+                )
+              ) : null}
+              <input ref={fileRef} type="file" accept={accecptFor(mediaKind)} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (fileRef.current) fileRef.current.value = ""; if (f) void onUpload(f); }} />
+              <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
+                <Upload className="h-3.5 w-3.5 mr-1.5" /> {uploading ? "Yuklanmoqda…" : "Kompyuterdan yuklash"}
+              </Button>
+              <Input value={mediaUrl} onChange={(e) => setMediaUrl(e.target.value)} placeholder="…yoki URL qo'ying" className="text-sm" />
+            </div>
+          )}
         </div>
       ) : null}
 

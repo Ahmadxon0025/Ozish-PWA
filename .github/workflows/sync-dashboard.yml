@@ -59,3 +59,14 @@ jobs:
             dashboard-main:main
 
           echo "Synced shahnoza-dashboard/ → Ahmadxon0025/shahnoza-dashboard@main"
+
+      - name: Trigger Vercel deploy (if hook configured)
+        env:
+          VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        run: |
+          if [ -n "${VERCEL_DEPLOY_HOOK:-}" ]; then
+            echo "Firing Vercel deploy hook…"
+            curl -sS -X POST "$VERCEL_DEPLOY_HOOK" -w "\nHTTP %{http_code}\n" || echo "::warning::deploy hook call failed (non-fatal)"
+          else
+            echo "::warning::No VERCEL_DEPLOY_HOOK secret — Vercel won't auto-deploy. Add it in Settings → Secrets and variables → Actions."
+          fi

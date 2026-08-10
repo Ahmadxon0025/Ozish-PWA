@@ -261,6 +261,95 @@ export const marketingRouter = createTRPCRouter({
     return { total, leads, calls, byStatus, bySegment, stages, steps };
   }),
 
+  /**
+   * Flow as a laid-out node graph for the ManyChat-style canvas: every step as
+   * a positioned node (longest-path columns) with live sent/clicked/CTR, plus
+   * the edges (branches labelled by button text, delays by minutes).
+   */
+  funnelBotGraph: managerProcedure.query(async () => {
+    const db = requireAdminClient() as any;
+    const { data: logs } = await db.from("funnel_bot_log").select("step_id, direction, kind").limit(20000);
+    const sent: Record<string, number> = {};
+    const advanced: Record<string, number> = {};
+    for (const l of (logs ?? []) as Array<{ step_id: string | null; direction: string; kind: string | null }>) {
+      if (!l.step_id) continue;
+      if (l.direction === "out") sent[l.step_id] = (sent[l.step_id] ?? 0) + 1;
+      else if (l.direction === "in" && l.kind === "button") advanced[l.step_id] = (advanced[l.step_id] ?? 0) + 1;
+    }
+
+    type Edge = { from: string; to: string; label: string };
+    const edges: Edge[] = [];
+    for (const st of FLOW) {
+      if (st.type === "buttons") {
+        for (const b of (st as { buttons: Array<{ text: string; next?: string }> }).buttons) {
+          if (b.next) edges.push({ from: st.id, to: b.next, label: b.text });
+        }
+      } else if (st.type === "delay") {
+        const s = st as { next: string; minutes: number };
+        edges.push({ from: st.id, to: s.next, label: `${s.minutes} daq` });
+      } else if (st.type === "message" || st.type === "continue" || st.type === "ask_phone" || st.type === "ask_text") {
+        const nx = (st as { next?: string }).next;
+        if (nx) edges.push({ from: st.id, to: nx, label: "" });
+      } else if (st.type === "action") {
+        const nx = (st as { next?: string }).next;
+        if (nx) edges.push({ from: st.id, to: nx, label: "" });
+      }
+    }
+
+    const ids = FLOW.map((s) => s.id);
+    const adj: Record<string, string[]> = {};
+    const indeg: Record<string, number> = {};
+    ids.forEach((i) => (indeg[i] = 0));
+    for (const e of edges) {
+      (adj[e.from] ??= []).push(e.to);
+      indeg[e.to] = (indeg[e.to] ?? 0) + 1;
+    }
+    // Kahn topo sort → longest-path depth (=column)
+    const queue = ids.filter((i) => indeg[i] === 0);
+    const ind = { ...indeg };
+    const topo: string[] = [];
+    while (queue.length) {
+      const n = queue.shift()!;
+      topo.push(n);
+      for (const m of adj[n] ?? []) {
+        ind[m] -= 1;
+        if (ind[m] === 0) queue.push(m);
+      }
+    }
+    const depth: Record<string, number> = {};
+    ids.forEach((i) => (depth[i] = 0));
+    for (const n of topo) for (const m of adj[n] ?? []) depth[m] = Math.max(depth[m], depth[n] + 1);
+
+    const byDepth: Record<number, string[]> = {};
+    for (const i of ids) (byDepth[depth[i]] ??= []).push(i);
+    const COLW = 300;
+    const ROWH = 160;
+    const pos: Record<string, { x: number; y: number }> = {};
+    for (const d of Object.keys(byDepth)) {
+      byDepth[Number(d)].forEach((id, idx) => {
+        pos[id] = { x: Number(d) * COLW, y: idx * ROWH };
+      });
+    }
+
+    const nodes = FLOW.map((st) => {
+      const hasText = "text" in st && typeof (st as { text?: unknown }).text === "string";
+      const interactive = st.type === "continue" || st.type === "buttons";
+      const s = sent[st.id] ?? 0;
+      const a = advanced[st.id] ?? 0;
+      return {
+        id: st.id,
+        type: st.type,
+        label: hasText ? (st as { text: string }).text.replace(/\s+/g, " ").trim() : st.id,
+        x: pos[st.id]?.x ?? 0,
+        y: pos[st.id]?.y ?? 0,
+        sent: s,
+        advanced: interactive ? a : null,
+        ctr: interactive && s > 0 ? Math.round((a / s) * 100) : null,
+      };
+    });
+    return { nodes, edges };
+  }),
+
   /** Audience list — filterable subscribers of the funnel bot. */
   funnelBotSubscribers: managerProcedure
     .input(

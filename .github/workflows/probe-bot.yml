@@ -5,6 +5,10 @@ name: Probe funnel-bot production
 # which layer of the funnel bot is broken: deployment, env vars, or database.
 on:
   workflow_dispatch: {}
+  push:
+    paths:
+      - ".github/workflows/probe-bot.yml"
+      - ".github/probe-trigger"
 
 jobs:
   probe:

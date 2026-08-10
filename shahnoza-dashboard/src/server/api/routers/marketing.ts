@@ -371,13 +371,18 @@ export const marketingRouter = createTRPCRouter({
    */
   funnelBotFlow: managerProcedure.query(async () => {
     const db = requireAdminClient() as any;
-    let overrides: Array<{ step_id: string; text: string | null; minutes: number | null }> = [];
+    let overrides: Array<{ step_id: string; text: string | null; minutes: number | null; buttons?: Record<string, string> | null }> = [];
     let media: Array<{ media_key: string; file_id: string | null; url: string | null }> = [];
     try {
-      const { data } = await db.from("funnel_bot_step_overrides").select("step_id, text, minutes");
+      const { data } = await db.from("funnel_bot_step_overrides").select("step_id, text, minutes, buttons");
       overrides = data ?? [];
     } catch {
-      /* table not applied yet */
+      try {
+        const { data } = await db.from("funnel_bot_step_overrides").select("step_id, text, minutes");
+        overrides = data ?? [];
+      } catch {
+        /* table not applied yet */
+      }
     }
     try {
       const { data } = await db.from("funnel_bot_media").select("media_key, file_id, url");
@@ -393,6 +398,20 @@ export const marketingRouter = createTRPCRouter({
       const hasText = "text" in st && typeof (st as { text?: unknown }).text === "string";
       const mediaSlot = "media" in st ? (st as { media?: { key: string; kind: string } }).media : undefined;
       const med = mediaSlot ? medByKey.get(mediaSlot.key) : undefined;
+
+      // Editable link buttons: message url-buttons, plus any buttons-step button
+      // that is a link (has a url). Callback buttons are not links.
+      const rawBtns =
+        st.type === "message"
+          ? ((st as { urlButtons?: Array<{ text: string; url?: string }> }).urlButtons ?? [])
+          : st.type === "buttons"
+            ? ((st as { buttons: Array<{ text: string; url?: string }> }).buttons ?? [])
+            : [];
+      const urlButtons = rawBtns
+        .map((b, i) => ({ index: i, label: b.text, defaultUrl: b.url ?? "", url: o?.buttons?.[String(i)] ?? null, isLink: st.type === "message" || !!b.url }))
+        .filter((b) => b.isLink)
+        .map(({ index, label, defaultUrl, url }) => ({ index, label, defaultUrl, url }));
+
       return {
         id: st.id,
         type: st.type,
@@ -406,6 +425,7 @@ export const marketingRouter = createTRPCRouter({
         mediaKind: mediaSlot?.kind ?? null,
         mediaUrl: med?.url ?? null,
         mediaFileId: med?.file_id ?? null,
+        urlButtons,
       };
     });
   }),
@@ -445,6 +465,27 @@ export const marketingRouter = createTRPCRouter({
           { media_key: input.key, url: input.url || null, file_id: input.fileId || null, updated_at: new Date().toISOString() },
           { onConflict: "media_key" },
         );
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      return { ok: true };
+    }),
+
+  /** Set a link button's URL (merges into the step's button overrides). */
+  saveStepButton: managerProcedure
+    .input(z.object({ stepId: z.string(), index: z.number().int().min(0), url: z.string().max(2000).nullable() }))
+    .mutation(async ({ input }) => {
+      const db = requireAdminClient() as any;
+      const { data: existing } = await db
+        .from("funnel_bot_step_overrides")
+        .select("buttons")
+        .eq("step_id", input.stepId)
+        .maybeSingle();
+      const buttons: Record<string, string> = { ...((existing?.buttons as Record<string, string>) ?? {}) };
+      const url = input.url?.trim();
+      if (url) buttons[String(input.index)] = url;
+      else delete buttons[String(input.index)];
+      const { error } = await db
+        .from("funnel_bot_step_overrides")
+        .upsert({ step_id: input.stepId, buttons, updated_at: new Date().toISOString() }, { onConflict: "step_id" });
       if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
       return { ok: true };
     }),

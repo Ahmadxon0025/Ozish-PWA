@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Clock, Image as ImageIcon, MessageSquare, Save } from "lucide-react";
+import { Clock, Image as ImageIcon, Link2, MessageSquare, Save } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent } from "@/components/ui/card";
@@ -25,13 +25,14 @@ type Step = {
   mediaKind: string | null;
   mediaUrl: string | null;
   mediaFileId: string | null;
+  urlButtons: Array<{ index: number; label: string; defaultUrl: string; url: string | null }>;
 };
 
 const MEDIA_KIND: Record<string, string> = { photo: "rasm", video: "video", voice: "ovoz", document: "hujjat" };
 
 export default function FunnelBotEditorPage() {
   const { data, isLoading } = api.marketing.funnelBotFlow.useQuery();
-  const editable = (data ?? []).filter((s) => s.editableText || s.isDelay || s.mediaKey);
+  const editable = (data ?? []).filter((s) => s.editableText || s.isDelay || s.mediaKey || (s.urlButtons && s.urlButtons.length > 0));
 
   return (
     <div className="space-y-5">
@@ -60,16 +61,21 @@ function StepCard({ step }: { step: Step }) {
   const [text, setText] = useState(step.text ?? step.defaultText ?? "");
   const [minutes, setMinutes] = useState<string>(String(step.minutes ?? step.defaultMinutes ?? 0));
   const [media, setMedia] = useState(step.mediaUrl ?? step.mediaFileId ?? "");
+  const [btns, setBtns] = useState<Record<number, string>>(() =>
+    Object.fromEntries((step.urlButtons ?? []).map((b) => [b.index, b.url ?? b.defaultUrl ?? ""])),
+  );
 
   const saveText = api.marketing.saveStepText.useMutation();
   const saveMin = api.marketing.saveStepMinutes.useMutation();
   const saveMedia = api.marketing.saveMedia.useMutation();
-  const busy = saveText.isPending || saveMin.isPending || saveMedia.isPending;
+  const saveBtn = api.marketing.saveStepButton.useMutation();
+  const busy = saveText.isPending || saveMin.isPending || saveMedia.isPending || saveBtn.isPending;
 
   const textDirty = step.editableText && text !== (step.text ?? step.defaultText ?? "");
   const minDirty = step.isDelay && Number(minutes) !== (step.minutes ?? step.defaultMinutes ?? 0);
   const mediaDirty = !!step.mediaKey && media !== (step.mediaUrl ?? step.mediaFileId ?? "");
-  const dirty = textDirty || minDirty || mediaDirty;
+  const dirtyBtns = (step.urlButtons ?? []).filter((b) => (btns[b.index] ?? "") !== (b.url ?? b.defaultUrl ?? ""));
+  const dirty = textDirty || minDirty || mediaDirty || dirtyBtns.length > 0;
 
   async function onSave() {
     try {
@@ -83,10 +89,13 @@ function StepCard({ step }: { step: Step }) {
           fileId: isUrl ? null : media.trim() || null,
         });
       }
+      for (const b of dirtyBtns) {
+        await saveBtn.mutateAsync({ stepId: step.id, index: b.index, url: (btns[b.index] ?? "").trim() || null });
+      }
       toast({ title: "Saqlandi", variant: "success" });
       void utils.marketing.funnelBotFlow.invalidate();
     } catch (e) {
-      toast({ title: "Xatolik", description: e instanceof Error ? e.message : "0049 SQL qo'llanganmi?", variant: "destructive" });
+      toast({ title: "Xatolik", description: e instanceof Error ? e.message : "SQL qo'llanganmi?", variant: "destructive" });
     }
   }
 
@@ -131,6 +140,20 @@ function StepCard({ step }: { step: Step }) {
             />
           </div>
         ) : null}
+
+        {(step.urlButtons ?? []).map((b) => (
+          <div key={b.index}>
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+              <Link2 className="h-3.5 w-3.5" /> Tugma havolasi: <b>{b.label}</b>
+            </div>
+            <Input
+              value={btns[b.index] ?? ""}
+              onChange={(e) => setBtns((s) => ({ ...s, [b.index]: e.target.value }))}
+              placeholder="https://… (video/sayt havolasi)"
+              className="text-sm"
+            />
+          </div>
+        ))}
 
         <div className="flex justify-end">
           <Button size="sm" onClick={onSave} disabled={!dirty || busy}>

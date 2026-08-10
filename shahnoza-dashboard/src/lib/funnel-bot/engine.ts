@@ -5,7 +5,7 @@ import { sendMessage as sendViaMainBot } from "@/lib/telegram/bot";
 import { env } from "@/lib/env";
 import { FLOW_KEY, ENTRY_STEP, getStep, type FlowStep } from "./flow";
 import { sendRich, personalize, answerCallback, InlineKeyboard, Keyboard } from "./telegram";
-import { ovText, ovMinutes, setFlowOv, loadFlowOv } from "./overrides";
+import { ovText, ovMinutes, ovButtonUrl, setFlowOv, loadFlowOv } from "./overrides";
 
 // The bot's own tables aren't in the generated Database types, so we use a
 // loosely-typed admin client for them (same approach as the finance bot).
@@ -92,7 +92,8 @@ function buildInline(step: FlowStep): InlineKeyboard | undefined {
   if (step.type === "buttons") {
     const kb = new InlineKeyboard();
     step.buttons.forEach((btn, i) => {
-      if (btn.url) kb.url(btn.text, btn.url).row();
+      const url = btn.url ? ovButtonUrl(step.id, i, btn.url) : "";
+      if (url) kb.url(btn.text, url).row();
       else kb.text(btn.text, `b:${step.id}:${i}`).row();
     });
     return kb;
@@ -100,12 +101,13 @@ function buildInline(step: FlowStep): InlineKeyboard | undefined {
   if (step.type === "message" && step.urlButtons?.length) {
     const kb = new InlineKeyboard();
     let any = false;
-    for (const b of step.urlButtons) {
-      if (b.url) {
-        kb.url(b.text, b.url).row();
+    step.urlButtons.forEach((b, i) => {
+      const url = ovButtonUrl(step.id, i, b.url ?? "");
+      if (url) {
+        kb.url(b.text, url).row();
         any = true;
       }
-    }
+    });
     return any ? kb : undefined;
   }
   return undefined;

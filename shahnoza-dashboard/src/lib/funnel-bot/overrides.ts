@@ -11,12 +11,17 @@ interface FlowOv {
   textById: Record<string, string>;
   minutesById: Record<string, number>;
   mediaByKey: Record<string, { fileId?: string; url?: string }>;
+  buttonUrlById: Record<string, Record<string, string>>; // stepId → { index: url }
 }
 
-let CURRENT: FlowOv = { textById: {}, minutesById: {}, mediaByKey: {} };
+let CURRENT: FlowOv = { textById: {}, minutesById: {}, mediaByKey: {}, buttonUrlById: {} };
 
 export function setFlowOv(ov: FlowOv): void {
   CURRENT = ov;
+}
+
+export function ovButtonUrl(stepId: string, index: number, fallback: string): string {
+  return CURRENT.buttonUrlById[stepId]?.[String(index)] ?? fallback;
 }
 
 export function ovText(id: string, fallback: string): string {
@@ -34,15 +39,25 @@ export function ovMedia(key: string): { fileId?: string; url?: string } | undefi
 /** Load the current overrides from the DB. Never throws — returns empty maps if
  *  the optional tables aren't applied yet. */
 export async function loadFlowOv(db: any): Promise<FlowOv> {
-  const ov: FlowOv = { textById: {}, minutesById: {}, mediaByKey: {} };
+  const ov: FlowOv = { textById: {}, minutesById: {}, mediaByKey: {}, buttonUrlById: {} };
   try {
-    const { data } = await db.from("funnel_bot_step_overrides").select("step_id, text, minutes");
-    for (const r of (data ?? []) as Array<{ step_id: string; text: string | null; minutes: number | null }>) {
+    const { data } = await db.from("funnel_bot_step_overrides").select("step_id, text, minutes, buttons");
+    for (const r of (data ?? []) as Array<{ step_id: string; text: string | null; minutes: number | null; buttons: Record<string, string> | null }>) {
       if (r.text != null) ov.textById[r.step_id] = r.text;
       if (r.minutes != null) ov.minutesById[r.step_id] = r.minutes;
+      if (r.buttons && typeof r.buttons === "object") ov.buttonUrlById[r.step_id] = r.buttons;
     }
   } catch {
-    /* table not applied — use code defaults */
+    // Fall back: buttons column may not exist yet — retry without it.
+    try {
+      const { data } = await db.from("funnel_bot_step_overrides").select("step_id, text, minutes");
+      for (const r of (data ?? []) as Array<{ step_id: string; text: string | null; minutes: number | null }>) {
+        if (r.text != null) ov.textById[r.step_id] = r.text;
+        if (r.minutes != null) ov.minutesById[r.step_id] = r.minutes;
+      }
+    } catch {
+      /* table not applied — use code defaults */
+    }
   }
   try {
     const { data } = await db.from("funnel_bot_media").select("media_key, file_id, url");

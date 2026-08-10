@@ -13,6 +13,32 @@ export const maxDuration = 60;
  * it so only Telegram can drive the flow. Always returns 200 so Telegram never
  * retries a poisoned update.
  */
+/**
+ * Diagnostic: GET reports whether the bot is deployable end-to-end — env vars
+ * present and the funnel_bot_* tables reachable. No secrets are exposed; this
+ * exists so a silent webhook failure can be diagnosed from outside.
+ */
+export async function GET() {
+  const diag: Record<string, unknown> = {
+    ok: true,
+    route: "funnel-bot-webhook",
+    token_set: isFunnelBotConfigured(),
+    webhook_secret_set: Boolean(env.FUNNEL_BOT_WEBHOOK_SECRET),
+  };
+  try {
+    const { requireAdminClient } = await import("@/lib/supabase/admin");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const db = requireAdminClient() as any;
+    const { error, count } = await db
+      .from("funnel_bot_subscribers")
+      .select("id", { count: "exact", head: true });
+    diag.db = error ? `error: ${error.message}` : `ok (${count ?? 0} subscribers)`;
+  } catch (e) {
+    diag.db = `error: ${e instanceof Error ? e.message : "unknown"}`;
+  }
+  return NextResponse.json(diag);
+}
+
 export async function POST(req: NextRequest) {
   if (!isFunnelBotConfigured()) return NextResponse.json({ ok: false, reason: "not_configured" });
   if (env.FUNNEL_BOT_WEBHOOK_SECRET) {

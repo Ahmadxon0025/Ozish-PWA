@@ -1,0 +1,24 @@
+name: Probe funnel-bot production
+
+# Manual diagnostic: hits the production dashboard from a runner with open
+# internet (the dev sandbox's egress proxy can't reach vercel.app) and prints
+# which layer of the funnel bot is broken: deployment, env vars, or database.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe production endpoints
+        run: |
+          BASE="https://shahnoza-dashboard.vercel.app"
+          echo "== GET /api/bot/telegram (diagnostic; 404 = old deploy still live) =="
+          curl -sS -w "\nHTTP %{http_code}\n" --max-time 30 "$BASE/api/bot/telegram" || true
+          echo
+          echo "== POST /api/bot/telegram without secret (401 = deployed + secret enforced) =="
+          curl -sS -w "\nHTTP %{http_code}\n" --max-time 30 -X POST \
+            -H 'content-type: application/json' -d '{}' "$BASE/api/bot/telegram" || true
+          echo
+          echo "== GET /kurs/ (landing page present) =="
+          curl -sS -o /dev/null -w "HTTP %{http_code}\n" --max-time 30 "$BASE/kurs/" || true

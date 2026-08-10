@@ -22,6 +22,8 @@ export async function GET() {
   const diag: Record<string, unknown> = {
     ok: true,
     route: "funnel-bot-webhook",
+    build: "flows-v2", // bump to prove a fresh deploy is live
+    commit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null,
     token_set: isFunnelBotConfigured(),
     webhook_secret_set: Boolean(env.FUNNEL_BOT_WEBHOOK_SECRET),
   };

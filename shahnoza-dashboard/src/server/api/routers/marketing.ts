@@ -1,7 +1,10 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, roleProcedure } from "@/server/api/trpc";
+import { requireAdminClient } from "@/lib/supabase/admin";
 import { FLOW } from "@/lib/funnel-bot/flow";
+
+const SUB_STATUSES = ["active", "lead", "call_requested", "replied", "cold", "stopped"] as const;
 
 // Funnel + cost data is manager/owner territory (ROAS touches spend).
 const managerProcedure = roleProcedure("super_admin", "owner", "sales_manager");
@@ -257,4 +260,89 @@ export const marketingRouter = createTRPCRouter({
 
     return { total, leads, calls, byStatus, bySegment, stages, steps };
   }),
+
+  /** Audience list — filterable subscribers of the funnel bot. */
+  funnelBotSubscribers: managerProcedure
+    .input(
+      z
+        .object({
+          status: z.string().optional(),
+          segment: z.string().optional(),
+          search: z.string().optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ input }) => {
+      const db = requireAdminClient() as any;
+      let q = db
+        .from("funnel_bot_subscribers")
+        .select("id, telegram_id, first_name, username, phone, segment, city, status, created_at, updated_at")
+        .order("updated_at", { ascending: false })
+        .limit(500);
+      if (input?.status) q = q.eq("status", input.status);
+      if (input?.segment) q = q.eq("segment", input.segment);
+      const { data } = await q;
+      let rows = (data ?? []) as any[];
+      const s = input?.search?.trim().toLowerCase();
+      if (s) {
+        rows = rows.filter(
+          (r) =>
+            (r.first_name ?? "").toLowerCase().includes(s) ||
+            (r.username ?? "").toLowerCase().includes(s) ||
+            (r.phone ?? "").includes(s) ||
+            (r.city ?? "").toLowerCase().includes(s),
+        );
+      }
+      return rows as Array<{
+        id: string;
+        telegram_id: string;
+        first_name: string | null;
+        username: string | null;
+        phone: string | null;
+        segment: string | null;
+        city: string | null;
+        status: string;
+        created_at: string;
+        updated_at: string;
+      }>;
+    }),
+
+  /** One subscriber + their full message-by-message journey through the bot. */
+  funnelBotJourney: managerProcedure
+    .input(z.object({ subscriberId: z.string().uuid() }))
+    .query(async ({ input }) => {
+      const db = requireAdminClient() as any;
+      const [subRes, logRes] = await Promise.all([
+        db.from("funnel_bot_subscribers").select("*").eq("id", input.subscriberId).maybeSingle(),
+        db
+          .from("funnel_bot_log")
+          .select("step_id, direction, kind, detail, created_at")
+          .eq("subscriber_id", input.subscriberId)
+          .order("created_at", { ascending: true })
+          .limit(500),
+      ]);
+      return {
+        subscriber: subRes.data ?? null,
+        log: (logRes.data ?? []) as Array<{
+          step_id: string | null;
+          direction: string;
+          kind: string | null;
+          detail: string | null;
+          created_at: string;
+        }>,
+      };
+    }),
+
+  /** Manually re-tag a subscriber's status (e.g. mark cold, or hand to sales). */
+  setSubscriberStatus: managerProcedure
+    .input(z.object({ id: z.string().uuid(), status: z.enum(SUB_STATUSES) }))
+    .mutation(async ({ input }) => {
+      const db = requireAdminClient() as any;
+      const { error } = await db
+        .from("funnel_bot_subscribers")
+        .update({ status: input.status, updated_at: new Date().toISOString() })
+        .eq("id", input.id);
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      return { ok: true };
+    }),
 });

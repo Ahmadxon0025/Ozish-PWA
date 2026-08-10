@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { FunnelBotTabs } from "./_tabs";
 
 const SEGMENT_LABEL: Record<string, string> = {
   tajriba: "Tajriba yo'q",
@@ -40,6 +41,7 @@ export default function FunnelBotPage() {
         title="Bot voronka tahlili"
         description="Lead-magnit botining ManyChat uslubidagi statistikasi — har bir qadamda kim qoladi."
       />
+      <FunnelBotTabs />
 
       {isLoading || !data ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

@@ -36,14 +36,8 @@ export default function FunnelBotEditorPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Bot muharriri" description="Har bir xabar matni, kutish vaqti va media — kod tegmasdan shu yerdan tahrirlang." />
+      <PageHeader title="Bot muharriri" description="Har bir xabar matni, kutish vaqti va media — kod tegmasdan shu yerdan tahrirlang. O'zgarish bir daqiqada botga tushadi; bo'sh qoldirsangiz asl matn ishlatiladi." />
       <FunnelBotTabs />
-
-      <Card className="border-amber-500/30 bg-amber-500/5">
-        <CardContent className="p-3 text-xs text-muted-foreground">
-          Tahrirlash saqlanishi uchun <b>0049 SQL</b> qo'llangan bo'lishi kerak. Saqlangach o'zgarish bir daqiqada botga tushadi. Bo'sh qoldirsangiz — koddagi asl matn ishlatiladi.
-        </CardContent>
-      </Card>
 
       {isLoading ? (
         <div className="space-y-3">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-28" />)}</div>

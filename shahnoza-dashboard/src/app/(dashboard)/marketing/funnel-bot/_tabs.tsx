@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 const TABS = [
   { href: "/marketing/funnel-bot", label: "Tahlil" },
   { href: "/marketing/funnel-bot/contacts", label: "Kontaktlar" },
+  { href: "/marketing/funnel-bot/broadcasts", label: "Xabar yuborish" },
 ];
 
 /** ManyChat-style section tabs for the funnel bot area. */

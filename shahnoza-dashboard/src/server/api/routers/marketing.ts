@@ -345,4 +345,46 @@ export const marketingRouter = createTRPCRouter({
       if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
       return { ok: true };
     }),
+
+  /** Broadcast a one-off message to a filtered segment of subscribers. */
+  funnelBotBroadcast: managerProcedure
+    .input(
+      z.object({
+        status: z.string().optional(),
+        segment: z.string().optional(),
+        text: z.string().min(1).max(4000),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const { runBroadcast } = await import("@/lib/funnel-bot/broadcast");
+      return runBroadcast({
+        status: input.status ?? null,
+        segment: input.segment ?? null,
+        text: input.text,
+      });
+    }),
+
+  /** Recent broadcasts (empty until the optional history table is applied). */
+  funnelBotBroadcasts: managerProcedure.query(async () => {
+    const db = requireAdminClient() as any;
+    try {
+      const { data } = await db
+        .from("funnel_bot_broadcasts")
+        .select("id, filter_status, filter_segment, text, total, sent, failed, created_at")
+        .order("created_at", { ascending: false })
+        .limit(30);
+      return (data ?? []) as Array<{
+        id: string;
+        filter_status: string | null;
+        filter_segment: string | null;
+        text: string;
+        total: number;
+        sent: number;
+        failed: number;
+        created_at: string;
+      }>;
+    } catch {
+      return [];
+    }
+  }),
 });

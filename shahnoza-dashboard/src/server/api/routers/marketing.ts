@@ -490,6 +490,102 @@ export const marketingRouter = createTRPCRouter({
       return { ok: true };
     }),
 
+  /** Inbox list: subscribers who typed a free-text reply (need a human), newest first. */
+  funnelBotConversations: managerProcedure.query(async () => {
+    const db = requireAdminClient() as any;
+    const { data: replies } = await db
+      .from("funnel_bot_log")
+      .select("subscriber_id, detail, created_at")
+      .eq("direction", "in")
+      .eq("kind", "reply")
+      .order("created_at", { ascending: false })
+      .limit(300);
+    const seen = new Set<string>();
+    const conv: Array<{ id: string; preview: string; at: string }> = [];
+    for (const r of (replies ?? []) as Array<{ subscriber_id: string | null; detail: string | null; created_at: string }>) {
+      if (!r.subscriber_id || seen.has(r.subscriber_id)) continue;
+      seen.add(r.subscriber_id);
+      conv.push({ id: r.subscriber_id, preview: r.detail ?? "", at: r.created_at });
+    }
+    if (conv.length === 0) return [];
+    const { data: subs } = await db
+      .from("funnel_bot_subscribers")
+      .select("id, first_name, username, phone, status")
+      .in("id", conv.map((c) => c.id));
+    const subById = new Map(((subs ?? []) as Array<{ id: string }>).map((s) => [s.id, s]));
+    return conv.map((c) => ({ ...c, ...(subById.get(c.id) ?? {}) })) as Array<{
+      id: string;
+      preview: string;
+      at: string;
+      first_name?: string | null;
+      username?: string | null;
+      phone?: string | null;
+      status?: string;
+    }>;
+  }),
+
+  /** Full message thread for a conversation (reconstructs bot message text). */
+  funnelBotThread: managerProcedure
+    .input(z.object({ subscriberId: z.string().uuid() }))
+    .query(async ({ input }) => {
+      const db = requireAdminClient() as any;
+      const ovText: Record<string, string> = {};
+      try {
+        const { data } = await db.from("funnel_bot_step_overrides").select("step_id, text");
+        for (const r of (data ?? []) as Array<{ step_id: string; text: string | null }>) if (r.text != null) ovText[r.step_id] = r.text;
+      } catch {
+        /* overrides optional */
+      }
+      const textByStep: Record<string, string> = {};
+      for (const st of FLOW) {
+        if ("text" in st && typeof (st as { text?: unknown }).text === "string") {
+          textByStep[st.id] = ovText[st.id] ?? (st as { text: string }).text;
+        }
+      }
+      const [subRes, logRes] = await Promise.all([
+        db.from("funnel_bot_subscribers").select("id, first_name, username, phone, status").eq("id", input.subscriberId).maybeSingle(),
+        db
+          .from("funnel_bot_log")
+          .select("step_id, direction, kind, detail, created_at")
+          .eq("subscriber_id", input.subscriberId)
+          .order("created_at", { ascending: true })
+          .limit(500),
+      ]);
+      const sub = subRes.data as { first_name?: string | null } | null;
+      const name = sub?.first_name ?? "";
+      const thread = ((logRes.data ?? []) as Array<{ step_id: string | null; direction: string; kind: string | null; detail: string | null; created_at: string }>)
+        .map((l) => {
+          let text = "";
+          if (l.direction === "in") {
+            if (l.kind === "reply") text = l.detail ?? "";
+            else if (l.kind === "phone") text = "📱 raqam yuborildi";
+            else if (l.kind === "button") text = "▸ tugma bosildi";
+            else text = l.detail ?? "";
+          } else if (l.kind === "human") {
+            text = l.detail ?? "";
+          } else if (l.step_id && textByStep[l.step_id]) {
+            text = textByStep[l.step_id].replace(/\[ism\]/g, name);
+          } else if (l.kind === "delay" || l.kind === "action") {
+            return null;
+          } else {
+            text = `(${l.kind})`;
+          }
+          return { direction: l.direction, kind: l.kind, human: l.kind === "human", text, at: l.created_at };
+        })
+        .filter(Boolean);
+      return { subscriber: subRes.data ?? null, thread };
+    }),
+
+  /** Send a human reply from the inbox (stops the drip). */
+  funnelBotReply: managerProcedure
+    .input(z.object({ subscriberId: z.string().uuid(), text: z.string().min(1).max(4000) }))
+    .mutation(async ({ input }) => {
+      const { sendHumanReply } = await import("@/lib/funnel-bot/reply");
+      const r = await sendHumanReply(input.subscriberId, input.text);
+      if (!r.ok) throw new TRPCError({ code: "BAD_REQUEST", message: r.error ?? "Yuborilmadi" });
+      return { ok: true };
+    }),
+
   /** Recent broadcasts (empty until the optional history table is applied). */
   funnelBotBroadcasts: managerProcedure.query(async () => {
     const db = requireAdminClient() as any;

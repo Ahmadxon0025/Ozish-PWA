@@ -3,11 +3,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, Stethoscope, Bell } from "lucide-react";
+import { Menu, Stethoscope, Bell, PanelLeft, PanelLeftClose } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/trpc/react";
 import { UserMenu, type SessionUser } from "./user-menu";
+import { useSidebarCollapsed } from "./sidebar-store";
 import { visibleNav } from "@/lib/nav";
 import { APP_NAME } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -48,10 +49,22 @@ export function Topbar({
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const groups = visibleNav(role);
+  const [collapsed, toggleSidebar] = useSidebarCollapsed();
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-3 border-b bg-background/95 px-4 backdrop-blur lg:px-6">
       <div className="flex items-center gap-2">
+        {/* Desktop: collapse / show the sidebar */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="hidden lg:inline-flex"
+          aria-label={collapsed ? "Yon panelni ko'rsatish" : "Yon panelni berkitish"}
+          title={collapsed ? "Yon panelni ko'rsatish" : "Yon panelni berkitish"}
+          onClick={() => toggleSidebar()}
+        >
+          {collapsed ? <PanelLeft className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+        </Button>
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger asChild>
             <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Menyu">

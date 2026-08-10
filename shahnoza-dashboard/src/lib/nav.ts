@@ -25,6 +25,7 @@ import {
   Megaphone,
   Clapperboard,
   Filter,
+  Bot,
   type LucideIcon,
 } from "lucide-react";
 
@@ -71,6 +72,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: "Marketing tahlili", href: "/marketing", icon: Megaphone, roles: OWNER_ROP },
       { label: "Voronkalar", href: "/marketing/funnels", icon: Filter, roles: OWNER_ROP },
+      { label: "Bot voronka", href: "/marketing/funnel-bot", icon: Bot, roles: OWNER_ROP },
       { label: "Reels rejasi", href: "/marketing/reels", icon: Clapperboard, roles: OWNER_ROP },
     ],
   },

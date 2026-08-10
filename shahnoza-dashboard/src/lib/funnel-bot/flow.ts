@@ -60,9 +60,7 @@ export const FLOW: FlowStep[] = [
     text: `Assalomu alaykum, [ism]! 🌿\nBepul darsingiz tayyor — bolalar massaji orqali, oilangiz yonida turib, halol daromadga chiqish yo'li.`,
     media: { key: "lesson_free", kind: "video" },
     urlButtons: [{ text: "🎥 Bepul darsni ko'rish", url: "" }],
-    // TEMP TEST MODE: skip the 90-min wait so the funnel can be walked end-to-end
-    // right now. Restore to "s1_wait" for real drip timing.
-    next: "s2",
+    next: "s1_wait",
   },
   { id: "s1_wait", type: "delay", minutes: 90, next: "s2" },
   {

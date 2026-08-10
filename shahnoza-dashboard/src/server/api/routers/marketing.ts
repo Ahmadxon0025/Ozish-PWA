@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, roleProcedure } from "@/server/api/trpc";
+import { FLOW } from "@/lib/funnel-bot/flow";
 
 // Funnel + cost data is manager/owner territory (ROAS touches spend).
 const managerProcedure = roleProcedure("super_admin", "owner", "sales_manager");
@@ -189,4 +190,71 @@ export const marketingRouter = createTRPCRouter({
       if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
       return { ok: true };
     }),
+
+  /**
+   * ManyChat-style analytics for the funnel bot: headline funnel (started →
+   * engaged → lead → call), segment split, and per-message stats (sent /
+   * advanced / CTR) so you can see exactly which step loses people. Reads the
+   * funnel_bot_* tables (not in the generated DB types, hence the loose cast)
+   * and joins them to the flow definition for labels + ordering.
+   */
+  funnelBotStats: managerProcedure.query(async ({ ctx }) => {
+    const db = ctx.supabase as unknown as {
+      from: (t: string) => {
+        select: (c: string) => { limit: (n: number) => Promise<{ data: unknown[] | null }> };
+      };
+    };
+    const [subsRes, logsRes] = await Promise.all([
+      db.from("funnel_bot_subscribers").select("status, segment, phone, city, created_at").limit(5000),
+      db.from("funnel_bot_log").select("step_id, direction, kind").limit(20000),
+    ]);
+    const subs = (subsRes.data ?? []) as Array<{ status: string; segment: string | null; phone: string | null }>;
+    const logs = (logsRes.data ?? []) as Array<{ step_id: string | null; direction: string; kind: string | null }>;
+
+    const total = subs.length;
+    const byStatus: Record<string, number> = {};
+    const bySegment: Record<string, number> = {};
+    let leads = 0;
+    let calls = 0;
+    for (const s of subs) {
+      byStatus[s.status] = (byStatus[s.status] ?? 0) + 1;
+      if (s.segment) bySegment[s.segment] = (bySegment[s.segment] ?? 0) + 1;
+      if (s.phone) leads += 1;
+      if (s.status === "call_requested") calls += 1;
+    }
+
+    const sent: Record<string, number> = {};
+    const advanced: Record<string, number> = {};
+    for (const l of logs) {
+      if (!l.step_id) continue;
+      if (l.direction === "out") sent[l.step_id] = (sent[l.step_id] ?? 0) + 1;
+      else if (l.direction === "in" && l.kind === "button")
+        advanced[l.step_id] = (advanced[l.step_id] ?? 0) + 1;
+    }
+
+    const steps = FLOW.filter((st) => st.type !== "delay" && st.type !== "action").map((st) => {
+      const raw = "text" in st && st.text ? st.text.replace(/\s+/g, " ").trim() : st.id;
+      const interactive = st.type === "continue" || st.type === "buttons";
+      const s = sent[st.id] ?? 0;
+      const a = advanced[st.id] ?? 0;
+      return {
+        id: st.id,
+        type: st.type,
+        label: raw.length > 70 ? raw.slice(0, 70) + "…" : raw,
+        sent: s,
+        advanced: interactive ? a : null,
+        ctr: interactive && s > 0 ? Math.round((a / s) * 100) : null,
+      };
+    });
+
+    const engaged = sent["s5"] ?? 0; // reached the origin story = past the "did you watch?" gate
+    const stages = [
+      { key: "started", label: "Boshladi", count: total },
+      { key: "engaged", label: "Qiziqdi", count: engaged },
+      { key: "lead", label: "Lead (raqam)", count: leads },
+      { key: "call", label: "Qo'ng'iroq so'radi", count: calls },
+    ].map((s) => ({ ...s, pct: total > 0 ? Math.round((s.count / total) * 100) : 0 }));
+
+    return { total, leads, calls, byStatus, bySegment, stages, steps };
+  }),
 });

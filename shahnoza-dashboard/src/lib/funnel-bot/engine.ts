@@ -9,7 +9,6 @@ import { sendRich, personalize, answerCallback, InlineKeyboard, Keyboard } from 
 // The bot's own tables aren't in the generated Database types, so we use a
 // loosely-typed admin client for them (same approach as the finance bot).
 type Db = ReturnType<typeof requireAdminClient>;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = any;
 
 interface Subscriber {

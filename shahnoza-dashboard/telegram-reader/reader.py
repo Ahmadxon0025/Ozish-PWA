@@ -40,6 +40,10 @@ API_ID = int(os.environ.get("TELEGRAM_API_ID") or "0")
 API_HASH = os.environ.get("TELEGRAM_API_HASH", "")
 SESSION = os.environ.get("TELEGRAM_SESSION_STRING", "")
 SECRET = os.environ.get("TELEGRAM_READER_SECRET", "")
+# When set (e.g. https://shahnoza-dashboard.vercel.app), this always-on service
+# pings the dashboard's funnel-bot cron every 5 min so drip delays resume on
+# time — Vercel Hobby crons only run daily. Auth = the shared reader secret.
+DASHBOARD_URL = os.environ.get("DASHBOARD_URL", "").rstrip("/")
 
 # Safety caps so one export can't run away (flood limits / memory / disk).
 MAX_MESSAGES = 5000
@@ -112,6 +116,29 @@ def _to_dict(m) -> dict:
     }
 
 
+def _ping_funnel_cron() -> None:
+    """One tick: ask the dashboard to resume due funnel-bot drip steps."""
+    import urllib.request
+
+    req = urllib.request.Request(
+        f"{DASHBOARD_URL}/api/cron/funnel-bot",
+        headers={"x-reader-secret": SECRET},
+    )
+    with urllib.request.urlopen(req, timeout=30) as res:
+        res.read()
+
+
+async def _funnel_cron_loop() -> None:
+    import asyncio
+
+    while True:
+        try:
+            await asyncio.get_event_loop().run_in_executor(None, _ping_funnel_cron)
+        except Exception as e:  # noqa: BLE001
+            print(f"funnel cron ping failed: {e}")
+        await asyncio.sleep(300)
+
+
 @app.on_event("startup")
 async def _startup() -> None:
     # Boot even if not fully configured (health stays up + Railway shell is
@@ -123,6 +150,11 @@ async def _startup() -> None:
                   "and set TELEGRAM_SESSION_STRING.")
     except Exception as e:  # noqa: BLE001
         print(f"startup connect failed (set the env vars): {e}")
+    if DASHBOARD_URL and SECRET:
+        import asyncio
+
+        asyncio.get_event_loop().create_task(_funnel_cron_loop())
+        print(f"funnel cron pinger active → {DASHBOARD_URL}/api/cron/funnel-bot every 5 min")
 
 
 @app.get("/")

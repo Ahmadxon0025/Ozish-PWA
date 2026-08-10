@@ -5,6 +5,13 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 function authorized(request: NextRequest): boolean {
+  // The Railway reader pings this every 5 min (Vercel Hobby crons are daily-
+  // only, which is too coarse for drip delays) — it authenticates with the
+  // reader secret both sides already share.
+  const readerSecret = request.headers.get("x-reader-secret");
+  if (env.TELEGRAM_READER_SECRET && readerSecret === env.TELEGRAM_READER_SECRET) {
+    return true;
+  }
   if (!env.CRON_SECRET) return process.env.NODE_ENV !== "production";
   const header = request.headers.get("authorization");
   if (header === `Bearer ${env.CRON_SECRET}`) return true;

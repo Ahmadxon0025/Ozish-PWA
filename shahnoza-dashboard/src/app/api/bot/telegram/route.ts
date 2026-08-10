@@ -27,7 +27,6 @@ export async function GET() {
   };
   try {
     const { requireAdminClient } = await import("@/lib/supabase/admin");
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const db = requireAdminClient() as any;
     const { error, count } = await db
       .from("funnel_bot_subscribers")

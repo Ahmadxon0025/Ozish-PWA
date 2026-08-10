@@ -5,6 +5,7 @@ import { sendMessage as sendViaMainBot } from "@/lib/telegram/bot";
 import { env } from "@/lib/env";
 import { FLOW_KEY, ENTRY_STEP, getStep, type FlowStep } from "./flow";
 import { sendRich, personalize, answerCallback, InlineKeyboard, Keyboard } from "./telegram";
+import { ovText, ovMinutes, setFlowOv, loadFlowOv } from "./overrides";
 
 // The bot's own tables aren't in the generated Database types, so we use a
 // loosely-typed admin client for them (same approach as the finance bot).
@@ -125,33 +126,33 @@ async function runFrom(db: Loose, sub: Subscriber, run: Run, stepId: string | nu
 
     switch (step.type) {
       case "message": {
-        await sendRich(chatId, personalize(step.text, sub.first_name), { media: step.media, replyMarkup: buildInline(step) });
+        await sendRich(chatId, personalize(ovText(step.id, step.text), sub.first_name), { media: step.media, replyMarkup: buildInline(step) });
         await log(db, sub.id, step.id, "out", "message");
         cur = step.next;
         break;
       }
       case "continue":
       case "buttons": {
-        await sendRich(chatId, personalize(step.text, sub.first_name), { media: step.media, replyMarkup: buildInline(step) });
+        await sendRich(chatId, personalize(ovText(step.id, step.text), sub.first_name), { media: step.media, replyMarkup: buildInline(step) });
         await log(db, sub.id, step.id, "out", step.type);
         await setRunState(db, run.id, step.id, "waiting");
         return;
       }
       case "ask_phone": {
         const kb = new Keyboard().requestContact(step.buttonText);
-        await sendRich(chatId, personalize(step.text, sub.first_name), { replyMarkup: kb });
+        await sendRich(chatId, personalize(ovText(step.id, step.text), sub.first_name), { replyMarkup: kb });
         await log(db, sub.id, step.id, "out", "ask_phone");
         await setRunState(db, run.id, step.id, "waiting");
         return;
       }
       case "ask_text": {
-        await sendRich(chatId, personalize(step.text, sub.first_name), { replyMarkup: { remove_keyboard: true } });
+        await sendRich(chatId, personalize(ovText(step.id, step.text), sub.first_name), { replyMarkup: { remove_keyboard: true } });
         await log(db, sub.id, step.id, "out", "ask_text");
         await setRunState(db, run.id, step.id, "waiting");
         return;
       }
       case "delay": {
-        const runAt = new Date(Date.now() + step.minutes * 60_000).toISOString();
+        const runAt = new Date(Date.now() + ovMinutes(step.id, step.minutes) * 60_000).toISOString();
         await db.from("funnel_bot_schedule").insert({ run_id: run.id, step_id: step.next, run_at: runAt, status: "pending" });
         await log(db, sub.id, step.id, "out", "delay", `+${step.minutes}m → ${step.next}`);
         await setRunState(db, run.id, step.id, "delayed");
@@ -164,7 +165,7 @@ async function runFrom(db: Loose, sub: Subscriber, run: Run, stepId: string | nu
       }
       case "end": {
         if (step.text) {
-          await sendRich(chatId, personalize(step.text, sub.first_name), { replyMarkup: { remove_keyboard: true } });
+          await sendRich(chatId, personalize(ovText(step.id, step.text), sub.first_name), { replyMarkup: { remove_keyboard: true } });
           await log(db, sub.id, step.id, "out", "message");
         }
         if (step.status) await updateSubscriber(db, sub.id, { status: step.status });
@@ -285,6 +286,7 @@ async function onText(db: Loose, sub: Subscriber, run: Run | null, text: string)
 /** Handle one Telegram update. Never throws (webhook must always 200). */
 export async function handleUpdate(update: Loose): Promise<void> {
   const db = requireAdminClient() as Loose;
+  setFlowOv(await loadFlowOv(db)); // latest dashboard edits (text/timing/media)
   try {
     if (update.callback_query) {
       const cq = update.callback_query;
@@ -349,6 +351,7 @@ export async function handleUpdate(update: Loose): Promise<void> {
 /** Resume every delay whose time has come. Called by the cron route. */
 export async function processDueSteps(limit = 100): Promise<number> {
   const db = requireAdminClient() as Loose;
+  setFlowOv(await loadFlowOv(db)); // latest dashboard edits (text/timing/media)
   const nowIso = new Date().toISOString();
   const { data: due } = await db
     .from("funnel_bot_schedule")

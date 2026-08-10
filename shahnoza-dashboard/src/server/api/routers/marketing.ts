@@ -364,6 +364,91 @@ export const marketingRouter = createTRPCRouter({
       });
     }),
 
+  /**
+   * The full flow for the editor: every step with its default text/timing/media
+   * plus any dashboard override. Structure comes from code; content comes from
+   * the funnel_bot_step_overrides / funnel_bot_media tables.
+   */
+  funnelBotFlow: managerProcedure.query(async () => {
+    const db = requireAdminClient() as any;
+    let overrides: Array<{ step_id: string; text: string | null; minutes: number | null }> = [];
+    let media: Array<{ media_key: string; file_id: string | null; url: string | null }> = [];
+    try {
+      const { data } = await db.from("funnel_bot_step_overrides").select("step_id, text, minutes");
+      overrides = data ?? [];
+    } catch {
+      /* table not applied yet */
+    }
+    try {
+      const { data } = await db.from("funnel_bot_media").select("media_key, file_id, url");
+      media = data ?? [];
+    } catch {
+      /* table not applied yet */
+    }
+    const ovById = new Map(overrides.map((o) => [o.step_id, o]));
+    const medByKey = new Map(media.map((m) => [m.media_key, m]));
+
+    return FLOW.map((st) => {
+      const o = ovById.get(st.id);
+      const hasText = "text" in st && typeof (st as { text?: unknown }).text === "string";
+      const mediaSlot = "media" in st ? (st as { media?: { key: string; kind: string } }).media : undefined;
+      const med = mediaSlot ? medByKey.get(mediaSlot.key) : undefined;
+      return {
+        id: st.id,
+        type: st.type,
+        editableText: hasText,
+        defaultText: hasText ? ((st as { text: string }).text ?? "") : null,
+        text: o?.text ?? null,
+        isDelay: st.type === "delay",
+        defaultMinutes: st.type === "delay" ? (st as { minutes: number }).minutes : null,
+        minutes: o?.minutes ?? null,
+        mediaKey: mediaSlot?.key ?? null,
+        mediaKind: mediaSlot?.kind ?? null,
+        mediaUrl: med?.url ?? null,
+        mediaFileId: med?.file_id ?? null,
+      };
+    });
+  }),
+
+  /** Override a step's message text (null clears the override → code default). */
+  saveStepText: managerProcedure
+    .input(z.object({ stepId: z.string(), text: z.string().max(4000).nullable() }))
+    .mutation(async ({ input }) => {
+      const db = requireAdminClient() as any;
+      const { error } = await db
+        .from("funnel_bot_step_overrides")
+        .upsert({ step_id: input.stepId, text: input.text, updated_at: new Date().toISOString() }, { onConflict: "step_id" });
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      return { ok: true };
+    }),
+
+  /** Override a delay step's minutes. */
+  saveStepMinutes: managerProcedure
+    .input(z.object({ stepId: z.string(), minutes: z.number().int().min(0).max(100000).nullable() }))
+    .mutation(async ({ input }) => {
+      const db = requireAdminClient() as any;
+      const { error } = await db
+        .from("funnel_bot_step_overrides")
+        .upsert({ step_id: input.stepId, minutes: input.minutes, updated_at: new Date().toISOString() }, { onConflict: "step_id" });
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      return { ok: true };
+    }),
+
+  /** Fill a media slot (paste a Telegram file_id or a public URL). */
+  saveMedia: managerProcedure
+    .input(z.object({ key: z.string(), url: z.string().max(2000).nullable(), fileId: z.string().max(400).nullable() }))
+    .mutation(async ({ input }) => {
+      const db = requireAdminClient() as any;
+      const { error } = await db
+        .from("funnel_bot_media")
+        .upsert(
+          { media_key: input.key, url: input.url || null, file_id: input.fileId || null, updated_at: new Date().toISOString() },
+          { onConflict: "media_key" },
+        );
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      return { ok: true };
+    }),
+
   /** Recent broadcasts (empty until the optional history table is applied). */
   funnelBotBroadcasts: managerProcedure.query(async () => {
     const db = requireAdminClient() as any;

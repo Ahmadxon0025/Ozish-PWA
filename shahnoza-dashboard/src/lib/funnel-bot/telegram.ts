@@ -2,6 +2,7 @@ import "server-only";
 import { Bot, InlineKeyboard, Keyboard } from "grammy";
 import { env, isFunnelBotConfigured } from "@/lib/env";
 import { MEDIA, type MediaSlot } from "./flow";
+import { ovMedia } from "./overrides";
 
 /** The funnel bot ("Shahnoza Soliyeva | BOT") — a SEPARATE Telegram bot from the
  *  finance/Alfred bot, so it has its own token. */
@@ -20,8 +21,9 @@ export function personalize(text: string, firstName?: string | null): string {
 
 function resolveMedia(slot?: MediaSlot): { kind: MediaSlot["kind"]; src: string } | null {
   if (!slot) return null;
+  const o = ovMedia(slot.key); // dashboard-filled media wins over the code default
   const m = MEDIA[slot.key];
-  const src = m?.fileId || m?.url;
+  const src = o?.fileId || o?.url || m?.fileId || m?.url;
   return src ? { kind: slot.kind, src } : null;
 }
 

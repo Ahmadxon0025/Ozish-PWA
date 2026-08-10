@@ -5,9 +5,11 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   ArrowLeft, Clock, Copy, Flag, Image as ImageIcon, Link2, MessageSquare, MousePointerClick,
-  Plus, Minus, Maximize2, RotateCcw, Save, Send, Trash2, Zap,
+  Plus, Minus, Maximize2, RotateCcw, Save, Send, Trash2, Upload, Zap,
 } from "lucide-react";
 import { api } from "@/lib/trpc/react";
+import { createClient } from "@/lib/supabase/client";
+import { FUNNEL_MEDIA_BUCKET, FUNNEL_MEDIA_MAX_BYTES, accecptFor, safeName } from "@/lib/funnel-media";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -625,6 +627,37 @@ function BuiltinEditPanel({ step, flowKey }: { step: OvStep; flowKey?: string })
   const saveBtn = api.marketing.saveStepButton.useMutation();
   const busy = saveText.isPending || saveMin.isPending || saveMedia.isPending || saveBtn.isPending;
 
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const [uploading, setUploading] = useState(false);
+  async function onUpload(file: File) {
+    if (!step.mediaKey) return;
+    if (file.size > FUNNEL_MEDIA_MAX_BYTES) {
+      toast({ title: "Fayl juda katta", description: "Maksimum 20 MB (Telegram cheklovi).", variant: "destructive" });
+      return;
+    }
+    setUploading(true);
+    try {
+      const supabase = createClient();
+      const path = `${step.mediaKey}/${crypto.randomUUID()}-${safeName(file.name)}`;
+      const up = await supabase.storage.from(FUNNEL_MEDIA_BUCKET).upload(path, file, { upsert: true, contentType: file.type || undefined });
+      if (up.error) {
+        const msg = /bucket not found/i.test(up.error.message) ? "0052 SQL qo'llanmagan — Media bucket yo'q." : up.error.message;
+        toast({ title: "Yuklashda xato", description: msg, variant: "destructive" });
+        return;
+      }
+      const url = supabase.storage.from(FUNNEL_MEDIA_BUCKET).getPublicUrl(path).data.publicUrl;
+      setMedia(url);
+      await saveMedia.mutateAsync({ key: step.mediaKey, url, fileId: null });
+      toast({ title: "Media yuklandi ✓", variant: "success" });
+      void utils.marketing.funnelBotFlow.invalidate({ flowKey });
+      void utils.marketing.funnelBotGraph.invalidate({ flowKey });
+    } catch (e) {
+      toast({ title: "Yuklashda xato", description: e instanceof Error ? e.message : "", variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
+  }
+
   const textDirty = step.editableText && text !== (step.text ?? step.defaultText ?? "");
   const minDirty = step.isDelay && Number(minutes) !== (step.minutes ?? step.defaultMinutes ?? 0);
   const mediaDirty = !!step.mediaKey && media !== (step.mediaUrl ?? step.mediaFileId ?? "");
@@ -675,7 +708,36 @@ function BuiltinEditPanel({ step, flowKey }: { step: OvStep; flowKey?: string })
       {step.mediaKey ? (
         <div>
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1"><ImageIcon className="h-3.5 w-3.5" /> Media ({MEDIA_LABEL[step.mediaKind ?? ""] ?? step.mediaKind}) · <span className="font-mono">{step.mediaKey}</span></div>
-          <Input value={media} onChange={(e) => setMedia(e.target.value)} placeholder="URL (https://…) yoki Telegram file_id" className="text-sm" />
+
+          {media && /^https?:\/\//i.test(media) ? (
+            step.mediaKind === "photo" ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={media} alt="" className="mb-2 max-h-44 w-full rounded-md border object-contain" />
+            ) : step.mediaKind === "video" ? (
+              <video src={media} controls className="mb-2 max-h-44 w-full rounded-md border" />
+            ) : step.mediaKind === "voice" ? (
+              <audio src={media} controls className="mb-2 w-full" />
+            ) : null
+          ) : null}
+
+          <input
+            ref={fileRef}
+            type="file"
+            accept={accecptFor(step.mediaKind)}
+            className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (fileRef.current) fileRef.current.value = ""; if (f) void onUpload(f); }}
+          />
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading} className="shrink-0">
+              <Upload className="h-3.5 w-3.5 mr-1.5" /> {uploading ? "Yuklanmoqda…" : "Kompyuterdan yuklash"}
+            </Button>
+            {media ? (
+              <Button type="button" variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setMedia("")} disabled={uploading}>
+                <Trash2 className="h-3.5 w-3.5 mr-1" /> Tozalash
+              </Button>
+            ) : null}
+          </div>
+          <Input value={media} onChange={(e) => setMedia(e.target.value)} placeholder="…yoki URL / Telegram file_id qo'ying" className="mt-2 text-sm" />
         </div>
       ) : null}
 

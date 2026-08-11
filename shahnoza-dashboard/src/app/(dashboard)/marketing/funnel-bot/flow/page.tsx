@@ -4,8 +4,8 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type Point
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
-  ArrowLeft, Clock, Copy, Flag, Image as ImageIcon, Link2, MessageSquare, MousePointerClick,
-  Plus, Minus, Maximize2, RotateCcw, Save, Send, Trash2, Upload, Zap,
+  ArrowLeft, Clock, Copy, Expand, Flag, Image as ImageIcon, Link2, MessageSquare, MousePointerClick,
+  Plus, Minus, Maximize2, RotateCcw, Save, Send, Shrink, Trash2, Upload, Zap,
 } from "lucide-react";
 import { api } from "@/lib/trpc/react";
 import { createClient } from "@/lib/supabase/client";
@@ -58,7 +58,7 @@ function estHeight(step: FlowStep, text: string): number {
 }
 
 type XY = { x: number; y: number };
-type Drag = { kind: "node" | "pan"; id?: string; sx: number; sy: number; ox: number; oy: number; moved: boolean };
+type Drag = { kind: "node" | "pan"; id?: string; sx: number; sy: number; ox: number; oy: number; moved: boolean; lastPan?: XY };
 type GraphNode = { id: string; type: string; label: string; x: number; y: number; sent: number; advanced: number | null; ctr: number | null };
 type OvStep = {
   id: string; type: string; editableText: boolean; defaultText: string | null; text: string | null;
@@ -155,6 +155,7 @@ function FlowCanvas() {
 
   // ── viewport: pan + zoom ──
   const viewportRef = useRef<HTMLDivElement | null>(null);
+  const contentRef = useRef<HTMLDivElement | null>(null);
   const [zoom, setZoom] = useState(0.8);
   const [pan, setPan] = useState<XY>({ x: 16, y: 8 });
   const zoomRef = useRef(zoom);
@@ -168,6 +169,13 @@ function FlowCanvas() {
   const [connActive, setConnActive] = useState(false);
   const [connCursor, setConnCursor] = useState<XY>({ x: 0, y: 0 });
   const [selectedEdge, setSelectedEdge] = useState<{ from: string; to: string } | null>(null);
+  const [fullscreen, setFullscreen] = useState(false);
+  useEffect(() => {
+    if (!fullscreen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setFullscreen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [fullscreen]);
   const clientToCanvas = useCallback((clientX: number, clientY: number): XY => {
     const vp = viewportRef.current;
     if (!vp) return { x: 0, y: 0 };
@@ -254,8 +262,12 @@ function FlowCanvas() {
     const dy = e.clientY - d.sy;
     if (!d.moved && (Math.abs(dx) > 3 || Math.abs(dy) > 3)) d.moved = true;
     if (!d.moved) return;
-    if (d.kind === "pan") setPan({ x: d.ox + dx, y: d.oy + dy });
-    else if (d.id) {
+    if (d.kind === "pan") {
+      // pan via direct DOM transform (no React re-render of every card per frame)
+      const nx = d.ox + dx, ny = d.oy + dy;
+      d.lastPan = { x: nx, y: ny };
+      if (contentRef.current) contentRef.current.style.transform = `translate(${nx}px, ${ny}px) scale(${zoomRef.current})`;
+    } else if (d.id) {
       const z = zoomRef.current;
       const id = d.id;
       setCustom((prev) => ({ ...prev, [id]: { x: Math.round(d.ox + dx / z), y: Math.round(d.oy + dy / z) } }));
@@ -278,7 +290,8 @@ function FlowCanvas() {
     const d = drag.current;
     drag.current = null;
     if (!d) return;
-    if (d.kind === "node" && d.id && !d.moved) setSelected(d.id);
+    if (d.kind === "pan" && d.moved && d.lastPan) setPan(d.lastPan); // commit direct-DOM pan to state
+    else if (d.kind === "node" && d.id && !d.moved) setSelected(d.id);
     else if (d.kind === "node" && d.moved) {
       setCustom((prev) => {
         try { localStorage.setItem(POS_KEY, JSON.stringify(prev)); } catch { /* ignore */ }
@@ -451,18 +464,23 @@ function FlowCanvas() {
       ) : (
         <div
           ref={viewportRef}
-          className="relative cursor-grab overflow-hidden rounded-xl border bg-[#eef1f5] touch-none select-none active:cursor-grabbing"
-          style={{ height: "68vh" }}
+          className={cn(
+            "relative cursor-grab overflow-hidden border bg-[#eef1f5] touch-none select-none active:cursor-grabbing",
+            fullscreen ? "fixed inset-0 z-[60] rounded-none" : "rounded-xl",
+          )}
+          style={{ height: fullscreen ? "100dvh" : "68vh" }}
           onPointerDown={onBgDown}
           onPointerMove={onMove}
           onPointerUp={onUp}
           onPointerCancel={onUp}
         >
           <div
+            ref={contentRef}
             className="absolute left-0 top-0 origin-top-left"
             style={{
               width, height,
               transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+              willChange: "transform",
               backgroundImage: "radial-gradient(circle, #d3d9e0 1px, transparent 1px)",
               backgroundSize: "24px 24px",
             }}
@@ -566,6 +584,7 @@ function FlowCanvas() {
             className="absolute bottom-4 left-4 z-10 flex flex-col gap-1.5"
             onPointerDown={(e) => e.stopPropagation()}
           >
+            <button onClick={() => { setFullscreen((f) => !f); requestAnimationFrame(() => requestAnimationFrame(fit)); }} className="flex h-10 w-10 items-center justify-center rounded-lg bg-white text-slate-700 shadow-md ring-1 ring-black/5 hover:bg-slate-50 active:scale-95" title={fullscreen ? "Chiqish (Esc)" : "Butun ekran"}>{fullscreen ? <Shrink className="h-5 w-5" /> : <Expand className="h-5 w-5" />}</button>
             <button onClick={() => zoomBy(1.25)} className="flex h-10 w-10 items-center justify-center rounded-lg bg-white text-slate-700 shadow-md ring-1 ring-black/5 hover:bg-slate-50 active:scale-95" title="Kattalashtirish"><Plus className="h-5 w-5" /></button>
             <div className="rounded-lg bg-white px-1 py-1 text-center text-[11px] font-medium tabular-nums text-slate-600 shadow-md ring-1 ring-black/5">{Math.round(zoom * 100)}%</div>
             <button onClick={() => zoomBy(1 / 1.25)} className="flex h-10 w-10 items-center justify-center rounded-lg bg-white text-slate-700 shadow-md ring-1 ring-black/5 hover:bg-slate-50 active:scale-95" title="Kichraytirish"><Minus className="h-5 w-5" /></button>

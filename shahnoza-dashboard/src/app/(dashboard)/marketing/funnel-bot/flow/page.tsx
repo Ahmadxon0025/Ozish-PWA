@@ -169,13 +169,21 @@ function FlowCanvas() {
   const [connActive, setConnActive] = useState(false);
   const [connCursor, setConnCursor] = useState<XY>({ x: 0, y: 0 });
   const [selectedEdge, setSelectedEdge] = useState<{ from: string; to: string } | null>(null);
-  // click a port (no drag) → a little menu; or link-to-existing mode
-  const [portMenu, setPortMenu] = useState<{ from: string; left: number; top: number } | null>(null);
+  // release a pulled-out connector on empty canvas → menu at the drop point
+  const [portMenu, setPortMenu] = useState<{ from: string; left: number; top: number; canvasX: number; canvasY: number } | null>(null);
   const [linkFrom, setLinkFrom] = useState<string | null>(null);
+  // "sticky" connector: click a port → a line follows the cursor with no button
+  // held; the next click (on a card or empty canvas) resolves it.
+  const pulling = useRef<{ from: string } | null>(null);
+  const [pullingActive, setPullingActive] = useState(false);
+  function cancelPulling() { pulling.current = null; setPullingActive(false); }
   const [fullscreen, setFullscreen] = useState(false);
   useEffect(() => {
-    if (!fullscreen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setFullscreen(false); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (pulling.current) { pulling.current = null; setPullingActive(false); }
+      else if (fullscreen) setFullscreen(false);
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [fullscreen]);
@@ -242,11 +250,22 @@ function FlowCanvas() {
   }
   function onNodeDown(e: ReactPointerEvent, id: string) {
     e.stopPropagation();
+    // resolving a sticky connector onto this card → wire it
+    if (pulling.current) { const from = pulling.current.from; cancelPulling(); if (from !== id) void connect(from, id); return; }
+    if (linkFrom) { const from = linkFrom; setLinkFrom(null); if (from !== id) void connect(from, id); return; }
     capture(e);
     const p = posOf(id);
     drag.current = { kind: "node", id, sx: e.clientX, sy: e.clientY, ox: p.x, oy: p.y, moved: false };
   }
   function onBgDown(e: ReactPointerEvent) {
+    // resolving a sticky connector on empty canvas → menu at the drop point
+    if (pulling.current) {
+      const from = pulling.current.from; cancelPulling();
+      const r = viewportRef.current?.getBoundingClientRect();
+      const pt = clientToCanvas(e.clientX, e.clientY);
+      setPortMenu({ from, left: e.clientX - (r?.left ?? 0), top: e.clientY - (r?.top ?? 0), canvasX: pt.x, canvasY: pt.y });
+      return;
+    }
     capture(e);
     setPortMenu(null);
     setLinkFrom(null);
@@ -257,6 +276,7 @@ function FlowCanvas() {
     capture(e);
     setPortMenu(null);
     setLinkFrom(null);
+    cancelPulling();
     conn.current = { from: fromId, buttonIndex, sx: e.clientX, sy: e.clientY, moved: false };
     setConnActive(true);
     setConnCursor(clientToCanvas(e.clientX, e.clientY));
@@ -267,6 +287,7 @@ function FlowCanvas() {
       setConnCursor(clientToCanvas(e.clientX, e.clientY));
       return;
     }
+    if (pulling.current) { setConnCursor(clientToCanvas(e.clientX, e.clientY)); return; }
     const d = drag.current;
     if (!d) return;
     const dx = e.clientX - d.sx;
@@ -289,20 +310,24 @@ function FlowCanvas() {
       const c = conn.current;
       conn.current = null;
       setConnActive(false);
-      if (c.moved) {
-        // dragged onto a card → wire it
-        const pt = clientToCanvas(e.clientX, e.clientY);
-        const target = nodes.find((n) => {
-          const p = posOf(n.id);
-          const h = heights.get(n.id) ?? 90;
-          return pt.x >= p.x && pt.x <= p.x + CARD_W && pt.y >= p.y && pt.y <= p.y + h;
-        });
-        if (target && target.id !== c.from) void connect(c.from, target.id, c.buttonIndex);
+      if (!c.moved) {
+        // a click on the port → sticky: the line now follows the cursor until
+        // the next click resolves it (on a card = connect, on empty = menu).
+        pulling.current = { from: c.from };
+        setPullingActive(true);
+        return;
+      }
+      const pt = clientToCanvas(e.clientX, e.clientY);
+      const target = nodes.find((n) => {
+        const p = posOf(n.id);
+        const h = heights.get(n.id) ?? 90;
+        return pt.x >= p.x && pt.x <= p.x + CARD_W && pt.y >= p.y && pt.y <= p.y + h;
+      });
+      if (target && target.id !== c.from) {
+        void connect(c.from, target.id, c.buttonIndex);
       } else {
-        // just clicked the port → open the add/link menu right there
-        const vp = viewportRef.current;
-        const r = vp?.getBoundingClientRect();
-        setPortMenu({ from: c.from, left: e.clientX - (r?.left ?? 0), top: e.clientY - (r?.top ?? 0) });
+        const r = viewportRef.current?.getBoundingClientRect();
+        setPortMenu({ from: c.from, left: e.clientX - (r?.left ?? 0), top: e.clientY - (r?.top ?? 0), canvasX: pt.x, canvasY: pt.y });
       }
       return;
     }
@@ -332,7 +357,7 @@ function FlowCanvas() {
     try { await saveSteps(steps); toast({ title: "Ulandi ✓", variant: "success" }); }
     catch (err) { toast({ title: "Xatolik", description: err instanceof Error ? err.message : "", variant: "destructive" }); }
   }
-  async function addConnectedStep(fromId: string, kind: "message" | "delay") {
+  async function addConnectedStep(fromId: string, kind: "message" | "delay", at?: XY) {
     setPortMenu(null);
     if (!raw || raw.isBuiltin) return;
     const steps = structuredClone(raw.steps) as FlowStep[];
@@ -346,8 +371,9 @@ function FlowCanvas() {
     (from as { next?: string }).next = id;
     steps.push(fresh);
     const p = posOf(fromId);
+    const pos = at ? { x: Math.round(at.x - CARD_W / 2), y: Math.round(at.y - 24) } : { x: p.x + COL_PITCH, y: p.y };
     setCustom((prev) => {
-      const nextC = { ...prev, [id]: { x: p.x + COL_PITCH, y: p.y } };
+      const nextC = { ...prev, [id]: pos };
       try { localStorage.setItem(POS_KEY, JSON.stringify(nextC)); } catch { /* ignore */ }
       return nextC;
     });
@@ -528,6 +554,11 @@ function FlowCanvas() {
             }}
           >
             <svg width={width} height={height} className="absolute inset-0" style={{ pointerEvents: "none" }}>
+              <defs>
+                <marker id="fb-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M 0 0 L 10 5 L 0 10 z" fill="#2f80ed" />
+                </marker>
+              </defs>
               {edges.map((e, i) => {
                 const a = posOf(e.from);
                 const b = posOf(e.to);
@@ -565,14 +596,21 @@ function FlowCanvas() {
                   </g>
                 );
               })}
-              {/* temp edge while dragging a connection */}
-              {connActive && conn.current ? (() => {
-                const a = posOf(conn.current.from);
-                const ha = heights.get(conn.current.from) ?? 90;
+              {/* live connector being pulled out of a port (drag or sticky) */}
+              {(() => {
+                const from = conn.current?.from ?? pulling.current?.from;
+                if (!from || (!connActive && !pullingActive)) return null;
+                const a = posOf(from);
+                const ha = heights.get(from) ?? 90;
                 const x1 = a.x + CARD_W - 14, y1 = a.y + ha - 15;
                 const dx = Math.max(46, Math.abs(connCursor.x - x1) / 2);
-                return <path d={`M ${x1} ${y1} C ${x1 + dx} ${y1}, ${connCursor.x - dx} ${connCursor.y}, ${connCursor.x} ${connCursor.y}`} fill="none" stroke="#2f80ed" strokeWidth={2.4} strokeDasharray="5 4" />;
-              })() : null}
+                return (
+                  <g>
+                    <circle cx={x1} cy={y1} r={4} fill="#2f80ed" />
+                    <path d={`M ${x1} ${y1} C ${x1 + dx} ${y1}, ${connCursor.x - dx} ${connCursor.y}, ${connCursor.x} ${connCursor.y}`} fill="none" stroke="#2f80ed" strokeWidth={2.4} markerEnd="url(#fb-arrow)" />
+                  </g>
+                );
+              })()}
             </svg>
 
             {nodes.map((n) => {
@@ -599,7 +637,12 @@ function FlowCanvas() {
           </div>
 
           {/* hint pill / linking prompt */}
-          {linkFrom ? (
+          {pullingActive ? (
+            <div className="absolute left-1/2 top-3 z-30 -translate-x-1/2 flex items-center gap-2 rounded-full bg-[#2f80ed] px-3 py-1.5 text-xs font-medium text-white shadow">
+              👉 Qadamga bosing yoki bo'sh joyni bosing
+              <button onPointerDown={(e) => { e.stopPropagation(); cancelPulling(); }} className="rounded-full bg-white/25 px-2 py-0.5 hover:bg-white/40">bekor</button>
+            </div>
+          ) : linkFrom ? (
             <div className="absolute left-1/2 top-3 z-30 -translate-x-1/2 flex items-center gap-2 rounded-full bg-[#2f80ed] px-3 py-1.5 text-xs font-medium text-white shadow">
               👉 Ulanadigan qadamni bosing
               <button onPointerDown={(e) => e.stopPropagation()} onClick={() => setLinkFrom(null)} className="rounded-full bg-white/25 px-2 py-0.5 hover:bg-white/40">bekor</button>
@@ -618,8 +661,8 @@ function FlowCanvas() {
               onPointerDown={(e) => e.stopPropagation()}
             >
               <div className="px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-slate-400">Keyingi qadam</div>
-              <button className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50" onClick={() => addConnectedStep(portMenu.from, "message")}><Send className="h-4 w-4 text-[#2f80ed]" /> Yangi xabar</button>
-              <button className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50" onClick={() => addConnectedStep(portMenu.from, "delay")}><Clock className="h-4 w-4 text-amber-500" /> Yangi kutish</button>
+              <button className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50" onClick={() => addConnectedStep(portMenu.from, "message", { x: portMenu.canvasX, y: portMenu.canvasY })}><Send className="h-4 w-4 text-[#2f80ed]" /> Yangi xabar</button>
+              <button className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50" onClick={() => addConnectedStep(portMenu.from, "delay", { x: portMenu.canvasX, y: portMenu.canvasY })}><Clock className="h-4 w-4 text-amber-500" /> Yangi kutish</button>
               <button className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50" onClick={() => { setLinkFrom(portMenu.from); setPortMenu(null); }}><Link2 className="h-4 w-4 text-slate-500" /> Mavjud qadamga ulash</button>
             </div>
           ) : null}

@@ -15,18 +15,19 @@ const flowButtonZ = z.object({
 });
 const mediaSlotZ = z.object({ key: z.string().min(1).max(64), kind: z.enum(["photo", "video", "voice", "document"]) });
 const stepId = z.string().min(1).max(64);
+const nextRef = z.string().max(64); // may be "" (a dangling step / branch end)
 const flowStepZ = z.discriminatedUnion("type", [
-  z.object({ id: stepId, type: z.literal("message"), text: z.string().max(4000), media: mediaSlotZ.optional(), urlButtons: z.array(flowButtonZ).max(6).optional(), next: stepId }),
-  z.object({ id: stepId, type: z.literal("continue"), text: z.string().max(4000), media: mediaSlotZ.optional(), label: z.string().max(64).optional(), next: stepId }),
+  z.object({ id: stepId, type: z.literal("message"), text: z.string().max(4000), media: mediaSlotZ.optional(), urlButtons: z.array(flowButtonZ).max(6).optional(), next: nextRef }),
+  z.object({ id: stepId, type: z.literal("continue"), text: z.string().max(4000), media: mediaSlotZ.optional(), label: z.string().max(64).optional(), next: nextRef }),
   z.object({ id: stepId, type: z.literal("buttons"), text: z.string().max(4000), media: mediaSlotZ.optional(), buttons: z.array(flowButtonZ).min(1).max(8) }),
-  z.object({ id: stepId, type: z.literal("ask_phone"), text: z.string().max(4000), buttonText: z.string().min(1).max(64), next: stepId }),
-  z.object({ id: stepId, type: z.literal("ask_text"), text: z.string().max(4000), field: z.literal("city"), next: stepId }),
-  z.object({ id: stepId, type: z.literal("delay"), minutes: z.number().int().min(0).max(100000), next: stepId }),
-  z.object({ id: stepId, type: z.literal("action"), action: z.enum(["mark_lead", "mark_call_requested", "mark_cold", "notify_sales"]), next: stepId.optional() }),
+  z.object({ id: stepId, type: z.literal("ask_phone"), text: z.string().max(4000), buttonText: z.string().min(1).max(64), next: nextRef }),
+  z.object({ id: stepId, type: z.literal("ask_text"), text: z.string().max(4000), field: z.literal("city"), next: nextRef }),
+  z.object({ id: stepId, type: z.literal("delay"), minutes: z.number().int().min(0).max(100000), next: nextRef }),
+  z.object({ id: stepId, type: z.literal("action"), action: z.enum(["mark_lead", "mark_call_requested", "mark_cold", "notify_sales"]), next: nextRef.optional() }),
   z.object({ id: stepId, type: z.literal("end"), text: z.string().max(4000).optional(), status: z.string().max(32).optional() }),
 ]);
 
-/** Check a custom flow's graph: unique ids, every `next` resolves. */
+/** Check a custom flow's graph: unique ids, every non-empty `next` resolves. */
 function validateFlowGraph(steps: FlowStep[]): string | null {
   const ids = new Set<string>();
   for (const s of steps) {

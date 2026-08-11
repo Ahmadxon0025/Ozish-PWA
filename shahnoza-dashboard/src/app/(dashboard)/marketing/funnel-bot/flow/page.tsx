@@ -163,6 +163,18 @@ function FlowCanvas() {
   useEffect(() => { panRef.current = pan; }, [pan]);
   const drag = useRef<Drag | null>(null);
 
+  // ── connection dragging (wire a step's "Keyingi qadam" port to another step) ──
+  const conn = useRef<{ from: string; buttonIndex?: number } | null>(null);
+  const [connActive, setConnActive] = useState(false);
+  const [connCursor, setConnCursor] = useState<XY>({ x: 0, y: 0 });
+  const [selectedEdge, setSelectedEdge] = useState<{ from: string; to: string } | null>(null);
+  const clientToCanvas = useCallback((clientX: number, clientY: number): XY => {
+    const vp = viewportRef.current;
+    if (!vp) return { x: 0, y: 0 };
+    const r = vp.getBoundingClientRect();
+    return { x: (clientX - r.left - panRef.current.x) / zoomRef.current, y: (clientY - r.top - panRef.current.y) / zoomRef.current };
+  }, []);
+
   const fit = useCallback(() => {
     const vp = viewportRef.current;
     if (!vp || nodes.length === 0) return;
@@ -227,7 +239,15 @@ function FlowCanvas() {
     capture(e);
     drag.current = { kind: "pan", sx: e.clientX, sy: e.clientY, ox: panRef.current.x, oy: panRef.current.y, moved: false };
   }
+  function onPortDown(e: ReactPointerEvent, fromId: string, buttonIndex?: number) {
+    e.stopPropagation();
+    capture(e);
+    conn.current = { from: fromId, buttonIndex };
+    setConnActive(true);
+    setConnCursor(clientToCanvas(e.clientX, e.clientY));
+  }
   function onMove(e: ReactPointerEvent) {
+    if (conn.current) { setConnCursor(clientToCanvas(e.clientX, e.clientY)); return; }
     const d = drag.current;
     if (!d) return;
     const dx = e.clientX - d.sx;
@@ -241,7 +261,20 @@ function FlowCanvas() {
       setCustom((prev) => ({ ...prev, [id]: { x: Math.round(d.ox + dx / z), y: Math.round(d.oy + dy / z) } }));
     }
   }
-  function onUp() {
+  function onUp(e: ReactPointerEvent) {
+    if (conn.current) {
+      const c = conn.current;
+      conn.current = null;
+      setConnActive(false);
+      const pt = clientToCanvas(e.clientX, e.clientY);
+      const target = nodes.find((n) => {
+        const p = posOf(n.id);
+        const h = heights.get(n.id) ?? 90;
+        return pt.x >= p.x && pt.x <= p.x + CARD_W && pt.y >= p.y && pt.y <= p.y + h;
+      });
+      if (target && target.id !== c.from) void connect(c.from, target.id, c.buttonIndex);
+      return;
+    }
     const d = drag.current;
     drag.current = null;
     if (!d) return;
@@ -252,6 +285,30 @@ function FlowCanvas() {
         return prev;
       });
     }
+  }
+  async function connect(fromId: string, toId: string, buttonIndex?: number) {
+    if (!raw || raw.isBuiltin || fromId === toId) return;
+    const steps = structuredClone(raw.steps) as FlowStep[];
+    const s = steps.find((x) => x.id === fromId);
+    if (!s) return;
+    if (typeof buttonIndex === "number" && s.type === "buttons") {
+      if (s.buttons[buttonIndex]) s.buttons[buttonIndex].next = toId;
+    } else if ("next" in s) {
+      (s as { next?: string }).next = toId;
+    }
+    try { await saveSteps(steps); toast({ title: "Ulandi ✓", variant: "success" }); }
+    catch (err) { toast({ title: "Xatolik", description: err instanceof Error ? err.message : "", variant: "destructive" }); }
+  }
+  async function disconnectEdge(fromId: string, toId: string) {
+    if (!raw || raw.isBuiltin) return;
+    const steps = structuredClone(raw.steps) as FlowStep[];
+    const s = steps.find((x) => x.id === fromId);
+    if (!s) return;
+    if (s.type === "buttons") { for (const b of s.buttons) if (b.next === toId) b.next = ""; }
+    else if ("next" in s && (s as { next?: string }).next === toId) (s as { next?: string }).next = "";
+    setSelectedEdge(null);
+    try { await saveSteps(steps); toast({ title: "Ulanish uzildi", variant: "success" }); }
+    catch (err) { toast({ title: "Xatolik", description: err instanceof Error ? err.message : "", variant: "destructive" }); }
   }
   function resetPositions() {
     setCustom({});
@@ -276,24 +333,21 @@ function FlowCanvas() {
       kind === "message"
         ? { id, type: "message", text: "Yangi xabar — matnni bosib tahrirlang.", next: "" }
         : { id, type: "delay", minutes: 60, next: "" };
-    // insert after the selected step, else after the last step that leads to an end
-    let anchor = selected ? steps.find((s) => s.id === selected && s.type !== "buttons" && "next" in s) : undefined;
-    if (!anchor) {
-      anchor = [...steps].reverse().find((s) => s.type !== "buttons" && "next" in s && typeof (s as { next?: string }).next === "string");
-    }
-    if (anchor && "next" in anchor) {
-      const endId = steps.find((s) => s.type === "end")?.id ?? id;
-      (fresh as { next: string }).next = (anchor as { next?: string }).next ?? endId;
-      (anchor as { next: string }).next = id;
-      steps.splice(steps.findIndex((s) => s.id === anchor!.id) + 1, 0, fresh);
-    } else {
-      (fresh as { next: string }).next = steps.find((s) => s.type === "end")?.id ?? id;
-      steps.push(fresh);
-    }
+    // Free-floating: drop it where you're looking (center of the viewport),
+    // unconnected — you wire it up by dragging from a "Keyingi qadam" port.
+    steps.push(fresh);
+    const vp = viewportRef.current;
+    const cx = vp ? (vp.clientWidth / 2 - panRef.current.x) / zoomRef.current : 120;
+    const cy = vp ? (vp.clientHeight / 2 - panRef.current.y) / zoomRef.current : 120;
+    setCustom((prev) => {
+      const nextC = { ...prev, [id]: { x: Math.round(cx - CARD_W / 2), y: Math.round(cy - 40) } };
+      try { localStorage.setItem(POS_KEY, JSON.stringify(nextC)); } catch { /* ignore */ }
+      return nextC;
+    });
     try {
       await saveSteps(steps);
       setSelected(id);
-      toast({ title: kind === "message" ? "Xabar qo'shildi" : "Kutish qo'shildi", variant: "success" });
+      toast({ title: kind === "message" ? "Xabar qo'shildi" : "Kutish qo'shildi", description: "Portdan (○) sudrab, keyingi qadamga ulang.", variant: "success" });
     } catch (e) {
       toast({ title: "Xatolik", description: e instanceof Error ? e.message : "", variant: "destructive" });
     }
@@ -413,7 +467,7 @@ function FlowCanvas() {
               backgroundSize: "24px 24px",
             }}
           >
-            <svg width={width} height={height} className="absolute inset-0 pointer-events-none">
+            <svg width={width} height={height} className="absolute inset-0" style={{ pointerEvents: "none" }}>
               {edges.map((e, i) => {
                 const a = posOf(e.from);
                 const b = posOf(e.to);
@@ -421,23 +475,44 @@ function FlowCanvas() {
                 const x1 = a.x + CARD_W - 14, y1 = a.y + ha - 15, x2 = b.x - 2, y2 = b.y + 22;
                 const dx = Math.max(46, Math.abs(x2 - x1) / 2);
                 const active = selected === e.from || selected === e.to;
+                const sel = selectedEdge && selectedEdge.from === e.from && selectedEdge.to === e.to;
+                const d = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
                 return (
                   <g key={i}>
-                    <path
-                      d={`M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`}
-                      fill="none"
-                      stroke={active ? "#2f80ed" : "#aeb9c6"}
-                      strokeWidth={active ? 2.4 : 1.8}
-                    />
-                    <circle cx={x2} cy={y2} r={3} fill={active ? "#2f80ed" : "#aeb9c6"} />
-                    {e.label ? (
-                      <text x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 6} fill="#7b8794" fontSize={11} textAnchor="middle">
+                    <path d={d} fill="none" stroke={sel ? "#f43f5e" : active ? "#2f80ed" : "#aeb9c6"} strokeWidth={sel ? 3 : active ? 2.4 : 1.8} />
+                    <circle cx={x2} cy={y2} r={3} fill={sel ? "#f43f5e" : active ? "#2f80ed" : "#aeb9c6"} />
+                    {/* fat invisible hit-area to click the edge (editable flows only) */}
+                    {!isBuiltin ? (
+                      <path
+                        d={d}
+                        fill="none"
+                        stroke="transparent"
+                        strokeWidth={16}
+                        style={{ pointerEvents: "stroke", cursor: "pointer" }}
+                        onPointerDown={(ev) => { ev.stopPropagation(); setSelectedEdge(sel ? null : { from: e.from, to: e.to }); }}
+                      />
+                    ) : null}
+                    {sel ? (
+                      <g style={{ pointerEvents: "auto", cursor: "pointer" }} onPointerDown={(ev) => { ev.stopPropagation(); void disconnectEdge(e.from, e.to); }}>
+                        <circle cx={(x1 + x2) / 2} cy={(y1 + y2) / 2} r={10} fill="#f43f5e" />
+                        <text x={(x1 + x2) / 2} y={(y1 + y2) / 2 + 4} fill="#fff" fontSize={13} textAnchor="middle">×</text>
+                      </g>
+                    ) : e.label ? (
+                      <text x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 6} fill="#7b8794" fontSize={11} textAnchor="middle" style={{ pointerEvents: "none" }}>
                         {e.label.length > 18 ? e.label.slice(0, 18) + "…" : e.label}
                       </text>
                     ) : null}
                   </g>
                 );
               })}
+              {/* temp edge while dragging a connection */}
+              {connActive && conn.current ? (() => {
+                const a = posOf(conn.current.from);
+                const ha = heights.get(conn.current.from) ?? 90;
+                const x1 = a.x + CARD_W - 14, y1 = a.y + ha - 15;
+                const dx = Math.max(46, Math.abs(connCursor.x - x1) / 2);
+                return <path d={`M ${x1} ${y1} C ${x1 + dx} ${y1}, ${connCursor.x - dx} ${connCursor.y}, ${connCursor.x} ${connCursor.y}`} fill="none" stroke="#2f80ed" strokeWidth={2.4} strokeDasharray="5 4" />;
+              })() : null}
             </svg>
 
             {nodes.map((n) => {
@@ -455,7 +530,9 @@ function FlowCanvas() {
                   y={p.y}
                   h={heights.get(n.id) ?? 90}
                   selected={selected === n.id}
+                  editable={!isBuiltin}
                   onPointerDown={(e) => onNodeDown(e, n.id)}
+                  onPortDown={(e, buttonIndex) => onPortDown(e, n.id, buttonIndex)}
                 />
               );
             })}
@@ -463,7 +540,7 @@ function FlowCanvas() {
 
           {/* hint pill */}
           <div className="absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-white/90 px-3 py-1.5 text-xs text-slate-500 shadow-sm backdrop-blur pointer-events-none">
-            👆 Qadamni bosib tahrirlang · suring · fonni siljiting
+            {isBuiltin ? "👆 Qadamni bosib tahrirlang · suring · fonni siljiting" : "👆 Bosib tahrirlang · «Keyingi qadam ○» dan sudrab ulang · chiziqni bosib uzing"}
           </div>
 
           {/* add-step (custom flows) */}
@@ -552,7 +629,7 @@ const HEAD: Record<string, { icon: typeof Send; tint: string; bg: string; label:
 const MEDIA_LABEL: Record<string, string> = { photo: "Rasm", video: "Video", voice: "Ovozli xabar", document: "Hujjat" };
 
 function NodeCard({
-  step, text, ov, stats, x, y, h, selected, onPointerDown,
+  step, text, ov, stats, x, y, h, selected, editable, onPointerDown, onPortDown,
 }: {
   step: FlowStep;
   text: string;
@@ -562,7 +639,9 @@ function NodeCard({
   y: number;
   h: number;
   selected: boolean;
+  editable: boolean;
   onPointerDown: (e: ReactPointerEvent) => void;
+  onPortDown: (e: ReactPointerEvent, buttonIndex?: number) => void;
 }) {
   const head = HEAD[step.type] ?? HEAD.message!;
   const Icon = head.icon;
@@ -574,7 +653,7 @@ function NodeCard({
     : step.type === "ask_phone" ? [{ text: step.buttonText, isUrl: false }]
     : step.type === "message" ? (step.urlButtons ?? []).map((b, i) => ({ text: b.text, isUrl: !!(ov?.urlButtons.find((u) => u.index === i)?.url || b.url) }))
     : [];
-  const hasNext = step.type !== "end";
+  const hasSingleNext = step.type !== "end" && step.type !== "buttons";
 
   return (
     <div
@@ -629,8 +708,17 @@ function NodeCard({
       {/* footer */}
       <div className="absolute bottom-0 left-0 right-0 flex items-center px-3 py-1.5 text-[10px] text-slate-400">
         <span>Yuborildi <b className="text-slate-600">{stats.sent}</b>{stats.ctr !== null ? <> · CTR <b className={stats.ctr >= 50 ? "text-emerald-600" : "text-amber-600"}>{stats.ctr}%</b></> : null}</span>
-        {hasNext ? (
-          <span className="ml-auto inline-flex items-center gap-1">Keyingi qadam <span className="inline-block h-2.5 w-2.5 rounded-full border-2 border-slate-300 bg-white" /></span>
+        {hasSingleNext ? (
+          <span className="ml-auto inline-flex items-center gap-1">Keyingi qadam
+            <span
+              onPointerDown={editable ? (e) => { e.stopPropagation(); onPortDown(e); } : undefined}
+              title={editable ? "Sudrab, keyingi qadamga ulang" : undefined}
+              className={cn(
+                "inline-block h-3 w-3 rounded-full border-2 bg-white",
+                editable ? "border-[#2f80ed] cursor-crosshair hover:scale-125 transition-transform" : "border-slate-300",
+              )}
+            />
+          </span>
         ) : null}
       </div>
     </div>

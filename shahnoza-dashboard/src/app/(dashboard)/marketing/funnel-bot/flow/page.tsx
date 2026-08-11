@@ -165,10 +165,13 @@ function FlowCanvas() {
   const drag = useRef<Drag | null>(null);
 
   // ── connection dragging (wire a step's "Keyingi qadam" port to another step) ──
-  const conn = useRef<{ from: string; buttonIndex?: number } | null>(null);
+  const conn = useRef<{ from: string; buttonIndex?: number; sx: number; sy: number; moved: boolean } | null>(null);
   const [connActive, setConnActive] = useState(false);
   const [connCursor, setConnCursor] = useState<XY>({ x: 0, y: 0 });
   const [selectedEdge, setSelectedEdge] = useState<{ from: string; to: string } | null>(null);
+  // click a port (no drag) → a little menu; or link-to-existing mode
+  const [portMenu, setPortMenu] = useState<{ from: string; left: number; top: number } | null>(null);
+  const [linkFrom, setLinkFrom] = useState<string | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
   useEffect(() => {
     if (!fullscreen) return;
@@ -245,17 +248,25 @@ function FlowCanvas() {
   }
   function onBgDown(e: ReactPointerEvent) {
     capture(e);
+    setPortMenu(null);
+    setLinkFrom(null);
     drag.current = { kind: "pan", sx: e.clientX, sy: e.clientY, ox: panRef.current.x, oy: panRef.current.y, moved: false };
   }
   function onPortDown(e: ReactPointerEvent, fromId: string, buttonIndex?: number) {
     e.stopPropagation();
     capture(e);
-    conn.current = { from: fromId, buttonIndex };
+    setPortMenu(null);
+    setLinkFrom(null);
+    conn.current = { from: fromId, buttonIndex, sx: e.clientX, sy: e.clientY, moved: false };
     setConnActive(true);
     setConnCursor(clientToCanvas(e.clientX, e.clientY));
   }
   function onMove(e: ReactPointerEvent) {
-    if (conn.current) { setConnCursor(clientToCanvas(e.clientX, e.clientY)); return; }
+    if (conn.current) {
+      if (!conn.current.moved && (Math.abs(e.clientX - conn.current.sx) > 4 || Math.abs(e.clientY - conn.current.sy) > 4)) conn.current.moved = true;
+      setConnCursor(clientToCanvas(e.clientX, e.clientY));
+      return;
+    }
     const d = drag.current;
     if (!d) return;
     const dx = e.clientX - d.sx;
@@ -278,19 +289,28 @@ function FlowCanvas() {
       const c = conn.current;
       conn.current = null;
       setConnActive(false);
-      const pt = clientToCanvas(e.clientX, e.clientY);
-      const target = nodes.find((n) => {
-        const p = posOf(n.id);
-        const h = heights.get(n.id) ?? 90;
-        return pt.x >= p.x && pt.x <= p.x + CARD_W && pt.y >= p.y && pt.y <= p.y + h;
-      });
-      if (target && target.id !== c.from) void connect(c.from, target.id, c.buttonIndex);
+      if (c.moved) {
+        // dragged onto a card → wire it
+        const pt = clientToCanvas(e.clientX, e.clientY);
+        const target = nodes.find((n) => {
+          const p = posOf(n.id);
+          const h = heights.get(n.id) ?? 90;
+          return pt.x >= p.x && pt.x <= p.x + CARD_W && pt.y >= p.y && pt.y <= p.y + h;
+        });
+        if (target && target.id !== c.from) void connect(c.from, target.id, c.buttonIndex);
+      } else {
+        // just clicked the port → open the add/link menu right there
+        const vp = viewportRef.current;
+        const r = vp?.getBoundingClientRect();
+        setPortMenu({ from: c.from, left: e.clientX - (r?.left ?? 0), top: e.clientY - (r?.top ?? 0) });
+      }
       return;
     }
     const d = drag.current;
     drag.current = null;
     if (!d) return;
     if (d.kind === "pan" && d.moved && d.lastPan) setPan(d.lastPan); // commit direct-DOM pan to state
+    else if (d.kind === "node" && d.id && !d.moved && linkFrom) { void connect(linkFrom, d.id); setLinkFrom(null); }
     else if (d.kind === "node" && d.id && !d.moved) setSelected(d.id);
     else if (d.kind === "node" && d.moved) {
       setCustom((prev) => {
@@ -310,6 +330,28 @@ function FlowCanvas() {
       (s as { next?: string }).next = toId;
     }
     try { await saveSteps(steps); toast({ title: "Ulandi ✓", variant: "success" }); }
+    catch (err) { toast({ title: "Xatolik", description: err instanceof Error ? err.message : "", variant: "destructive" }); }
+  }
+  async function addConnectedStep(fromId: string, kind: "message" | "delay") {
+    setPortMenu(null);
+    if (!raw || raw.isBuiltin) return;
+    const steps = structuredClone(raw.steps) as FlowStep[];
+    const from = steps.find((s) => s.id === fromId);
+    if (!from || !("next" in from)) return;
+    const oldNext = (from as { next?: string }).next || "";
+    const id = newId();
+    const fresh: FlowStep = kind === "message"
+      ? { id, type: "message", text: "Yangi xabar — matnni bosib tahrirlang.", next: oldNext }
+      : { id, type: "delay", minutes: 60, next: oldNext };
+    (from as { next?: string }).next = id;
+    steps.push(fresh);
+    const p = posOf(fromId);
+    setCustom((prev) => {
+      const nextC = { ...prev, [id]: { x: p.x + COL_PITCH, y: p.y } };
+      try { localStorage.setItem(POS_KEY, JSON.stringify(nextC)); } catch { /* ignore */ }
+      return nextC;
+    });
+    try { await saveSteps(steps); setSelected(id); toast({ title: kind === "message" ? "Xabar ulandi ✓" : "Kutish ulandi ✓", variant: "success" }); }
     catch (err) { toast({ title: "Xatolik", description: err instanceof Error ? err.message : "", variant: "destructive" }); }
   }
   async function disconnectEdge(fromId: string, toId: string) {
@@ -556,10 +598,31 @@ function FlowCanvas() {
             })}
           </div>
 
-          {/* hint pill */}
-          <div className="absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-white/90 px-3 py-1.5 text-xs text-slate-500 shadow-sm backdrop-blur pointer-events-none">
-            {isBuiltin ? "👆 Qadamni bosib tahrirlang · suring · fonni siljiting" : "👆 Bosib tahrirlang · «Keyingi qadam ○» dan sudrab ulang · chiziqni bosib uzing"}
-          </div>
+          {/* hint pill / linking prompt */}
+          {linkFrom ? (
+            <div className="absolute left-1/2 top-3 z-30 -translate-x-1/2 flex items-center gap-2 rounded-full bg-[#2f80ed] px-3 py-1.5 text-xs font-medium text-white shadow">
+              👉 Ulanadigan qadamni bosing
+              <button onPointerDown={(e) => e.stopPropagation()} onClick={() => setLinkFrom(null)} className="rounded-full bg-white/25 px-2 py-0.5 hover:bg-white/40">bekor</button>
+            </div>
+          ) : (
+            <div className="absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-white/90 px-3 py-1.5 text-xs text-slate-500 shadow-sm backdrop-blur pointer-events-none">
+              {isBuiltin ? "👆 Qadamni bosib tahrirlang · suring · fonni siljiting" : "👆 «Keyingi qadam ○» ni bosing yoki sudrab ulang · chiziqni bosib uzing"}
+            </div>
+          )}
+
+          {/* port menu (click a "Keyingi qadam ○" port, no drag) */}
+          {portMenu ? (
+            <div
+              className="absolute z-30 w-52 overflow-hidden rounded-lg border bg-white py-1 shadow-xl"
+              style={{ left: Math.min(portMenu.left, (viewportRef.current?.clientWidth ?? 400) - 216), top: Math.min(portMenu.top, (viewportRef.current?.clientHeight ?? 400) - 150) }}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              <div className="px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-slate-400">Keyingi qadam</div>
+              <button className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50" onClick={() => addConnectedStep(portMenu.from, "message")}><Send className="h-4 w-4 text-[#2f80ed]" /> Yangi xabar</button>
+              <button className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50" onClick={() => addConnectedStep(portMenu.from, "delay")}><Clock className="h-4 w-4 text-amber-500" /> Yangi kutish</button>
+              <button className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50" onClick={() => { setLinkFrom(portMenu.from); setPortMenu(null); }}><Link2 className="h-4 w-4 text-slate-500" /> Mavjud qadamga ulash</button>
+            </div>
+          ) : null}
 
           {/* add-step (custom flows) */}
           {!isBuiltin ? (

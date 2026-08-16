@@ -227,7 +227,7 @@ export default function MyTasksPage() {
         <EmptyState
           icon={ClipboardList}
           title="Vazifa yo'q"
-          description="Bu bo'limda vazifa yo'q."
+          description="Hozircha bu yerda vazifa yo'q."
         />
       ) : (
         <div className="space-y-3">

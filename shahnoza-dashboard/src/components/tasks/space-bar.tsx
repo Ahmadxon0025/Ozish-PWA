@@ -33,10 +33,25 @@ import type { UserRole } from "@/types/database";
 const MANAGER_ROLES: UserRole[] = ["super_admin", "owner", "sales_manager"];
 export const ALL_SPACES = "all";
 
+// Auto-assigned colours so each new project chip gets its own dot without a
+// picker. Cycled by current project count.
+const PROJECT_COLORS = [
+  "#3b82f6", // blue
+  "#a16207", // brown
+  "#8b5cf6", // violet
+  "#10b981", // green
+  "#ef4444", // red
+  "#f59e0b", // amber
+  "#ec4899", // pink
+  "#14b8a6", // teal
+];
+
 /**
- * ClickUp-style "Spaces" (bo'limlar) selector. A horizontal pill bar:
- * [Hammasi] [Bo'lim A] [Bo'lim B] … [+ Bo'lim] plus a manage dialog for
- * renaming/deleting. Managers create/rename/delete; everyone can filter.
+ * Project selector (loyihalar) — a horizontal pill bar:
+ * [Hammasi] [Loyiha A] [Loyiha B] … [+ Loyiha] plus a manage dialog for
+ * renaming/deleting. Backed by task_spaces. Managers create/rename/delete;
+ * everyone can filter. "Hammasi" shows every project's tasks mixed; a chip
+ * narrows the board/calendar to just that project.
  */
 export function SpaceBar({
   selected,
@@ -75,7 +90,10 @@ export function SpaceBar({
         {selectedSpace && <SpaceFilesDialog spaceId={selectedSpace.id} name={selectedSpace.name} />}
         {canManage && (
           <>
-            <CreateSpaceButton onCreated={(id) => onSelect(id)} />
+            <CreateSpaceButton
+              nextColor={PROJECT_COLORS[spaces.length % PROJECT_COLORS.length]}
+              onCreated={(id) => onSelect(id)}
+            />
             {spaces.length > 0 && (
               <ManageSpacesDialog
                 onDeletedSelected={() => onSelect(ALL_SPACES)}
@@ -89,7 +107,7 @@ export function SpaceBar({
   );
 }
 
-/** A bo'lim's own files (Segmentatsiya materiallari kabi). */
+/** A project's own files (shartnoma, texnik topshiriq kabi). */
 function SpaceFilesDialog({ spaceId, name }: { spaceId: string; name: string }) {
   const [open, setOpen] = useState(false);
   return (
@@ -103,7 +121,7 @@ function SpaceFilesDialog({ spaceId, name }: { spaceId: string; name: string }) 
         <DialogHeader>
           <DialogTitle>{name} — fayllar</DialogTitle>
           <DialogDescription>
-            Bu bo&apos;limga oid hujjat va havolalar. Fayl yuklang yoki Google
+            Bu loyihaga oid hujjat va havolalar. Fayl yuklang yoki Google
             hujjat/jadval havolasini qo&apos;shing.
           </DialogDescription>
         </DialogHeader>
@@ -138,34 +156,45 @@ function Pill({
   );
 }
 
-function CreateSpaceButton({ onCreated }: { onCreated: (id: string) => void }) {
+function CreateSpaceButton({
+  nextColor,
+  onCreated,
+}: {
+  nextColor: string;
+  onCreated: (id: string) => void;
+}) {
   const utils = api.useUtils();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const create = api.tasks.createSpace.useMutation({
     onSuccess: (data) => {
       utils.tasks.spaces.invalidate();
-      toast({ title: "Bo'lim yaratildi", variant: "success" });
+      toast({ title: "Loyiha yaratildi", variant: "success" });
       setName("");
       setOpen(false);
       if (data?.id) onCreated(data.id);
     },
     onError: (e) => toast({ title: "Xato", description: e.message, variant: "destructive" }),
   });
+  const submit = () => {
+    if (name.trim() && !create.isPending) {
+      create.mutate({ name: name.trim(), color: nextColor });
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm" className="shrink-0 rounded-full">
-          <Plus className="h-4 w-4" /> Bo&apos;lim
+          <Plus className="h-4 w-4" /> Loyiha
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Yangi bo&apos;lim</DialogTitle>
+          <DialogTitle>Yangi loyiha</DialogTitle>
           <DialogDescription>
-            Vazifalarni alohida ish yo&apos;nalishlariga ajrating (masalan: Sotuv,
-            Marketing, Kontent).
+            Vazifalarni alohida loyihalarga ajrating (masalan: Clinic ads, Asl
+            charm ERP, Shahnoza course, Karobka tsex).
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-1.5">
@@ -173,12 +202,10 @@ function CreateSpaceButton({ onCreated }: { onCreated: (id: string) => void }) {
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Bo'lim nomi"
+            placeholder="Loyiha nomi"
             autoFocus
             onKeyDown={(e) => {
-              if (e.key === "Enter" && name.trim() && !create.isPending) {
-                create.mutate({ name: name.trim() });
-              }
+              if (e.key === "Enter") submit();
             }}
           />
         </div>
@@ -186,10 +213,7 @@ function CreateSpaceButton({ onCreated }: { onCreated: (id: string) => void }) {
           <DialogClose asChild>
             <Button variant="ghost">Bekor</Button>
           </DialogClose>
-          <Button
-            disabled={!name.trim() || create.isPending}
-            onClick={() => create.mutate({ name: name.trim() })}
-          >
+          <Button disabled={!name.trim() || create.isPending} onClick={submit}>
             {create.isPending ? "Saqlanmoqda…" : "Yaratish"}
           </Button>
         </DialogFooter>
@@ -223,7 +247,7 @@ function ManageSpacesDialog({
     onSuccess: (_r, vars) => {
       utils.tasks.spaces.invalidate();
       utils.tasks.board.invalidate();
-      toast({ title: "Bo'lim o'chirildi", variant: "success" });
+      toast({ title: "Loyiha o'chirildi", variant: "success" });
       if (vars.id === selected) onDeletedSelected();
     },
     onError: (e) => toast({ title: "Xato", description: e.message, variant: "destructive" }),
@@ -232,22 +256,22 @@ function ManageSpacesDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" className="shrink-0 rounded-full" aria-label="Bo'limlarni boshqarish">
+        <Button variant="ghost" size="icon" className="shrink-0 rounded-full" aria-label="Loyihalarni boshqarish">
           <Settings2 className="h-4 w-4" />
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Bo&apos;limlarni boshqarish</DialogTitle>
+          <DialogTitle>Loyihalarni boshqarish</DialogTitle>
           <DialogDescription>
-            Nomini o&apos;zgartiring yoki o&apos;chiring. Bo&apos;lim o&apos;chirilsa,
-            undagi vazifalar o&apos;chmaydi — faqat &quot;Bo&apos;limsiz&quot; bo&apos;lib qoladi.
+            Nomini o&apos;zgartiring yoki o&apos;chiring. Loyiha o&apos;chirilsa,
+            undagi vazifalar o&apos;chmaydi — faqat &quot;Loyihasiz&quot; bo&apos;lib qoladi.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
           {spaces.length === 0 && (
             <p className="py-4 text-center text-sm text-muted-foreground">
-              Hali bo&apos;lim yo&apos;q.
+              Hali loyiha yo&apos;q.
             </p>
           )}
           {spaces.map((s) => (
@@ -312,7 +336,7 @@ function ManageSpacesDialog({
                     className="h-8 w-8 text-destructive"
                     disabled={del.isPending}
                     onClick={() => {
-                      if (window.confirm(`"${s.name}" bo'limi o'chirilsinmi?`))
+                      if (window.confirm(`"${s.name}" loyihasi o'chirilsinmi?`))
                         del.mutate({ id: s.id });
                     }}
                     aria-label="O'chirish"

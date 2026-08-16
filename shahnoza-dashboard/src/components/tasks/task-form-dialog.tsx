@@ -517,15 +517,15 @@ export function TaskFormDialog({
             />
           </div>
 
-          {/* Bo'lim (ClickUp Space) — group the task into a work area. */}
+          {/* Loyiha (project) — group the task under one of the businesses. */}
           <div className="space-y-1.5">
-            <Label>Bo&apos;lim</Label>
+            <Label>Loyiha</Label>
             <Select value={spaceId} onValueChange={setSpaceId}>
               <SelectTrigger>
-                <SelectValue placeholder="Bo'limsiz" />
+                <SelectValue placeholder="Loyihasiz" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={NO_SPACE}>Bo&apos;limsiz</SelectItem>
+                <SelectItem value={NO_SPACE}>Loyihasiz</SelectItem>
                 {spaces.map((s) => (
                   <SelectItem key={s.id} value={s.id}>
                     {s.name}

@@ -1,5 +1,5 @@
 import "server-only";
-import { Bot } from "grammy";
+import { Bot, InputFile } from "grammy";
 import { env, isTelegramConfigured } from "@/lib/env";
 
 let botInstance: Bot | null = null;
@@ -45,6 +45,26 @@ export async function sendMessage(
     } catch {
       return null;
     }
+  }
+}
+
+/** Send a file (e.g. a generated PDF) as a Telegram document. Returns true on success. */
+export async function sendDocument(
+  chatId: string | number,
+  file: Buffer,
+  filename: string,
+  caption?: string,
+): Promise<boolean> {
+  const bot = getBot();
+  if (!bot || !chatId) return false;
+  try {
+    await bot.api.sendDocument(String(chatId), new InputFile(file, filename), {
+      ...(caption ? { caption, parse_mode: "Markdown" } : {}),
+    });
+    return true;
+  } catch (err) {
+    console.error("Telegram sendDocument failed:", err);
+    return false;
   }
 }
 

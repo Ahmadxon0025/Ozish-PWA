@@ -18,7 +18,7 @@ export async function buildWorkspaceContextForChat(
     // Get all tasks with enough detail for Alfred to answer real questions
     const { data: tasks } = (await supabase
       .from("tasks")
-      .select("id, title, assigned_to, status, due_date, priority, created_at")
+      .select("id, title, assigned_to, status, due_date, priority, created_at, completed_at")
       .order("created_at", { ascending: false })) as any;
 
     if (!users || !tasks) {
@@ -119,6 +119,41 @@ export async function buildWorkspaceContextForChat(
     const completionRate =
       tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0;
 
+    // Velocity: tasks actually finished (status=done, completed_at set) in
+    // the trailing 30 days / 30 — real throughput, not "every task ever
+    // created" divided by a constant.
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 86_400_000);
+    const doneLast30 = tasks.filter(
+      (t: any) =>
+        t.status === "done" &&
+        t.completed_at &&
+        new Date(t.completed_at) >= thirtyDaysAgo
+    ).length;
+    const teamVelocity = Number((doneLast30 / 30).toFixed(1));
+
+    // Average delay: how many days late work tends to run, across (a) tasks
+    // finished after their due date and (b) tasks still open past their due
+    // date today. Tasks with no due date, or finished on/before it, don't
+    // contribute — there's nothing to be "late" about.
+    let delaySumDays = 0;
+    let delayedCount = 0;
+    for (const t of tasks) {
+      if (!t.due_date) continue;
+      const due = new Date(t.due_date);
+      if (t.status === "done" && t.completed_at) {
+        const lateDays = (new Date(t.completed_at).getTime() - due.getTime()) / 86_400_000;
+        if (lateDays > 0) {
+          delaySumDays += lateDays;
+          delayedCount++;
+        }
+      } else if (t.status !== "done" && due < now) {
+        const lateDays = (now.getTime() - due.getTime()) / 86_400_000;
+        delaySumDays += lateDays;
+        delayedCount++;
+      }
+    }
+    const averageDelay = delayedCount > 0 ? Math.round(delaySumDays / delayedCount) : 0;
+
     return {
       tasks: {
         total: tasks.length,
@@ -129,9 +164,9 @@ export async function buildWorkspaceContextForChat(
       taskList,
       users: userList,
       metrics: {
-        teamVelocity: tasks.length > 0 ? (tasks.length / 30).toFixed(1) as any : 0,
+        teamVelocity,
         completionRate,
-        averageDelay: 3, // placeholder
+        averageDelay,
       },
     };
   } catch (error) {

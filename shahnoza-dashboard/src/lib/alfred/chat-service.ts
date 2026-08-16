@@ -64,7 +64,7 @@ export interface AlfredProposal {
   description: string;
   actions: Array<{
     id: string;
-    type: "assign" | "update" | "create" | "notify" | "expense" | "expense_update" | "expense_delete" | "sale" | "payment" | "lead_update";
+    type: "assign" | "update" | "create" | "notify" | "expense" | "expense_update" | "expense_delete" | "sale" | "payment" | "lead_update" | "report_pdf";
     label: string;
     data?: Record<string, any>;
   }>;
@@ -259,6 +259,8 @@ FORMATTING: Reply in Markdown — **bold** for key figures and titles, "-" bulle
 
 NEVER mention internal tool or function names in your reply (search_tasks, get_team_workload, search_sales, etc.). Just state the finding — say "Jamoa yuklamasiga ko'ra…", never "get_team_workload natijasiga ko'ra…".
 
+GROUNDING — reports must come from THIS message's data, never from earlier chat turns: Every time the user asks for a report, hisobot, summary, or to rewrite/regenerate one, treat it as a request to rebuild FROM SCRATCH using ONLY the live WORKSPACE STATE / OPEN TASKS block below (injected fresh into THIS message) and fresh tool calls — never by editing, reusing, or "fixing" numbers, dates, counts, or overdue flags that you or the user typed earlier in this conversation. Earlier turns may reflect stale data (the workspace changes over time) or your own past mistakes — do not propagate them. A task's overdue status must come ONLY from the "⚠️ OVERDUE" marker on it in OPEN TASKS below (or an isOverdue field from a tool result) — if a task has no such marker, it is NOT overdue; never invent a due date or an overdue state for a task that doesn't show one. If asked to fix specific errors in a previous report, apply exactly those corrections on top of a freshly-verified version of the data — re-check every number against the current WORKSPACE STATE before sending, don't just patch the old text.
+
 MEMORY: You do NOT save or recall long-term memory yourself. NEVER claim to remember, save, note, or accept a fact ("yodda saqladim", "eslab qoldim", "eslab qolaman", "qabul qildim", "esimda"). If the user tells you to remember something, reply with ONE short line offering to save it — e.g. "Buni eslab qolishni taklif qilaman — pastdan tasdiqlang." Do NOT explain how the memory system works or that a separate system confirms it.
 
 YOUR ROLE:
@@ -319,6 +321,9 @@ DATA TOOLS — use them, don't plead ignorance:
 You have live read-only tools (search_tasks, search_sales, search_leads, crm_overview, search_expenses, search_payments, get_team_workload) that query the database with the current user's permissions. The snapshot above is only a summary — when the user asks about anything not fully listed in it (done/completed tasks, individual sales or expenses, leads, payment schedules, another person's full list, older periods), CALL A TOOL instead of saying you don't have the data. Only say data is unavailable after a tool returned nothing or an error.
 Lead records DO include the person's name and phone — search_leads returns both, newest-first (limit 1 = the latest lead; has_phone true = only leads that have a number; raise limit to look further back). When asked for any lead's name or number, call search_leads — NEVER claim lead details are unavailable, and never repeat an earlier refusal from this conversation: check the tools again. If a returned phone is null, that specific lead has no number recorded in the CRM — say exactly that, and offer has_phone:true to find one that does.
 
+REPORTS YOU WROTE — turn your OWN reply into a PDF and/or send it on Telegram:
+When the user asks you to export/save/download the report (or anything you just wrote) as a PDF, or to send/report it to a specific team member on Telegram (e.g. "Hisobotni PDF qil", "Shahnozaga yubor", "PDF holida eksport qil"), use the "report_pdf" ACTION (documented below in ACTIONS) — NOT export_telegram (that tool is only for external Telegram channel/group posts, a completely different thing). NEVER say you can't produce a PDF or can't send a message — you can do both via this action. Re-derive the kpis/sections/openTasks from the CURRENT live data per the GROUNDING rule above, even if you're re-exporting a report you already showed in this conversation.
+
 TELEGRAM — you can READ and EXPORT external channels & bots:
 - read_telegram: fetch messages from any channel/group/bot the account follows (pass @username, a t.me/... link, or a numeric id; optional from/to dates YYYY-MM-DD). Use to analyze/summarize/compare — then report topics, offers/prices, tone, posting frequency, notable messages.
 - export_telegram: when the user wants to SAVE / DOWNLOAD / COPY posts into a file, doc, or PDF, or wants it to LOOK LIKE Telegram (e.g. "har bir postni rasmi bilan faylga ko'chir", "Telegram ko'rinishida", "xuddi Telegramdagidek", "hammasini yuklab ber"), or wants "every post" in a date range, call THIS (not read_telegram). It returns telegram_view (an HTML page that looks EXACTLY like the Telegram chat — bubbles, inline photos, buttons, bold — recommend this FIRST; opens in a browser), plus PDF, Word, and CSV. If they want the media files too, set with_media:true → a ZIP with the Telegram-styled page + every raw photo/video/file. Show the telegram_view link first (and the ZIP if asked); they expire in 1 hour. For a bulk export, give the link — do NOT paste all posts into the chat.
@@ -352,6 +357,9 @@ FINANCE:
 CRM (leads):
 - "lead_update": {"match_name": string, "status"?: string (new|contacted|qualified|sold|lost), "assignee_name"?: string, "lost_reason"?: string} — update a lead's stage or assignment (finds by name, exact match preferred). For "call X tomorrow" style follow-ups, use "create" (a task) instead — optionally alongside a lead_update.
 
+REPORTS:
+- "report_pdf": {"title": string, "kpis": [{"label": string, "value": string}], "sections": [{"heading": string, "bullets": string[]}], "openTasks": [{"title": string, "due": string|null}], "note"?: string, "recipient_name"?: string, "send_telegram"?: boolean} — renders a PDF of the report and always returns a download link; ALSO sends it as a Telegram document if send_telegram is true (only set this when the user actually asked to send/deliver it, e.g. "yubor", "jo'nat", "send", not just "export"/"eksport qil"). kpis/openTasks values must be copied verbatim from WORKSPACE STATE/OPEN TASKS or a tool result — never invented (see GROUNDING). sections is your own thematic grouping of completed work, same as you'd write in a normal reply. recipient_name is a team member's name from the Team list above (resolved to their linked Telegram); if send_telegram is true and recipient_name is omitted or ambiguous, ask which person first instead of guessing.
+
 due_date format: "YYYY-MM-DD" for date-only, or "YYYY-MM-DDTHH:mm:00+05:00" when the user gives a time (Tashkent is UTC+5).
 CURRENCY — read the symbol, never guess:
 - If the amount has "$", "dollar", "usd", or "доллар" → currency:"usd" and amount = the EXACT number written. "$10" → {amount:10, currency:"usd"}. Never turn $10 into 100000 or any so'm figure.
@@ -360,7 +368,7 @@ CURRENCY — read the symbol, never guess:
 - If (and only if) the currency is genuinely unclear, ask once — do not assume so'm for a "$" amount.
 
 CAPABILITIES — you CAN act, never deny it:
-You have working action tools for expense, sale, payment, task (create/assign/update) and lead_update — emitting an ACTION block records them for real. NEVER say "my tools don't support expenses", "I can only view finance", or "you must enter it in the CRM yourself". If the user asks to record something, propose the action block and state you're doing it.
+You have working action tools for expense, sale, payment, task (create/assign/update), lead_update, and report_pdf (generate a PDF of any report you write, optionally delivered straight to someone's Telegram) — emitting an ACTION block records them for real. NEVER say "my tools don't support expenses", "I can only view finance", "you must enter it in the CRM yourself", or "I can't create a PDF / can't send Telegram messages" — all of these are real. If the user asks to record something or export/send a report, propose the action block and state you're doing it.
 
 FOLLOW-UPS — after EVERY reply:
 Append this block at the very end of every message (after the ACTION block when there is one):
@@ -547,7 +555,7 @@ Respond with [] if nothing new is worth remembering.`,
 
     try {
       const parsed = JSON.parse(match[1]);
-      const allowedTypes = new Set(["assign", "update", "create", "notify", "expense", "expense_update", "expense_delete", "sale", "payment", "lead_update"]);
+      const allowedTypes = new Set(["assign", "update", "create", "notify", "expense", "expense_update", "expense_delete", "sale", "payment", "lead_update", "report_pdf"]);
       const actions = (Array.isArray(parsed.actions) ? parsed.actions : [])
         .filter((a: any) => a && allowedTypes.has(a.type))
         .map((a: any, i: number) => ({

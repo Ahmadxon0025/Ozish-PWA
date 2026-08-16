@@ -4,11 +4,13 @@ import {
   deleteRelatedEntries,
 } from "@/lib/business/account-posting";
 import { getCurrentRate } from "@/lib/business/exchange-rate";
+import { renderReportPdf } from "@/lib/alfred/report-pdf";
+import { FILES_BUCKET } from "@/lib/files";
 
 export interface ActionInput {
   conversationId: string | null;
   actionId: string;
-  actionType: "assign" | "update" | "create" | "notify" | "expense" | "expense_update" | "expense_delete" | "sale" | "payment" | "lead_update";
+  actionType: "assign" | "update" | "create" | "notify" | "expense" | "expense_update" | "expense_delete" | "sale" | "payment" | "lead_update" | "report_pdf";
   data: Record<string, any>;
 }
 
@@ -96,6 +98,9 @@ export class AlfredActionExecutor {
           break;
         case "lead_update":
           result = await this.executeLeadUpdate(data as any);
+          break;
+        case "report_pdf":
+          result = await this.executeReportPdf(data as any);
           break;
         default:
           result = {
@@ -1174,6 +1179,134 @@ export class AlfredActionExecutor {
       return {
         success: false,
         message: `To'lovni qo'yib bo'lmadi: ${detail}`,
+        error: detail,
+      };
+    }
+  }
+
+  /**
+   * Render a report Alfred wrote into a PDF, store it (24h signed link), and
+   * — only when explicitly asked to send/deliver it — push it straight into
+   * the recipient's Telegram DM as a document. Never reversible; not logged
+   * for undo beyond the generic action-log row.
+   */
+  private async executeReportPdf(data: {
+    title?: string;
+    kpis?: Array<{ label?: string; value?: string }>;
+    sections?: Array<{ heading?: string; bullets?: string[] }>;
+    openTasks?: Array<{ title?: string; due?: string | null }>;
+    note?: string;
+    recipient_name?: string;
+    send_telegram?: boolean;
+  }): Promise<ActionResult> {
+    try {
+      const title = String(data.title || "Hisobot").trim().slice(0, 150);
+      const kpis = Array.isArray(data.kpis)
+        ? data.kpis
+            .filter((k) => k && k.label && k.value)
+            .slice(0, 12)
+            .map((k) => ({ label: String(k.label).slice(0, 60), value: String(k.value).slice(0, 40) }))
+        : [];
+      const sections = Array.isArray(data.sections)
+        ? data.sections
+            .filter((s) => s && s.heading)
+            .slice(0, 20)
+            .map((s) => ({
+              heading: String(s.heading).slice(0, 150),
+              bullets: Array.isArray(s.bullets)
+                ? s.bullets.filter(Boolean).slice(0, 15).map((b) => String(b).slice(0, 400))
+                : [],
+            }))
+        : [];
+      const openTasks = Array.isArray(data.openTasks)
+        ? data.openTasks
+            .filter((t) => t && t.title)
+            .slice(0, 80)
+            .map((t) => ({ title: String(t.title).slice(0, 150), due: t.due ? String(t.due).slice(0, 20) : null }))
+        : [];
+
+      if (kpis.length === 0 && sections.length === 0 && openTasks.length === 0) {
+        return { success: false, message: "Hisobot uchun ma'lumot yo'q" };
+      }
+
+      const { data: me } = await this.supabase
+        .from("users")
+        .select("full_name")
+        .eq("id", this.userId)
+        .maybeSingle();
+
+      const recipientLabel = data.recipient_name ? String(data.recipient_name).trim() : null;
+      const todayTashkent = new Date(Date.now() + 5 * 3600 * 1000).toISOString().slice(0, 10);
+
+      const pdfBuffer = await renderReportPdf({
+        title,
+        preparedBy: (me as any)?.full_name || "Siz",
+        recipient: recipientLabel,
+        date: todayTashkent,
+        kpis,
+        sections,
+        openTasks,
+        note: data.note ? String(data.note).trim().slice(0, 800) : null,
+      });
+
+      const slug =
+        title
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "")
+          .slice(0, 40) || "hisobot";
+      const path = `reports/${Date.now()}-${slug}.pdf`;
+
+      const { error: uploadError } = await this.supabase.storage
+        .from(FILES_BUCKET)
+        .upload(path, pdfBuffer, { contentType: "application/pdf", upsert: false });
+      if (uploadError) throw uploadError;
+
+      const { data: signed, error: signError } = await this.supabase.storage
+        .from(FILES_BUCKET)
+        .createSignedUrl(path, 60 * 60 * 24);
+      if (signError || !signed?.signedUrl) throw signError ?? new Error("Signed URL yaratilmadi");
+      const url = signed.signedUrl;
+
+      let telegramSent = false;
+      let telegramNote = "";
+      if (data.send_telegram) {
+        if (!recipientLabel) {
+          telegramNote = " · qabul qiluvchi ko'rsatilmagani uchun faqat havola qaytarildi";
+        } else {
+          const recipient = await this.resolveUserByName(recipientLabel);
+          if ("error" in recipient) {
+            telegramNote = ` · ${recipient.error}`;
+          } else {
+            const { data: recipientRow } = await this.supabase
+              .from("users")
+              .select("telegram_id")
+              .eq("id", recipient.id)
+              .maybeSingle();
+            const tgId = (recipientRow as any)?.telegram_id;
+            if (tgId) {
+              const { sendDocument } = await import("@/lib/telegram/bot");
+              telegramSent = await sendDocument(tgId, pdfBuffer, `${slug}.pdf`, `📄 ${title}`);
+              telegramNote = telegramSent
+                ? ` · ${recipient.full_name}ga Telegram orqali yuborildi`
+                : ` · ${recipient.full_name}ga Telegramda yuborib bo'lmadi (havola ishlaydi)`;
+            } else {
+              telegramNote = ` · ${recipient.full_name}ning Telegram akkaunti ulanmagan, faqat havola`;
+            }
+          }
+        }
+      }
+
+      return {
+        success: true,
+        message: `Hisobot PDF tayyor: ${url}${telegramNote}`,
+        data: { url, telegramSent, path },
+      };
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Unknown error";
+      return {
+        success: false,
+        message: `Hisobot PDF yaratib bo'lmadi: ${detail}`,
         error: detail,
       };
     }

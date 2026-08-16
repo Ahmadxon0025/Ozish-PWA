@@ -713,6 +713,7 @@ export const alfredRouter = createTRPCRouter({
           "sale",
           "payment",
           "lead_update",
+          "report_pdf",
         ]),
         data: z.record(z.any()),
       })

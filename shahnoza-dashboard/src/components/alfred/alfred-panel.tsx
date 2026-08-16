@@ -140,7 +140,7 @@ function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
   const nodes: React.ReactNode[] = [];
   // Order matters: **bold** before *italic*; links; then _italic_.
   const regex =
-    /\*\*(.+?)\*\*|\[([^\]]+)\]\((\/[^)\s]+)\)|\*([^*\n]+?)\*|_([^_\n]+?)_/g;
+    /\*\*(.+?)\*\*|\[([^\]]+)\]\(((?:\/|https?:\/\/)[^)\s]+)\)|\*([^*\n]+?)\*|_([^_\n]+?)_/g;
   let last = 0;
   let m: RegExpExecArray | null;
   let i = 0;
@@ -153,10 +153,13 @@ function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
         </strong>
       );
     } else if (m[2] !== undefined) {
-      // Guard: a link whose path has no id (e.g. "/tasks/" or "/leads/")
-      // renders as plain bold text — never a dead link.
+      // Guard: an internal link whose path has no id (e.g. "/tasks/" or
+      // "/leads/") renders as plain bold text — never a dead link. External
+      // (https://…) links — e.g. a generated report/file download — always
+      // render as a real link; they're never "dead" in this sense.
       const href = m[3];
-      const deadLink = /^\/[a-z-]+\/?$/i.test(href) || href.endsWith("/");
+      const isExternal = /^https?:\/\//i.test(href);
+      const deadLink = !isExternal && (/^\/[a-z-]+\/?$/i.test(href) || href.endsWith("/"));
       if (deadLink) {
         nodes.push(
           <strong
@@ -171,6 +174,7 @@ function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
           <a
             key={`${keyPrefix}l${i++}`}
             href={href}
+            {...(isExternal ? { target: "_blank", rel: "noopener noreferrer" } : {})}
             className="text-purple-300 underline underline-offset-2 hover:text-purple-200"
           >
             {m[2]}
@@ -971,14 +975,14 @@ export function AlfredPanel({
                         <div className="ml-10 mt-2">
                           <Card className="border-purple-600/50 bg-purple-950/20 p-3 text-xs space-y-2">
                             {msg.executed.map((e, j) => (
-                              <p
+                              <div
                                 key={j}
                                 className={
                                   e.success ? "text-slate-300" : "text-red-400"
                                 }
                               >
-                                {e.success ? "✅" : "❌"} {e.message}
-                              </p>
+                                <MarkdownText text={`${e.success ? "✅" : "❌"} ${e.message}`} />
+                              </div>
                             ))}
                             {undoneMessages[msg.messageId] ? (
                               <p className="text-slate-400">↩️ Bekor qilindi</p>

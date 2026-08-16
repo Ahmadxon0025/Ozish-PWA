@@ -511,11 +511,6 @@ export default function KanbanPage() {
     <div>
       <PageHeader
         title="Kanban doska"
-        description={
-          viewMode === "kanban"
-            ? "Kartani boshqa ustunga torting. Mas'ul, muhimlik va muddatni kartadan bevosita o'zgartiring."
-            : "Har bir sana — alohida ustun. Kartani boshqa sanaga torting — muddati o'zgaradi."
-        }
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1 bg-muted rounded-lg p-1">

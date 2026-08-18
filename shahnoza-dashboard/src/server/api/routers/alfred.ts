@@ -315,6 +315,29 @@ export const alfredRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ input, ctx }) => {
+      // Hard cap: messages over 3 000 chars time out on Vercel Hobby (60 s
+      // limit) and consume rate-limit tokens. Return a helpful guide instead
+      // of silently failing with a generic error.
+      if (input.message.length > 3000) {
+        return {
+          success: true,
+          response:
+            "Xabaringiz juda uzun — AI uni 60 soniya ichida qayta ishlay olmaydi.\n\n" +
+            "**Iltimos, qisqaroq yozing:**\n" +
+            "- Bitta vazifani qo'shish: *\"[1.1] Map A-band info, deadline 18 Aug, yuqori\"*\n" +
+            "- Bitta savol: *\"Bugungi vazifalar holati qanday?\"*\n\n" +
+            "Uzun ro'yxatlarni bo'lib-bo'lib yuboring — yoki SQL orqali to'g'ridan-to'g'ri qo'shing.",
+          proposal: undefined,
+          followUps: [
+            "Bitta vazifani qo'shishni so'rang",
+            "Bugungi holat haqida so'rang",
+            "Jamoaga vazifa biriktiring",
+          ],
+          conversationId: input.conversationId ?? null,
+          executed: [],
+        };
+      }
+
       try {
         // Build workspace context (tasks + deterministic business snapshot,
         // both through the caller's client so RLS decides visibility)

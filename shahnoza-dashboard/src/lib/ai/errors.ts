@@ -11,6 +11,9 @@ import "server-only";
 export const AI_UNAVAILABLE_UZ =
   "AI vaqtincha ishlamayapti, birozdan keyin urinib ko'ring.";
 
+export const AI_TOO_LONG_UZ =
+  "Xabar juda uzun — AI uni qayta ishlay olmadi. Qisqaroq yozing.";
+
 export const AI_ERROR_UZ =
   "Kechirasiz, AI javob bera olmadi. Qayta urinib ko'ring.";
 
@@ -56,11 +59,22 @@ export function isAiUnavailableError(err: unknown): boolean {
   return false;
 }
 
+/** True when the request failed because the prompt/context was too long. */
+export function isAiTooLongError(err: unknown): boolean {
+  const e = err as { status?: number; statusCode?: number; message?: string; error?: { message?: string } } | null | undefined;
+  const status = e?.status ?? e?.statusCode;
+  const msg = String(e?.message ?? e?.error?.message ?? "").toLowerCase();
+  if (status === 400 && /too long|context.?length|max.?token|prompt.?exceed/i.test(msg)) return true;
+  if (/too long|context.?length|max.?token|prompt.?exceed/i.test(msg)) return true;
+  return false;
+}
+
 /**
  * A safe, user-facing message for ANY AI failure — never leaks raw provider
  * text. Use at conversational surfaces (Alfred web + Telegram, the brain).
  */
 export function safeAiMessage(err: unknown): string {
+  if (isAiTooLongError(err)) return AI_TOO_LONG_UZ;
   return isAiUnavailableError(err) ? AI_UNAVAILABLE_UZ : AI_ERROR_UZ;
 }
 

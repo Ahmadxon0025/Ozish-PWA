@@ -104,7 +104,7 @@ export class AlfredChatService {
 
     // Cap history so the prompt stays bounded as conversations grow
     const messages: Anthropic.MessageParam[] = [
-      ...conversationHistory.slice(-20).map((m) => ({
+      ...conversationHistory.slice(-10).map((m) => ({
         role: m.role as "user" | "assistant",
         content: m.content,
       })),

@@ -56,7 +56,11 @@ export async function sendRich(
       await bot.api.sendVideo(chatId, media.src, { caption: text, reply_markup: rm as never });
     } else if (media && media.kind === "voice") {
       await bot.api.sendVoice(chatId, media.src, {});
-      await bot.api.sendMessage(chatId, text, { reply_markup: rm as never });
+      if (text.trim()) {
+        await bot.api.sendMessage(chatId, text, { reply_markup: rm as never });
+      } else if (rm) {
+        await bot.api.sendMessage(chatId, "👇", { reply_markup: rm as never });
+      }
     } else if (media && media.kind === "document") {
       await bot.api.sendDocument(chatId, media.src, { caption: text, reply_markup: rm as never });
     } else {

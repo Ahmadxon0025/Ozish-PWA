@@ -534,7 +534,7 @@ function FlowCanvas() {
           ref={viewportRef}
           className={cn(
             "relative cursor-grab overflow-hidden border bg-[#eef1f5] touch-none select-none active:cursor-grabbing",
-            fullscreen ? "fixed inset-0 z-[60] rounded-none" : "rounded-xl",
+            fullscreen ? "fixed inset-0 z-[45] rounded-none" : "rounded-xl",
           )}
           style={{ height: fullscreen ? "100dvh" : "68vh" }}
           onPointerDown={onBgDown}

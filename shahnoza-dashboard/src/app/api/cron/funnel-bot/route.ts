@@ -30,6 +30,9 @@ export async function GET(request: NextRequest) {
   if (!isFunnelBotConfigured() || !isServiceRoleConfigured()) {
     return NextResponse.json({ ok: true, resumed: 0, reason: "not_configured" });
   }
+  // FUNNEL DISCONNECTED — switched to ChatPlace. Re-enable by restoring the block below.
+  return NextResponse.json({ ok: true, resumed: 0, reason: "funnel_disconnected" });
+
   try {
     const { processDueSteps } = await import("@/lib/funnel-bot/engine");
     const resumed = await processDueSteps();

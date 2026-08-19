@@ -98,7 +98,7 @@ export const FLOW: FlowStep[] = [
   // 7 — PARIZODA [PHOTO] +3 soat
   {
     id: "m7", type: "message",
-    text: `Bu — Parizoda.\nBir yil oldin poliklinikada 2-3 mln ga ishlagan oddiy hamshira.\n\nBugun:\n- Oyiga 10 mln+ topadi\n- O'z uyiga boshlang'ich to'lov qildi\n- Bolasi yonida ishlaydi\n\nU maxsus odam emas edi.\nShunchaki tizimni o'zgartirdi.`,
+    text: `Bu — Parizoda.\nBir yil oldin poliklinikada 2-3 mln ga ishlagan oddiy hamshira.\n\nBugun:\n\n✅ Oyiga 10 mln+ topadi\n✅ O'z uyiga boshlang'ich to'lov qildi\n✅ Bolasi yonida ishlaydi\n\nU maxsus odam emas edi.\nShunchaki tizimni o'zgartirdi.`,
     media: { key: "v2_photo_parizoda", kind: "photo" },
     next: "d7",
   },
@@ -131,7 +131,7 @@ export const FLOW: FlowStep[] = [
   // 11a — NILUFAR [PHOTO] +1 kun
   {
     id: "m11a", type: "message",
-    text: `Nilufar bog'cha hamshirasi edi.\nKo'p kurs o'qigan, lekin amaliyotda yolg'iz qolgan.\n\nBirinchi mijozini bog'chadagi onalar orasidan topdi.\n\nBugun:\n- Oyiga $2000 atrofida topadi\n- Bog'chaning o'zida markaz ochgan`,
+    text: `Nilufar bog'cha hamshirasi edi.\nKo'p kurs o'qigan, lekin amaliyotda yolg'iz qolgan.\n\nBirinchi mijozini bog'chadagi onalar orasidan topdi.\n\nBugun:\n\n✅ Oyiga $2000 atrofida topadi\n✅ Bog'chaning o'zida markaz ochgan`,
     media: { key: "v2_photo_nilufar", kind: "photo" },
     next: "d11a",
   },
@@ -241,7 +241,7 @@ export const FLOW: FlowStep[] = [
   // 23 — URGENCY [TEXT] +2 soat
   {
     id: "m23", type: "message",
-    text: `Yangi guruhga qabul ochildi.\n\nFaqat 30 ta joy.\nAmaliyot sifatli bo'lishi uchun ko'proq olmaymiz.\n\n48 soat ichida yozilsangiz:\n- Bonuslar ochiladi\n- Imtiyozli shartlar saqlanadi\n- Joy kafolatlanadi`,
+    text: `Yangi guruhga qabul ochildi.\n\nFaqat 30 ta joy.\nAmaliyot sifatli bo'lishi uchun ko'proq olmaymiz.\n\n48 soat ichida yozilsangiz:\n\n✅ Bonuslar ochiladi\n✅ Imtiyozli shartlar saqlanadi\n✅ Joy kafolatlanadi`,
     next: "d23",
   },
   { id: "d23", type: "delay", minutes: 180, next: "m24" },
@@ -266,7 +266,7 @@ export const FLOW: FlowStep[] = [
   // 25 — TIZIM + MICRO [TEXT] +1 kun
   {
     id: "m25", type: "message",
-    text: `Men sizga shunchaki kurs emas — umrlik kasb beraman.\n\nTugatgach sizda bo'ladi:\n- Birinchi to'laydigan mijoz\n- Birinchi halol daromad\n- Professional sertifikat\n- Tayyor marketing materiallari\n\nAgar rejani ko'rishni xohlasangiz,\n"HA" deb yozing.`,
+    text: `Men sizga shunchaki kurs emas — umrlik kasb beraman.\n\nTugatgach sizda bo'ladi:\n\n✅ Birinchi to'laydigan mijoz\n✅ Birinchi halol daromad\n✅ Professional sertifikat\n✅ Tayyor marketing materiallari\n\nAgar rejani ko'rishni xohlasangiz,\n"HA" deb yozing.`,
     next: "d25",
   },
   { id: "d25", type: "delay", minutes: 120, next: "m26" },
@@ -358,7 +358,7 @@ export const FLOW: FlowStep[] = [
   // 35 — CTA [TEXT + BUTTON] +2 soat
   {
     id: "m35", type: "message",
-    text: `Orzu va real daromad orasida bitta qadam qoldi.\n\n15 daqiqalik bepul suhbatda:\n- Holatingizni tahlil qilamiz\n- Qaysi tarif mosligini ko'ramiz\n- 10 mln ga chiqish rejasini tuzamiz`,
+    text: `Orzu va real daromad orasida bitta qadam qoldi.\n\n15 daqiqalik bepul suhbatda:\n\n✅ Holatingizni tahlil qilamiz\n✅ Qaysi tarif mosligini ko'ramiz\n✅ 10 mln ga chiqish rejasini tuzamiz`,
     urlButtons: [{ text: "📞 Bepul Suhbatga Yozilish", url: ADMIN }],
     next: "d35",
   },

@@ -44,7 +44,7 @@ export const FLOW: FlowStep[] = [
   // 1 — /START [PHOTO + BUTTON] +0 min
   {
     id: "m1", type: "message",
-    text: `Salom, [ism]! 🌿\n\nSizga va'da qilgan bepul darsni hozir yuboryapman.\n\nBu darsda aniq ko'rasiz:\n- Nega hamshiralar 2 mln dan oshmaydi\n- Qanday qilib kuniga 2 soat ishlab 10 mln topish mumkin\n- Parizoda 6 oyda uyiga boshlang'ich to'lovni qanday qildi\n\nEng muhim qismi oxirida.\nHozir ko'ring 👇`,
+    text: `Salom, [ism]! 🌿\n\nSizga va'da qilgan bepul darsni hozir yuboryapman.\nBu darsda aniq ko'rasiz:\n\n❤️ Nega hamshiralar 2 mln dan oshmaydi\n🧩 Qanday qilib kuniga 2 soat ishlab 10 mln topish mumkin\n🚀 Parizoda 6 oyda uyiga boshlang'ich to'lovni qanday qildi\n\nEng muhim qismi oxirida.\nHozir ko'ring 👇`,
     media: { key: "v2_photo_shahnoza", kind: "photo" },
     urlButtons: [{ text: "🎥 Bepul Darsni Ko'rish", url: "" }],
     next: "d1",

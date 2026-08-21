@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bolalar massaji kursi — Shahnoza Akademiyasi</title>
+<meta name="description" content="45 kunda birinchi to'laydigan mijozingiz. 17 yillik reabilitolog Shahnoza Soliyeva bilan 0 dan professional bolalar massajchisi bo'ling.">
+<meta property="og:title" content="Bolalar massaji kursi — Shahnoza Akademiyasi">
+<meta property="og:description" content="45 kunda birinchi to'laydigan mijozingiz — uydan chiqmasdan daromad.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Montserrat:wght@700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --cream:#FFF6EF; --pink:#EC4C89; --pink-deep:#D63B77; --pink-soft:#FCE4EE;
+  --pink-tint:#FDEFF5; --gold-1:#E7C173; --gold-2:#C89A3B; --ink:#2C2521;
+  --ink-soft:#5B4F49; --muted:#9A8A80; --line:#F0E2DA; --green:#33A15D;
+  --dark:#241F1C; --dark-soft:#332C28; --card:#FFFFFF;
+  --shadow:0 10px 30px rgba(140,90,70,.10); --shadow-lg:0 18px 46px rgba(140,90,70,.16);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{background:#F3E3DA}
+body{font-family:'Manrope',-apple-system,BlinkMacSystemFont,sans-serif;color:var(--ink);line-height:1.5;-webkit-font-smoothing:antialiased}
+img{max-width:100%;display:block}
+.page{max-width:480px;margin:0 auto;background:var(--cream);overflow:hidden;position:relative;min-height:100vh}
+.wrap{padding:0 20px}
+h1,h2,h3{font-family:'Montserrat',sans-serif;line-height:1.14;letter-spacing:-.01em}
+.eyebrow{font-family:'Manrope';font-weight:800;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--pink);display:inline-block}
+.h-sec{font-size:26px;font-weight:800;color:var(--ink);margin:8px 0 0}
+.sec{padding:44px 0}
+.center{text-align:center}
+.muted{color:var(--muted)}
+.sm{font-size:13px}
+.pink{color:var(--pink)}
+.strike{text-decoration:line-through;color:var(--muted);font-weight:600}
+
+/* buttons */
+.btn{display:block;width:100%;border:0;cursor:pointer;font-family:'Manrope';font-weight:800;
+  text-align:center;border-radius:16px;padding:18px 20px;font-size:16px;letter-spacing:.02em;
+  text-decoration:none;transition:transform .12s ease, box-shadow .12s ease;line-height:1.25}
+.btn:active{transform:translateY(1px)}
+.btn-gold{background:linear-gradient(180deg,var(--gold-1),var(--gold-2));color:#fff;
+  box-shadow:0 12px 26px rgba(200,154,59,.36);text-transform:uppercase}
+.btn-pink{background:linear-gradient(180deg,#F2609B,var(--pink-deep));color:#fff;
+  box-shadow:0 12px 26px rgba(214,59,119,.34);text-transform:uppercase}
+.btn-ghost{background:#fff;color:var(--pink);border:2px solid var(--pink)}
+.btn-sm{padding:12px 16px;font-size:14px;border-radius:12px;width:auto;display:inline-block}
+
+/* top bars */
+.topbar{background:var(--dark);color:#fff;text-align:center;font-size:12.5px;font-weight:600;padding:9px 16px;line-height:1.35}
+.topbar b{color:#FFC7DE}
+.subbar{background:linear-gradient(180deg,#F0C978,#DBA945);display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 14px}
+.subbar span{font-size:12.5px;font-weight:700;color:#4A3410;line-height:1.3}
+.subbar .btn{width:auto;padding:9px 16px;font-size:12px;border-radius:10px;background:#2C2521;color:#fff}
+
+/* hero */
+.hero{background:radial-gradient(120% 60% at 50% 0%,#FFE9F2 0%,var(--cream) 60%);padding:30px 20px 34px;text-align:center;position:relative}
+.hero h1{font-size:32px;font-weight:900;margin:16px 0 14px;color:#3A2C26}
+.hero h1 em{font-style:normal;color:var(--pink)}
+.hero .lead{color:var(--ink-soft);font-size:15.5px;max-width:36ch;margin:0 auto 22px}
+.hero-photo{position:relative;max-width:320px;margin:0 auto;border-radius:22px;overflow:hidden;box-shadow:var(--shadow-lg);background:#EED9E4}
+.hero-photo img{width:100%}
+.photo-cap{position:absolute;left:12px;right:12px;bottom:12px;background:rgba(255,255,255,.94);
+  border-radius:12px;padding:8px 12px;font-size:12.5px;font-weight:700;color:var(--ink);backdrop-filter:blur(4px)}
+.photo-cap b{color:var(--pink)}
+.note-pill{display:inline-block;margin:16px auto 20px;background:#fff;border:1px solid var(--line);
+  border-radius:999px;padding:8px 16px;font-size:12.5px;font-weight:600;color:var(--ink-soft);box-shadow:var(--shadow)}
+.trust{font-size:12.5px;color:var(--muted);margin-top:14px;line-height:1.5}
+.scrollcue{margin-top:22px;font-size:11px;letter-spacing:.2em;color:var(--pink);font-weight:800}
+.scrollcue .arw{display:block;font-size:18px;margin-top:2px;animation:bob 1.6s ease-in-out infinite}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(5px)}}
+
+/* stats strip */
+.stats{background:#fff;display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line)}
+.stat{background:#fff;padding:18px 14px;text-align:center}
+.stat b{display:block;font-family:'Montserrat';font-weight:900;font-size:22px;color:var(--pink)}
+.stat span{font-size:12px;color:var(--muted);font-weight:600}
+
+/* countdown / tariflar panel */
+.cd-panel{background:linear-gradient(160deg,#F2609B,#D63B77);color:#fff;border-radius:26px;padding:26px 20px;text-align:center;box-shadow:var(--shadow-lg);position:relative}
+.cd-panel .lbl{font-size:11px;letter-spacing:.18em;font-weight:800;text-transform:uppercase;opacity:.9}
+.cd-panel h3{color:#fff;font-size:19px;font-weight:800;margin:8px auto 18px;max-width:26ch;line-height:1.3}
+.cd-panel h3 b{color:#FFE08A}
+.cd-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;max-width:320px;margin:0 auto}
+.cd-cell{background:rgba(255,255,255,.16);border-radius:14px;padding:12px 6px}
+.cd-cell b{display:block;font-family:'Montserrat';font-weight:900;font-size:28px;line-height:1}
+.cd-cell span{font-size:10.5px;opacity:.85;font-weight:600;margin-top:4px;display:block}
+.cd-left{margin-top:16px;display:inline-block;background:#fff;color:var(--pink-deep);font-weight:800;
+  font-size:13px;padding:8px 18px;border-radius:999px}
+
+/* generic card */
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:var(--shadow)}
+.stack{display:flex;flex-direction:column;gap:14px}
+
+/* numbered imagine list */
+.num-item{display:flex;gap:14px;align-items:flex-start;text-align:left}
+.num-badge{flex:none;width:38px;height:38px;border-radius:12px;background:var(--pink-soft);color:var(--pink-deep);
+  font-family:'Montserrat';font-weight:900;font-size:15px;display:flex;align-items:center;justify-content:center}
+.num-item p{font-size:14.5px;color:var(--ink-soft)}
+
+/* pain points */
+.pain{border-left:4px solid var(--pink);background:#fff;border-radius:0 14px 14px 0;padding:14px 16px;text-align:left;box-shadow:var(--shadow)}
+.pain b{display:block;font-size:15px;margin-bottom:4px;color:var(--ink)}
+.pain p{font-size:13.5px;color:var(--ink-soft)}
+
+/* testimonial video */
+.vid-card{background:#fff;border-radius:18px;overflow:hidden;box-shadow:var(--shadow);border:1px solid var(--line)}
+.vid-wrap{position:relative;background:#000;aspect-ratio:9/13.5;max-height:420px;overflow:hidden}
+.vid-wrap video,.vid-wrap img{width:100%;height:100%;object-fit:cover}
+.vid-tag{position:absolute;top:12px;left:12px;right:12px;text-align:center;font-size:12px;font-weight:800;color:#fff;
+  text-shadow:0 1px 4px rgba(0,0,0,.6);letter-spacing:.04em}
+.play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.play i{width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,.92);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(0,0,0,.3)}
+.play i:after{content:"";border-left:20px solid var(--pink-deep);border-top:12px solid transparent;border-bottom:12px solid transparent;margin-left:5px}
+.ab{padding:16px;text-align:left}
+.ab .row{display:flex;gap:10px;margin-bottom:8px}
+.ab .k{flex:none;width:22px;height:22px;border-radius:7px;font-weight:900;font-size:12px;display:flex;align-items:center;justify-content:center;color:#fff}
+.ab .k.a{background:#C9836B}.ab .k.b{background:var(--green)}
+.ab .row p{font-size:13.5px;color:var(--ink-soft)}
+.ab .name{font-weight:800;font-size:14.5px;margin-top:6px}
+.ab .role{font-size:12px;color:var(--muted)}
+.disc{font-size:10.5px;color:#B7A79E;font-style:italic;margin-top:6px}
+
+/* text testimonial */
+.t-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;text-align:left;box-shadow:var(--shadow)}
+.t-card .top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+.t-card .cat{font-size:11px;font-weight:700;color:var(--muted)}
+.t-card .delta{font-size:12px;font-weight:800;color:var(--green);background:#EAF7EF;padding:4px 10px;border-radius:999px;white-space:nowrap}
+.t-card p{font-size:13.5px;color:var(--ink-soft)}
+.t-card .name{font-weight:800;font-size:14px;margin-top:8px}
+
+/* ustoz */
+.ustoz-photo{border-radius:20px;overflow:hidden;box-shadow:var(--shadow-lg);background:#000;max-width:300px;margin:0 auto 18px}
+.ustoz-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:16px}
+.ustoz-stats div{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 8px}
+.ustoz-stats b{display:block;font-family:'Montserrat';font-weight:900;font-size:20px;color:var(--pink)}
+.ustoz-stats span{font-size:11px;color:var(--muted);font-weight:600}
+
+/* audience */
+.aud{display:flex;gap:12px;text-align:left;align-items:flex-start;background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:var(--shadow)}
+.aud .ic{flex:none;width:44px;height:44px;border-radius:12px;background:var(--pink-soft);display:flex;align-items:center;justify-content:center;font-size:22px}
+.aud b{font-size:15px}.aud p{font-size:13px;color:var(--ink-soft)}
+.aud .path{color:var(--pink);font-weight:800;font-size:12.5px;margin-top:3px}
+.forlist{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
+.forlist .box{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;text-align:left;box-shadow:var(--shadow)}
+.forlist .box.no{background:#FBF3F1}
+.forlist h4{font-size:13px;margin-bottom:10px;font-family:'Manrope';font-weight:800}
+.forlist li{list-style:none;font-size:12.5px;color:var(--ink-soft);margin-bottom:7px;line-height:1.35}
+
+/* program steps */
+.step{display:flex;gap:14px;text-align:left;background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:var(--shadow)}
+.step .n{flex:none;width:36px;height:36px;border-radius:50%;background:linear-gradient(180deg,#F2609B,var(--pink-deep));color:#fff;font-family:'Montserrat';font-weight:900;display:flex;align-items:center;justify-content:center}
+.step b{font-size:15px}.step p{font-size:13px;color:var(--ink-soft);margin-top:3px}
+.step .res{font-size:12px;color:var(--green);font-weight:700;margin-top:6px}
+
+/* value stack */
+.vs{background:#fff;border:1px solid var(--line);border-radius:18px;padding:8px 18px;box-shadow:var(--shadow)}
+.vs .li{display:flex;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px dashed var(--line);font-size:13.5px;text-align:left}
+.vs .li:last-child{border-bottom:0}
+.vs .li span:first-child{color:var(--ink-soft)}
+.vs .li span:last-child{font-weight:700;white-space:nowrap;color:var(--ink)}
+.vs .total{display:flex;justify-content:space-between;padding:14px 0 4px;font-weight:800;font-size:15px;border-top:2px solid var(--ink)}
+.price-box{text-align:center;margin-top:18px}
+.price-box .now{font-family:'Montserrat';font-weight:900;font-size:38px;color:var(--pink);line-height:1}
+.price-box .nasiya{font-size:13px;color:var(--ink-soft);margin-top:6px;font-weight:600}
+.explain{background:var(--pink-tint);border:1px dashed var(--pink);border-radius:16px;padding:16px;margin-top:16px;text-align:left}
+.explain .t{font-weight:800;color:var(--pink-deep);font-size:13px;letter-spacing:.04em;text-align:center;margin-bottom:8px}
+.explain p{font-size:13px;color:var(--ink-soft)}
+
+/* bonuses */
+.bonus{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;text-align:left;box-shadow:var(--shadow);position:relative;overflow:hidden}
+.bonus:before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:linear-gradient(var(--gold-1),var(--gold-2))}
+.bonus .head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
+.bonus .b-tag{font-size:11px;font-weight:800;color:var(--gold-2);letter-spacing:.03em}
+.bonus .b-val{font-size:12px;font-weight:800;color:var(--muted)}
+.bonus .lock{font-size:13px;color:var(--pink-deep);font-weight:700;margin-bottom:6px}
+.bonus b.title{font-size:15px;display:block;margin-bottom:6px}
+.bonus p{font-size:13px;color:var(--ink-soft)}
+
+/* pricing tiers */
+.tier{background:#fff;border:1px solid var(--line);border-radius:22px;padding:22px 20px;box-shadow:var(--shadow);text-align:left;position:relative}
+.tier.feat{background:linear-gradient(170deg,#FF6DA6,#D63B77);color:#fff;border:0;box-shadow:0 20px 44px rgba(214,59,119,.4);transform:scale(1.02)}
+.tier .badge{position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:var(--gold-2);color:#fff;font-size:11px;font-weight:800;letter-spacing:.05em;padding:6px 16px;border-radius:999px;white-space:nowrap;box-shadow:0 6px 16px rgba(0,0,0,.18)}
+.tier .t-name{font-family:'Montserrat';font-weight:900;font-size:24px;letter-spacing:.02em}
+.tier.feat .t-name{color:#fff}
+.tier .t-sub{font-size:13px;color:var(--muted);margin-bottom:14px}
+.tier.feat .t-sub{color:rgba(255,255,255,.85)}
+.tier .t-price .old{font-size:14px}
+.tier .t-price .new{font-family:'Montserrat';font-weight:900;font-size:30px;line-height:1.1}
+.tier.feat .t-price .new{color:#fff}
+.tier:not(.feat) .t-price .new{color:var(--pink)}
+.tier .t-nasiya{font-size:12.5px;color:var(--ink-soft);margin:4px 0 14px}
+.tier.feat .t-nasiya{color:rgba(255,255,255,.9)}
+.tier ul{list-style:none;margin-bottom:16px}
+.tier li{font-size:13px;padding:7px 0 7px 26px;position:relative;color:var(--ink-soft);border-bottom:1px solid var(--line)}
+.tier li:last-child{border-bottom:0}
+.tier.feat li{color:#fff;border-color:rgba(255,255,255,.18)}
+.tier li:before{content:"✓";position:absolute;left:0;top:7px;color:var(--green);font-weight:900}
+.tier li.star:before{content:"★";color:var(--gold-2)}
+.tier.feat li:before{color:#fff}
+.tier.feat li.star:before{color:#FFE08A}
+.tier li.plus{font-weight:800;color:var(--ink);border-bottom:0;padding-left:0}
+.tier.feat li.plus{color:#FFE08A}
+.tier li.plus:before{content:""}
+
+/* guarantee */
+.guar{display:flex;gap:14px;text-align:left;background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:var(--shadow)}
+.guar .days{flex:none;width:56px;text-align:center}
+.guar .days b{display:block;font-family:'Montserrat';font-weight:900;font-size:20px;color:var(--pink)}
+.guar .days span{font-size:10px;color:var(--muted)}
+.guar b.title{font-size:14px}.guar p{font-size:12.5px;color:var(--ink-soft);margin-top:3px}
+.quote{text-align:center;font-style:italic;color:var(--ink-soft);font-size:14.5px;margin-top:18px;padding:0 10px;line-height:1.55}
+
+/* objections */
+.obj{background:#fff;border:1px solid var(--line);border-radius:14px;padding:15px 16px;text-align:left;box-shadow:var(--shadow)}
+.obj b{display:block;color:var(--pink-deep);font-size:14px;margin-bottom:6px}
+.obj p{font-size:13px;color:var(--ink-soft)}
+
+/* FAQ dark */
+.faq-sec{background:var(--dark);color:#fff;border-radius:28px 28px 0 0;margin-top:30px}
+.faq-sec .eyebrow{color:#FF8DBA}
+.faq-sec .h-sec{color:#fff}
+.faq{border-bottom:1px solid rgba(255,255,255,.1)}
+.faq summary{list-style:none;cursor:pointer;padding:16px 0;font-weight:700;font-size:15px;display:flex;justify-content:space-between;gap:12px;align-items:center}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary:after{content:"+";font-size:22px;color:var(--pink);font-weight:400;flex:none;transition:transform .2s}
+.faq[open] summary:after{transform:rotate(45deg)}
+.faq p{padding:0 0 16px;font-size:13.5px;color:#CFC4BD;line-height:1.6}
+
+/* nothing / close */
+.nothing{background:#fff;border:1px solid var(--line);border-radius:18px;padding:20px;text-align:left;box-shadow:var(--shadow)}
+.nothing p{font-size:14px;color:var(--ink-soft);margin-bottom:12px}
+.nothing .big{font-family:'Montserrat';font-weight:900;font-size:20px;color:var(--ink);text-align:center}
+.close-box{background:radial-gradient(120% 70% at 50% 0%,#FFE9F2,var(--cream));text-align:center}
+.recap{background:#fff;border:2px solid var(--pink);border-radius:20px;padding:22px;box-shadow:var(--shadow-lg);text-align:center}
+.recap .was{font-size:14px;color:var(--muted)}
+.recap .now{font-family:'Montserrat';font-weight:900;font-size:40px;color:var(--pink);line-height:1.05}
+.recap .nas{font-size:13px;color:var(--ink-soft);margin-top:6px}
+.ps{font-size:13.5px;color:var(--ink-soft);text-align:left;line-height:1.6;background:#fff;border-radius:16px;padding:18px;border:1px solid var(--line);margin-top:16px}
+.ps b{color:var(--ink)}
+.legal{font-size:11.5px;color:var(--muted);line-height:1.55;text-align:left;margin-top:14px}
+.legal b{color:var(--ink-soft)}
+
+/* footer */
+.foot{background:var(--dark);color:#fff;text-align:center;padding:30px 20px 110px}
+.foot .logo{font-family:'Montserrat';font-weight:900;letter-spacing:.1em;font-size:14px}
+.foot .sub{font-size:12px;color:#B7A79E;margin-top:6px}
+
+/* sticky bar */
+.sticky{position:fixed;left:0;right:0;bottom:0;z-index:60;background:rgba(255,255,255,.97);
+  border-top:1px solid var(--line);backdrop-filter:blur(8px);box-shadow:0 -8px 24px rgba(0,0,0,.08)}
+.sticky-in{max-width:480px;margin:0 auto;display:flex;align-items:center;gap:12px;padding:10px 16px}
+.sticky .info{flex:1;text-align:left;min-width:0}
+.sticky .info b{font-size:13px;display:block}
+.sticky .info span{font-size:11px;color:var(--muted)}
+.sticky .btn{width:auto;padding:13px 20px;font-size:13px}
+
+/* modal */
+.modal{position:fixed;inset:0;z-index:100;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(30,20,16,.55)}
+.modal.open{display:flex}
+.modal-card{background:#fff;border-radius:22px;padding:26px 22px;max-width:400px;width:100%;box-shadow:var(--shadow-lg);position:relative;text-align:center}
+.modal-card .x{position:absolute;top:14px;right:16px;font-size:24px;color:var(--muted);background:none;border:0;cursor:pointer;line-height:1}
+.modal-card h3{font-size:22px;font-weight:800;margin-bottom:4px}
+.modal-card .tsel{font-size:13px;color:var(--pink);font-weight:700;margin-bottom:10px}
+.modal-card p.mp{font-size:13.5px;color:var(--ink-soft);margin-bottom:16px}
+.modal-card input{width:100%;border:2px solid var(--line);border-radius:14px;padding:15px 16px;font-size:16px;font-family:inherit;margin-bottom:6px;text-align:center}
+.modal-card input:focus{outline:0;border-color:var(--pink)}
+.err{color:var(--pink-deep);font-size:12.5px;font-weight:700;min-height:18px;margin-bottom:8px}
+.modal-card .fine{font-size:11.5px;color:var(--muted);margin-top:12px}
+.success{display:none}
+.success .chk{width:64px;height:64px;border-radius:50%;background:var(--pink-soft);color:var(--pink-deep);
+  font-size:32px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px}
+.success h3{margin-bottom:8px}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- top bars -->
+  <div class="topbar">Kurs <b>15-sentabrda</b> boshlanadi · Guruhda atigi <b><span data-total>30</span> o'rin — <span data-left>12</span> tasi qoldi</b></div>
+  <div class="subbar">
+    <span>🎁 15-sentabrgacha yozilganlarga — 5.1 mln so'mlik bonuslar sovg'a</span>
+    <button class="btn" data-open>YOZILISH</button>
+  </div>
+
+  <!-- hero -->
+  <header class="hero">
+    <span class="eyebrow">Hamshiralar uchun</span>
+    <h1>45 kunda birinchi to'laydigan mijozingiz — uydan chiqmasdan <em>daromad</em></h1>
+    <p class="lead">Arzon, ishonchsiz kurslardan charchadingizmi? 17 yillik reabilitolog Shahnoza Soliyeva bilan <b>0 dan professional bolalar massajchisi bo'ling</b> — onlayn video darslar, jonli kurator va rasmiy sertifikat bilan.</p>
+    <div class="hero-photo">
+      <img src="img_hero_book.webp" alt="Shahnoza Soliyeva">
+      <div class="photo-cap"><b>Shahnoza Soliyeva</b> · professional reabilitolog</div>
+    </div>
+    <div class="note-pill">Parizoda: 3 mln maoshdan o'z daromadiga chiqdi*</div>
+    <button class="btn btn-gold" data-open>Kursga yozilish va daromadni boshlash</button>
+    <p class="trust">🛡️ 14 kun 100% pul qaytariladi · Uzum Nasiya, birinchi to'lovsiz · Hech qanday majburiyat yo'q</p>
+    <div class="scrollcue">PASTGA SURING<span class="arw">↓</span></div>
+  </header>
+
+  <!-- stats -->
+  <div class="stats">
+    <div class="stat"><b>17 yil</b><span>tajriba</span></div>
+    <div class="stat"><b>30,000+</b><span>bolaga yordam berilgan</span></div>
+    <div class="stat"><b>Oliy</b><span>toifali hamshira</span></div>
+    <div class="stat"><b>Xavfsiz</b><span>texnika standartlari</span></div>
+  </div>
+
+  <!-- countdown -->
+  <section class="sec wrap">
+    <div class="cd-panel">
+      <div class="lbl">Guruh to'lmoqda</div>
+      <h3>Kurs 15-sentabrda boshlanadi. Guruhda <b><span data-total>30</span> ta</b> o'rin — <span data-seats>18</span> tasi band.</h3>
+      <div class="cd-grid">
+        <div class="cd-cell"><b data-cd="d">00</b><span>kun</span></div>
+        <div class="cd-cell"><b data-cd="h">00</b><span>soat</span></div>
+        <div class="cd-cell"><b data-cd="m">00</b><span>daqiqa</span></div>
+        <div class="cd-cell"><b data-cd="s">00</b><span>soniya</span></div>
+      </div>
+      <div class="cd-left"><span data-left>12</span> ta o'rin qoldi</div>
+    </div>
+  </section>
+
+  <!-- imagine -->
+  <section class="sec wrap center">
+    <span class="eyebrow">90 kundan keyin</span>
+    <h2 class="h-sec">Tasavvur qiling: siz endi massajist kasbi egasisiz</h2>
+    <div class="stack" style="margin-top:22px">
+      <div class="num-item"><div class="num-badge">01</div><p>Ertalab uyg'onsangiz, bugungi 3 ta mijozingiz bor. Har biri 200,000 so'm to'laydi.</p></div>
+      <div class="num-item"><div class="num-badge">02</div><p>Instagramingizda onalar yozmoqda: "Qachon bo'sh vaqtingiz bor?"</p></div>
+      <div class="num-item"><div class="num-badge">03</div><p>O'z narxingiz, o'z grafikingiz — daromadingiz o'z qo'lingizda, hech kimdan so'ramasdan.</p></div>
+      <div class="num-item"><div class="num-badge">04</div><p>Professional sertifikatingiz bor. Shifokorlar sizga mijoz yo'naltirmoqda.</p></div>
+      <div class="num-item"><div class="num-badge">05</div><p>Bolangiz yonida turib, o'z grafikingizda ishlayapsiz. O'z xo'jayiningizsiz.</p></div>
+    </div>
+  </section>
+
+  <!-- pain -->
+  <section class="sec wrap center">
+    <span class="eyebrow">Tanish holat</span>
+    <h2 class="h-sec">Bilasiz — hozirgi vaziyat sizni qanoatlantirmayapti</h2>
+    <div class="stack" style="margin-top:20px">
+      <div class="pain"><b>Maosh yetmaydi.</b><p>Har oy hisoblar, oziq-ovqat, bolalar kiyimlari. Hech narsaga yetmaydi. Erdan pul so'rash esa...</p></div>
+      <div class="pain"><b>Ish baxtli qilmayapti.</b><p>Smenada yoki ofisda o'tirganingizda, "Shuncha yil o'qidim — natija shu bo'ldimi?" deb o'ylaysiz.</p></div>
+      <div class="pain"><b>Onlayn kurslarga ishonch yo'q.</b><p>Oldin ham biror narsa ko'rgansiz — natija bo'lmagan. Pulni berib, hech narsa olmaysiz deb qo'rqasiz.</p></div>
+      <div class="pain"><b>Vaqt yo'q.</b><p>Bola, ish, uy — o'zingizga 15 daqiqa topolmayapsiz. Yangi kasb o'rganishga qayerdan vaqt?</p></div>
+    </div>
+  </section>
+
+  <!-- video testimonials -->
+  <section class="sec wrap center">
+    <span class="eyebrow">Shogird natijalari</span>
+    <h2 class="h-sec">Boshlaganida ular ham siz kabi edi</h2>
+    <div class="stack" style="margin-top:22px">
+
+      <div class="vid-card">
+        <div class="vid-wrap"><video src="otziv-1.mp4" poster="poster_otziv1.webp" controls playsinline preload="none"></video><div class="vid-tag">🌿 DEPRESSIYADAN — O'Z MARKAZIGACHA</div><div class="play"><i></i></div></div>
+        <div class="ab">
+          <h3 style="font-size:16px;margin-bottom:10px">Ma'mura o'zining shaxsiy sog'lomlashtirish markazini ochdi</h3>
+          <div class="row"><span class="k a">A</span><p><b>Kursdan oldin:</b> turmush o'rtog'i xorijda, uyda bolalar bilan depressiyada, daromadi 0.</p></div>
+          <div class="row"><span class="k b">B</span><p><b>Kursdan keyin:</b> o'z sog'lomlashtirish markazini ochdi — oilasiga vaqt ajratib, har oy 15 000 000 so'm topmoqda.</p></div>
+          <div class="name">Abduqodirova Ma'mura</div><div class="role">shaxsiy sog'lomlashtirish markazi asoschisi</div>
+          <div class="disc">*Shaxsiy natija — kafolatlanmaydi</div>
+        </div>
+      </div>
+
+      <div class="vid-card">
+        <div class="vid-wrap"><video src="otziv-2.mp4" poster="poster_otziv2.webp" controls playsinline preload="none"></video><div class="vid-tag">👩🏻‍⚕️ HAMSHIRADAN — O'Z XONADONIGACHA</div><div class="play"><i></i></div></div>
+        <div class="ab">
+          <h3 style="font-size:16px;margin-bottom:10px">Parizoda yarim yilda o'z uyining boshlang'ich to'lovini yig'di</h3>
+          <div class="row"><span class="k a">A</span><p><b>Kursdan oldin:</b> poliklinikada patronaj hamshirasi, oyiga ~3 mln, ijarada, oylikdan oylikkacha.</p></div>
+          <div class="row"><span class="k b">B</span><p><b>Kursdan keyin:</b> har oy 10 000 000 so'm — yarim yil ichida jamg'arib, o'z xonadonining boshlang'ich to'lovini amalga oshirdi.</p></div>
+          <div class="name">Tojiyeva Parizoda</div><div class="role">sobiq patronaj hamshira</div>
+          <div class="disc">*Shaxsiy natija — kafolatlanmaydi</div>
+        </div>
+      </div>
+
+      <div class="vid-card">
+        <div class="vid-wrap"><video src="otziv-3.mp4" poster="poster_otziv3.webp" controls playsinline preload="none"></video><div class="vid-tag">👑 500 MINGDAN — BOSH MASTERLIKKA</div><div class="play"><i></i></div></div>
+        <div class="ab">
+          <h3 style="font-size:16px;margin-bottom:10px">Dilnoza daromadini 500 mingdan 15 millionga oshirdi</h3>
+          <div class="row"><span class="k a">A</span><p><b>Kursdan oldin:</b> sohada ishlagan, lekin xizmat narxini oshira olmagan — daromadi bor-yo'g'i 500 000 so'm.</p></div>
+          <div class="row"><span class="k b">B</span><p><b>Kursdan keyin:</b> daromadini 15 000 000 so'mga yetkazdi — bosh master lavozimida ishlab, farzandlarini oliygohda o'qitmoqda.</p></div>
+          <div class="name">Tursunova Dilnoza</div><div class="role">bosh master</div>
+          <div class="disc">*Shaxsiy natija — kafolatlanmaydi</div>
+        </div>
+      </div>
+
+      <div class="t-card"><div class="top"><span class="cat">Bog'cha hamshirasi</span><span class="delta">→ 20 mln/oy</span></div><p>Bog'chada kam oylikka ishlardi, ko'p kurslarda o'qisa ham savollari javobsiz qolardi. Endi bog'chaning o'zida sog'lomlashtirish markazini ochib, oyiga 20 mln topmoqda.</p><div class="name">Nilufar Ubaydullayeva</div><div class="disc">*Shaxsiy natija — kafolatlanmaydi</div></div>
+      <div class="t-card"><div class="top"><span class="cat">Bog'cha xodimi</span><span class="delta">→ 10 mln/oy</span></div><p>Daromadi yetmagani uchun oilasi buzilish arafasida edi. Endi bog'chada massajist bo'lib oyiga 10 mln topib, oilasini saqlab qoldi.</p><div class="name">Muhlisahon Kadirova</div><div class="disc">*Shaxsiy natija — kafolatlanmaydi</div></div>
+      <div class="t-card"><div class="top"><span class="cat">Ona</span><span class="delta">0 → 20 mln/oy</span></div><p>Farzandlariga davo topolmagani uchun o'zi o'rganishga keldi. Endi bolalarini o'zi parvarish qilib, uydan chiqmay patsiyent bazasini yaratib oyiga 20 mln topmoqda.</p><div class="name">Iroda Nazirova</div><div class="disc">*Shaxsiy natija — kafolatlanmaydi</div></div>
+      <div class="t-card"><div class="top"><span class="cat">Ona</span><span class="delta">0 → 20 mln/oy</span></div><p>Kursga faqat farzandlarining salomatligi uchun kelgan edi. Bolalari sog'lig'iga hissa qo'shdi va hozirda oylik daromadi 20 mln so'mni tashkil etmoqda.</p><div class="name">Muhlisa Kadirova</div><div class="disc">*Shaxsiy natija — kafolatlanmaydi</div></div>
+
+    </div>
+  </section>
+
+  <!-- ustoz -->
+  <section class="sec wrap center">
+    <span class="eyebrow">Ustoz</span>
+    <h2 class="h-sec">Shahnoza Soliyeva</h2>
+    <div class="ustoz-photo" style="margin-top:18px"><img src="img_balls.webp" alt="Shahnoza Soliyeva"></div>
+    <p style="font-size:14px;color:var(--ink-soft);text-align:left">Professional reabilitolog. 17 yil, 30,000 dan ortiq bola — oddiy kolikdan murakkab DCP va tortikolis holatlarigacha. Xavfsizlik — har doim ustuvor.</p>
+    <p style="font-size:14px;color:var(--ink-soft);text-align:left;margin-top:10px">Bu yillar davomida u bitta narsani ko'rdi: onalar malakali massajist izlab oylab navbat kutadi — mutaxassislar yetishmaydi. Shuning uchun endi u o'z tizimini o'rgatadi: 0 dan kasb darajasigacha, har bir qadam kurator nazorati ostida.</p>
+    <div class="ustoz-stats">
+      <div><b>17</b><span>yil</span></div><div><b>30K+</b><span>bola</span></div><div><b>Oliy</b><span>toifa</span></div>
+    </div>
+  </section>
+
+  <!-- who for -->
+  <section class="sec wrap center">
+    <span class="eyebrow">Bu kurs kim uchun?</span>
+    <h2 class="h-sec">O'zingizni toping</h2>
+    <div class="stack" style="margin-top:20px">
+      <div class="aud"><div class="ic">👩‍⚕️</div><div><b>Hamshiralar</b><p>Tibbiy bilimingiz bor — 50% dan boshlaysiz</p><div class="path">+5 mln/oy gacha yo'l</div></div></div>
+      <div class="aud"><div class="ic">💼</div><div><b>Ishlaydigan ayollar</b><p>Yangi kasb — maoshdan 2-3x ko'p</p><div class="path">+8 mln/oy gacha yo'l</div></div></div>
+      <div class="aud"><div class="ic">🏠</div><div><b>Uy bekalari</b><p>Uydan chiqmasdan, bolangiz yonida</p><div class="path">+3 mln/oy gacha yo'l</div></div></div>
+    </div>
+    <div class="forlist">
+      <div class="box"><h4>Siz uchun, agar:</h4>
+        <li>✓ 0-12 oylik bolangiz bor yoki bo'ladi</li>
+        <li>✓ Yangi kasb orqali daromad olmoqchisiz</li>
+        <li>✓ Haftada 5 soat ajrata olasiz</li>
+        <li>✓ Natijaga shogirdday intilasiz</li></div>
+      <div class="box no"><h4>Siz uchun EMAS, agar:</h4>
+        <li>✕ "Tez boyib ketish" yo'lini qidiryapsiz</li>
+        <li>✕ Amaliyot qilishga tayyor emassiz</li>
+        <li>✕ Sifat sizga ahamiyatsiz</li></div>
+    </div>
+  </section>
+
+  <!-- program -->
+  <section class="sec wrap center">
+    <span class="eyebrow">6 haftalik dastur</span>
+    <h2 class="h-sec">Kasbdan daromadgacha — aniq yo'l</h2>
+    <div class="stack" style="margin-top:20px">
+      <div class="step"><div class="n">1</div><div><b>Xavfsizlik va diagnostika</b><p>Kontraindikatsiyalar, bolani tekshirish, oilaga tushuntirish</p><div class="res">Natija: bolani ko'rib "massaj mumkin yoki yo'q" aniq aytasiz</div></div></div>
+      <div class="step"><div class="n">2</div><div><b>Massaj texnikasi asoslari</b><p>0-3 oylik bola: gipertonus, kolik, kindik churrasi, qo'l qo'yish</p><div class="res">Natija: to'liq massaj seansi o'tkaza olasiz, kurator tasdiqlagan</div></div></div>
+      <div class="step"><div class="n">3</div><div><b>Yosh bosqichlari</b><p>3-12 oy: o'tirish, emaklanish, yurish massaji + LFK va fitbol</p><div class="res">Natija: 0-12 oylik har qanday bolaga professional massaj</div></div></div>
+      <div class="step"><div class="n">4</div><div><b>Murakkab holatlar</b><p>Tortikolis, DCP, displaziya — aniqlash va xavfsiz ishlash</p><div class="res">Natija: murakkab holatlarni aniqlaysiz va bilasiz</div></div></div>
+      <div class="step"><div class="n">5</div><div><b>Birinchi mijoz</b><p>Narx qo'yish, Instagram, sotish skriptlari, 10 kunlik tizim</p><div class="res">Natija: birinchi mijozingiz bor, narx va brend tayyor</div></div></div>
+      <div class="step"><div class="n">6</div><div><b>Doimiy daromad</b><p>Mijoz qaytarish, narx ko'tarish, markaz ochish asoslari</p><div class="res">Natija: biznes tizimingiz bor, o'sish yo'lingiz aniq</div></div></div>
+    </div>
+    <button class="btn btn-pink" style="margin-top:20px" data-open>Dasturga yozilish</button>
+    <p class="trust">Keyingi guruh 15-sentabrda boshlanadi · 14 kun kafolat</p>
+  </section>
+
+  <!-- more testimonials -->
+  <section class="sec wrap center">
+    <span class="eyebrow">Jarayon haqida</span>
+    <h2 class="h-sec">Ular ham "vaqtim yo'q" deb o'ylagan edi</h2>
+    <div class="stack" style="margin-top:20px">
+      <div class="t-card"><div class="top"><span class="cat">Soha mutaxassisi</span><span class="delta">500 ming → 15 mln</span></div><p>Eski bilim va texnikalar bilan bir joyda qotib qolgan, daromadi atigi 500 ming edi. Yangi texnikalarni egallab daromadini 15 mln so'mga yetkazdi, hozir o'z markazi ustida ishlamoqda.</p><div class="name">Nigora Roziyeva</div><div class="disc">*Shaxsiy natija — kafolatlanmaydi</div></div>
+      <div class="t-card"><div class="top"><span class="cat">18 yoshli qiz</span><span class="delta">0 → 10 mln/oy</span></div><p>18 yoshida jiyanlarining salomatligi uchun o'qishga keldi. Endi oyiga 10 mln topib, oliygohga kirish uchun repetitorlar to'lovini o'zi qoplayapti.</p><div class="name">Muslima Abdurahimova</div><div class="disc">*Shaxsiy natija — kafolatlanmaydi</div></div>
+      <div class="t-card"><div class="top"><span class="cat">Sobiq oshpaz</span><span class="delta">→ 20 mln/oy</span></div><p>Maktabda oshpaz edi, "qo'limdan kelarmikin" deb ikkilanardi. Endi ayollar sog'lomlashtirishi bo'yicha o'z bazasiga ega — oyiga 20 mln topmoqda.</p><div class="name">Muqaddas Shakirova</div><div class="disc">*Shaxsiy natija — kafolatlanmaydi</div></div>
+    </div>
+  </section>
+
+  <!-- value stack -->
+  <section class="sec wrap center">
+    <span class="eyebrow">Kasb tarifida siz olasiz</span>
+    <h2 class="h-sec">Jami qiymati: 18,900,000 so'm</h2>
+    <div class="vs" style="margin-top:20px">
+      <div class="li"><span>22 modulli professional video kurs</span><span>4,500,000</span></div>
+      <div class="li"><span>22 ta PDF qo'llanma</span><span>1,100,000</span></div>
+      <div class="li"><span>Xavfsizlik moduli + tekshiruv varag'i</span><span>300,000</span></div>
+      <div class="li"><span>Kurator tizimi (haftalik tekshiruv)</span><span>3,000,000</span></div>
+      <div class="li"><span>Haftalik jonli Q&A (Shahnoza bilan)</span><span>2,400,000</span></div>
+      <div class="li"><span>Amaliyot video tahlili (shaxsiy feedback)</span><span>1,500,000</span></div>
+      <div class="li"><span>Professional sertifikat</span><span>500,000</span></div>
+      <div class="li"><span>Umrbod video dostup</span><span>1,000,000</span></div>
+      <div class="li"><span>Telegram community (umrbod)</span><span>600,000</span></div>
+      <div class="total"><span>JAMI:</span><span>18,900,000 so'm</span></div>
+    </div>
+    <div class="price-box">
+      <div class="now">3,500,000 so'm</div>
+      <div class="nasiya">Uzum Nasiya: 292,000 so'm/oy × 12</div>
+    </div>
+    <div class="explain">
+      <div class="t">★ NEGA ATIGI 3.5 MLN? OCHIQ GAPIRAMIZ ★</div>
+      <p>Bu kurs uchun 10 mln so'rasak ham arziydi — bitta shogird oyiga shundan ko'p topadi. Lekin Shahnozaning maqsadi boshqa: O'zbekistonda 11 million bola bor, malakali massajist deyarli yo'q. Qancha ko'p shogird — shuncha ko'p sog'lom bola. Narx past, talab yuqori — shuning uchun guruh 30 kishi bilan cheklangan va o'rinlar tez to'ladi.</p>
+    </div>
+  </section>
+
+  <!-- bonuses -->
+  <section class="sec wrap center">
+    <span class="eyebrow">Bonuslar</span>
+    <h2 class="h-sec">Kurs ustiga bepul olasiz</h2>
+    <div class="stack" style="margin-top:20px">
+      <div class="bonus"><div class="head"><span class="b-tag">BONUS 1 — KASB+</span><span class="b-val">2,000,000 so'm</span></div><div class="lock">🔓 «Mijozni qayerdan topaman?» — degan shubhani yopadi</div><b class="title">"10 Kunlik Birinchi Mijoz Tizimi"</b><p>Har kuni bitta aniq vazifa. 10-chi kunda birinchi mijozingiz bor. Shahnozaning o'zi shu tizim bilan 30,000+ bolaga xizmat ko'rsatgan. Tasavvur qiling: kursni tugatgandan 10 kun keyin, birinchi onam bolasi bilan sizga keladi. Siz professional ravishda massaj qilasiz. U xursand bo'lib ketadi — va do'stlariga aytadi.</p></div>
+      <div class="bonus"><div class="head"><span class="b-tag">BONUS 2 — KASB+</span><span class="b-val">1,500,000 so'm</span></div><div class="lock">🔓 «Instagramda o'zimni qanday tanitaman?» — degan shubhani yopadi</div><b class="title">"30 Kunlik Instagram Klient-Magnit Rejasi"</b><p>Har kunga tayyor post mavzusi + caption + hashtag. Ertalab rejani ochasiz — 10 daqiqada post tayyor. Kechga qarab yangi obunachilar keladi.</p></div>
+      <div class="bonus"><div class="head"><span class="b-tag">BONUS 3 — KASB+</span><span class="b-val">500,000 so'm</span></div><div class="lock">🔓 «Xizmatimga qancha narx qo'yaman?» — degan shubhani yopadi</div><b class="title">"5 Daqiqalik Narx Kalkulyatori"</b><p>Shaharingiz, tajribangiz, xizmat turini kiritasiz — bozoringizga mos narx chiqadi. 17 yillik tajriba asosida.</p></div>
+      <div class="bonus"><div class="head"><span class="b-tag">BONUS 4 — KASB+</span><span class="b-val">800,000 so'm</span></div><div class="lock">🔓 «Qanday professional ko'rinaman?» — degan shubhani yopadi</div><b class="title">"20 Ta Professional Dizayn Shabloni"</b><p>Canvani ochasiz, shablonni tanlaysiz, 5 daqiqada professional post tayyor. Before/after, testimonial, promo — har turi bor.</p></div>
+      <div class="bonus"><div class="head"><span class="b-tag">BONUS 5 — BARCHAGA</span><span class="b-val">300,000 so'm</span></div><div class="lock">🔓 «Bolaga xavf yo'qmi?» — degan shubhani yopadi</div><b class="title">"1 Daqiqalik Xavfsizlik Tekshiruv Varag'i"</b><p>Laminirlangan A4 varaq. Har seans oldidan 1 daqiqada tekshirasiz. 30,000+ seans tajribasi asosida tuzilgan.</p></div>
+    </div>
+    <p class="trust"><b>"10 Kunlik Birinchi Mijoz Tizimi"</b> — FAQAT shu guruh uchun. Keyingi guruhda kirmaydi.</p>
+  </section>
+
+  <!-- pricing tiers -->
+  <section class="sec wrap center">
+    <span class="eyebrow">Tariflar</span>
+    <h2 class="h-sec">O'zingizga mos yo'lni tanlang</h2>
+    <div class="stack" style="margin-top:26px;gap:22px">
+
+      <div class="tier">
+        <div class="t-name">BAZA</div>
+        <div class="t-sub">O'z bolangizdan boshlang</div>
+        <div class="t-price"><span class="strike old">6,200,000</span> <span class="new">1,500,000 so'm</span></div>
+        <div class="t-nasiya">Uzum Nasiya: 125,000/oy</div>
+        <ul>
+          <li>22 modul video (12 oy dostup)</li>
+          <li>22 ta PDF qo'llanma</li>
+          <li>Xavfsizlik moduli + tekshiruv varag'i</li>
+          <li>Telegram community (umrbod)</li>
+          <li>Kurs tugatish sertifikati</li>
+          <li class="star">BONUS: Ayollar massaji asoslari (3 video)</li>
+          <li class="star">BONUS: Massaj yog'i starter kit</li>
+          <li>14 kun kafolat</li>
+        </ul>
+        <button class="btn btn-ghost" data-open data-tier="BAZA">Tanlash</button>
+      </div>
+
+      <div class="tier feat">
+        <div class="badge">⭐ ENG KO'P TANLANADI</div>
+        <div class="t-name">KASB</div>
+        <div class="t-sub">Birinchi mijozgacha yo'l</div>
+        <div class="t-price"><span class="strike old" style="color:rgba(255,255,255,.7)">18,900,000</span> <span class="new">3,500,000 so'm</span></div>
+        <div class="t-nasiya">Uzum Nasiya: 292,000/oy</div>
+        <ul>
+          <li class="plus">✓ BAZA dagi hamma narsa, PLUS:</li>
+          <li>Kurator tizimi — haftalik tekshiruv (48 soat javob)</li>
+          <li>Haftalik jonli Q&A (Zoom — Shahnoza bilan)</li>
+          <li>Amaliyot video tahlili — shaxsiy feedback</li>
+          <li>Professional sertifikat (17 yillik mutaxassis tasdiqlagan)</li>
+          <li>Umrbod video dostup</li>
+          <li class="star">BONUS: "10 Kunlik Birinchi Mijoz Tizimi"</li>
+          <li class="star">BONUS: "5 Daqiqalik Narx Kalkulyatori"</li>
+          <li class="star">BONUS: "30 Kunlik Instagram Klient-Magnit Rejasi"</li>
+          <li class="star">BONUS: "20 Ta Dizayn Shabloni"</li>
+          <li class="star">BONUS: Canva Pro 1 oy bepul</li>
+          <li class="star">BONUS: Professional fotosessiya 50% chegirma (birinchi 10 ta)</li>
+          <li>14 kun + 90 kun kafolat</li>
+        </ul>
+        <button class="btn btn-gold" data-open data-tier="KASB">Tanlash</button>
+      </div>
+
+      <div class="tier">
+        <div class="t-name">BIZNES</div>
+        <div class="t-sub">Shahnoza bilan birga</div>
+        <div class="t-price"><span class="strike old">38,500,000</span> <span class="new">6,000,000 so'm</span></div>
+        <div class="t-nasiya">Uzum Nasiya: 500,000/oy</div>
+        <ul>
+          <li class="plus">✓ KASB dagi hamma narsa, PLUS:</li>
+          <li>Shahnoza bilan shaxsiy darslar (8 kishilik guruh, 2x/oy)</li>
+          <li>5 kunlik AMALIYOT — real bolalar bilan, Shahnoza yonida</li>
+          <li>Biznes qurish moduli — markaz ochish, hujjatlar, xodim</li>
+          <li>3 oy shaxsiy mentorlik — Shahnoza bilan TG direct</li>
+          <li>Shahnoza o'z tarmoqlariga tavsiya qiladi</li>
+          <li class="star">BONUS: "3 Ta Sotish Skripti"</li>
+          <li class="star">BONUS: "7 Og'ir E'tirozga 7 Tayyor Javob"</li>
+          <li class="star">BONUS: "24 Soatlik Professional Brend Paketi"</li>
+          <li class="star">BONUS: "Daromad Boshqarish Darsligi"</li>
+          <li class="star">BONUS: Professional forma 20% chegirma</li>
+          <li class="star">BONUS: Shahnozaning 17 yillik tajriba qo'llanmasi</li>
+          <li>14 kun + 90 kun + 12 oy kafolat</li>
+        </ul>
+        <button class="btn btn-ghost" data-open data-tier="BIZNES">Tanlash</button>
+      </div>
+
+    </div>
+    <p class="trust">Barcha tariflarda Uzum Nasiya mavjud — 12 oygacha bo'lib to'lash</p>
+  </section>
+
+  <!-- guarantee -->
+  <section class="sec wrap center">
+    <span class="eyebrow">Kafolat</span>
+    <h2 class="h-sec">Risk bizda, natija sizda</h2>
+    <div class="stack" style="margin-top:20px">
+      <div class="guar"><div class="days"><b>14 kun</b><span>kafolat</span></div><div><b class="title">"Sinab Ko'rish" Kafolati</b><p>Mos kelmasa — pulingiz 100% qaytadi. Hech qanday savol.</p></div></div>
+      <div class="guar"><div class="days"><b>90 kun</b><span>kafolat</span></div><div><b class="title">"Birinchi Mijoz" Kafolati</b><p>Barcha vazifalarni bajarsangiz, mijoz topmasa — BEPUL davom etamiz, natijangiz bo'lguncha.</p></div></div>
+      <div class="guar"><div class="days"><b>12 oy</b><span>kafolat</span></div><div><b class="title">"O'z Markazim" Kafolati</b><p>Uyda yoki alohida joyda markaz ochishni o'rganolmasa, 3 oy bepul mentorlik.</p></div></div>
+    </div>
+    <p class="quote">"Men sizdan bugun 'ha' yoki 'yo'q' deyishingizni so'ramayman. Men sizdan sinab ko'rishingizni so'rayman."</p>
+  </section>
+
+  <!-- objections -->
+  <section class="sec wrap center">
+    <span class="eyebrow">Balki siz o'ylayapsiz...</span>
+    <h2 class="h-sec">Bu savollar normaldi — mana javoblar</h2>
+    <div class="stack" style="margin-top:20px">
+      <div class="obj"><b>"Tibbiy bilimim yo'q"</b><p>Shart emas. Shogirdlarimizning 80% tibbiy bilimsiz boshlagan. 0 dan professional darajagacha olib boramiz. Va 14 kun kafolat — mos kelmasa pulingiz qaytadi.</p></div>
+      <div class="obj"><b>"Vaqtim yo'q — bola, ish, uy"</b><p>Darslar 15 daqiqalik. Haftada 5 soat yetarli. Bola uxlayotganda, smenalar orasida. Telefondan ko'rasiz. 12 oy muddatingiz bor.</p></div>
+      <div class="obj"><b>"Pulim yo'q"</b><p>Uzum Nasiya — oyiga 125,000 so'mdan. Bir marta restoranga borish narxida. Birinchi oylik daromadingiz kursni qaytaradi.</p></div>
+      <div class="obj"><b>"Online kurs ishlamaydi"</b><p>Bu YouTube emas. Kurator har hafta sizning video amaliyotingizni tekshiradi. Shahnoza jonli Q&A o'tkazadi. Xatoni OLDIDAN to'g'rilaymiz.</p></div>
+      <div class="obj"><b>"Aldab qo'yishlari mumkin"</b><p>14 kunlik 100% pul qaytarish. 17 yil tajriba, 30,000 bola. Risk BIZDA. Sizga faqat sinab ko'rish kerak.</p></div>
+      <div class="obj"><b>"Raqobatchilar arzonroq"</b><p>Guzal 3 mln so'raydi — modul yo'q, kurator yo'q, kafolat yo'q. Biz 3.5 mln uchun 12x ko'proq beramiz. Qiyoslang va qaror qiling.</p></div>
+    </div>
+  </section>
+
+  <!-- more testimonials 2 -->
+  <section class="sec wrap center">
+    <span class="eyebrow">Ular ham shubhalangan edi</span>
+    <h2 class="h-sec">Xuddi siz kabi savollar bergan edilar</h2>
+    <div class="stack" style="margin-top:20px">
+      <div class="t-card"><div class="top"><span class="cat">55 yoshda</span><span class="delta">0 → 15 mln/oy</span></div><p>55 yoshda nabiralarining salomatligi uchun keldi. Endi o'z patsiyentlariga ega — uydan chiqmay oyiga 15 mln topib, farzand va nabiralariga yordam bermoqda.</p><div class="name">Ra'no Ilhomova</div><div class="disc">*Shaxsiy natija — kafolatlanmaydi</div></div>
+      <div class="t-card"><div class="top"><span class="cat">Sobiq sotuvchi</span><span class="delta">→ 10 mln/oy</span></div><p>Moddiy qiyinchilik sababli oziq-ovqat do'konida sotuvchi edi. Farzandlarini parvarish qilib natija ko'rdi, sharoitini yaxshiladi — oyiga 10 mln daromadga chiqdi.</p><div class="name">Nazokat Abdullayeva</div><div class="disc">*Shaxsiy natija — kafolatlanmaydi</div></div>
+      <div class="t-card"><div class="top"><span class="cat">19 yoshli talaba</span><span class="delta">0 → 20 mln/oy</span></div><p>19 yoshida bolajonlarni yaxshi ko'rgani uchun keldi. Endi oyiga 20 mln topib, oliygoh kontraktini va o'z ehtiyojlarini qoplab, oilasiga ham daromad kiritmoqda.</p><div class="name">Nazokathon Sirojiddinova</div><div class="disc">*Shaxsiy natija — kafolatlanmaydi</div></div>
+    </div>
+  </section>
+
+  <!-- FAQ dark -->
+  <section class="faq-sec sec wrap center">
+    <span class="eyebrow">Tez-tez so'raladigan savollar</span>
+    <h2 class="h-sec">Amaliy savollar</h2>
+    <div style="margin-top:18px;text-align:left">
+      <details class="faq"><summary>Kurs qancha davom etadi?</summary><p>6 haftalik dastur + 12 oy video dostup. O'z tezligingizda o'rganing.</p></details>
+      <details class="faq"><summary>Telefondan ko'rsa bo'ladimi?</summary><p>Ha. Barcha darslar telefondan ko'rish uchun moslangan. Yuklab olish mumkin.</p></details>
+      <details class="faq"><summary>Kurs qaysi tilda?</summary><p>100% o'zbek tilida. Tibbiy terminlar ikki tilda beriladi.</p></details>
+      <details class="faq"><summary>Sertifikat berasizmi?</summary><p>BAZA — kurs tugatish sertifikati. KASB va BIZNES — Shahnoza tasdiqlagan professional sertifikat.</p></details>
+      <details class="faq"><summary>Qachon boshlansa bo'ladi?</summary><p>Keyingi guruh 15-sentabrda boshlanadi. O'rinlar soni cheklangan.</p></details>
+      <details class="faq"><summary>Uzum Nasiya qanday ishlaydi?</summary><p>To'lovni 12 oyga bo'lasiz. Foizsiz. BAZA: 125K/oy, KASB: 292K/oy, BIZNES: 500K/oy.</p></details>
+      <details class="faq"><summary>Internetim yomon — ishlayaptimi?</summary><p>Darslarni yuklab olish mumkin. Past sifat varianti ham bor.</p></details>
+      <details class="faq"><summary>Agar o'rtada tashlab qo'ysam?</summary><p>12 oy muddatingiz bor. O'z tezligingizda. Kurator motivatsiya qiladi.</p></details>
+      <details class="faq"><summary>Kimda amaliyot qilaman?</summary><p>O'z bolangizda, qo'shnining bolasida, yoki qo'g'irchoqda. Kurator video orqali tekshiradi.</p></details>
+      <details class="faq"><summary>Yoshim o'tib ketganmi?</summary><p>Yosh chegarasi yo'q. 25-55 yoshgacha shogirdlarimiz bor.</p></details>
+    </div>
+  </section>
+
+  <!-- nothing -->
+  <section class="sec wrap center">
+    <span class="eyebrow">O'ylab ko'ring</span>
+    <h2 class="h-sec">Agar hech narsa qilmasangiz nima bo'ladi?</h2>
+    <div class="nothing" style="margin-top:20px">
+      <p>Yana 6 oy o'tadi. Maosh o'zgarmaydi. Bola kattaroq bo'ladi — va massaj oynasi yopiladi. O'zbekistonda 11 million bola bor, massajist deyarli yo'q — onalar hali ham izlamoqda. Lekin siz yo'qsiz.</p>
+      <p>Shu payt kimdir — xuddi siz kabi — qaror qiladi va boshlaydi. 3 oydan keyin u mijozlarga ega. 6 oydan keyin u oyiga 5 mln topadi.</p>
+      <div class="big">Farq — bitta qaror.</div>
+    </div>
+  </section>
+
+  <!-- close -->
+  <section class="sec wrap center close-box">
+    <span class="eyebrow">Xulosa</span>
+    <h2 class="h-sec">Siz olasiz: 22 modul + kurator + sertifikat + 5 ta bonus</h2>
+    <div class="recap" style="margin-top:20px">
+      <div class="was">Jami qiymati <span class="strike">18,900,000 so'm</span></div>
+      <div class="now">3,500,000 so'm</div>
+      <div class="nas">Uzum Nasiya: oyiga 292,000 so'm × 12 — restoranga borish narxida</div>
+    </div>
+    <p style="font-size:13.5px;color:var(--ink-soft);margin-top:16px;text-align:left">Ochig'i: agar "tez boyish" yo'lini izlayotgan bo'lsangiz yoki haftada 5 soat ajrata olmasangiz — yozilmang, pulingizni tejang. Bu kurs mehnat qilishga tayyor ayollar uchun.</p>
+    <button class="btn btn-gold" style="margin-top:18px" data-open>Hoziroq yozilish</button>
+    <p class="trust">14 kun kafolat — mos kelmasa pulingiz 100% qaytadi</p>
+
+    <h2 class="h-sec" style="margin-top:40px">Birinchi qadamni tashlang</h2>
+    <p style="font-size:14.5px;color:var(--ink-soft);margin-top:12px">30,000+ bolaga yordam bergan mutaxassis sizga yo'l ko'rsatadi. 90 kunda yangi kasb. 14 kun kafolat. Sinab ko'ring.</p>
+    <button class="btn btn-pink" style="margin-top:16px" data-open>Hoziroq yozilish</button>
+
+    <div class="ps"><b>P.S.</b> Agar shu yergacha o'qigan bo'lsangiz — demak sizga kerak. Bitta savol: 3 oydan keyin siz qayerda bo'lasiz? Hozirgi joyingizda — yoki yangi kasbingiz, daromadingiz, va mustaqilligingiz bilan? Farq — bitta tugma. Va 14 kun ichida qaytarib olishingiz mumkin.</div>
+    <button class="btn btn-ghost" style="margin-top:12px" data-open>Hoziroq boshlash →</button>
+
+    <div class="legal">
+      <p><b>Daromad haqida:</b> Daromad misollari — ayrim shogirdlarning shaxsiy natijalari, kafolat emas. Natija mehnatingiz, tajribangiz va bozorga bog'liq.</p>
+      <p style="margin-top:8px"><b>Tibbiy izoh:</b> Bolalar massaji — sog'ayishga yordam beruvchi qo'shimcha usul; shifokor ko'rigi va davolash o'rnini bosmaydi. Har doim pediatr bilan maslahatlashing.</p>
+    </div>
+  </section>
+
+  <!-- footer -->
+  <footer class="foot">
+    <div class="logo">SHAHNOZA AKADEMIYASI</div>
+    <div class="sub">Bolalar massaji kursi · 15-sentabr · <span data-left>12</span> ta o'rin qoldi</div>
+  </footer>
+
+  <!-- sticky -->
+  <div class="sticky">
+    <div class="sticky-in">
+      <div class="info"><b>Bolalar massaji kursi</b><span>15-sentabr · <span data-left>12</span> ta o'rin qoldi</span></div>
+      <button class="btn btn-gold" data-open>YOZILISH</button>
+    </div>
+  </div>
+
+  <!-- modal -->
+  <div class="modal" id="modal">
+    <div class="modal-card">
+      <button class="x" data-close>×</button>
+      <div class="form-view">
+        <h3>Kursga yozilish</h3>
+        <div class="tsel">Tanlangan tarif: <span id="tariffName">KASB</span></div>
+        <p class="mp">Raqamingizni qoldiring — mutaxassisimiz tez orada qo'ng'iroq qilib, savollaringizga javob beradi.</p>
+        <input id="lead-name" type="text" placeholder="Ismingiz" autocomplete="name">
+        <input id="lead-phone" type="tel" placeholder="+998 90 123 45 67" autocomplete="tel" inputmode="tel">
+        <div class="err" id="err"></div>
+        <button class="btn btn-pink" id="submit">Qo'ng'iroqni kutaman</button>
+        <div class="fine">Ma'lumotlaringiz hech kimga berilmaydi. 14 kun kafolat.</div>
+      </div>
+      <div class="success">
+        <div class="chk">✓</div>
+        <h3>Arizangiz qabul qilindi!</h3>
+        <p class="mp">Mutaxassisimiz tez orada <b id="okphone">raqamingizga</b> qo'ng'iroq qiladi.</p>
+        <button class="btn btn-gold" data-close>Yaxshi</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  /* ===== CONFIG (edit these) ===== */
+  var CONFIG = {
+    total: 30, left: 12, seats: 18,
+    deadline: "2026-09-15T09:00:00",      // countdown target
+    leadEndpoint: "/api/funnel/event",     // where the phone form posts
+    telegramUrl: ""                        // optional: if set, buttons open this link instead of the form
+  };
+
+  function q(s,r){return (r||document).querySelector(s)}
+  function qa(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s))}
+
+  /* fill seat numbers */
+  qa('[data-total]').forEach(function(e){e.textContent=CONFIG.total});
+  qa('[data-left]').forEach(function(e){e.textContent=CONFIG.left});
+  qa('[data-seats]').forEach(function(e){e.textContent=CONFIG.seats});
+
+  /* countdown */
+  var target=new Date(CONFIG.deadline).getTime();
+  if(isNaN(target)||target<Date.now()) target=Date.now()+7*864e5; // fallback: 7 days
+  function pad(n){return (n<10?'0':'')+n}
+  function tick(){
+    var diff=Math.max(0,target-Date.now());
+    var d=Math.floor(diff/864e5), h=Math.floor(diff%864e5/36e5), m=Math.floor(diff%36e5/6e4), s=Math.floor(diff%6e4/1e3);
+    var D=q('[data-cd=d]'),H=q('[data-cd=h]'),M=q('[data-cd=m]'),S=q('[data-cd=s]');
+    if(D)D.textContent=pad(d); if(H)H.textContent=pad(h); if(M)M.textContent=pad(m); if(S)S.textContent=pad(s);
+  }
+  tick(); setInterval(tick,1000);
+
+  /* modal */
+  var modal=q('#modal');
+  function openModal(tier){
+    if(CONFIG.telegramUrl){ window.open(CONFIG.telegramUrl,'_blank'); return; }
+    if(tier) q('#tariffName').textContent=tier;
+    q('.form-view').style.display='block'; q('.success').style.display='none';
+    modal.classList.add('open'); document.body.style.overflow='hidden';
+    setTimeout(function(){var n=q('#lead-name'); if(n)n.focus();},200);
+  }
+  function closeModal(){modal.classList.remove('open'); document.body.style.overflow='';}
+  qa('[data-open]').forEach(function(b){b.addEventListener('click',function(){openModal(b.getAttribute('data-tier'))})});
+  qa('[data-close]').forEach(function(b){b.addEventListener('click',closeModal)});
+  modal.addEventListener('click',function(e){if(e.target===modal)closeModal()});
+
+  /* submit */
+  q('#submit').addEventListener('click',function(){
+    var name=q('#lead-name').value.trim();
+    var phone=q('#lead-phone').value.trim();
+    var digits=phone.replace(/\D/g,'');
+    if(digits.length<9){q('#err').textContent='Telefon raqamini to\'liq kiriting'; return;}
+    q('#err').textContent='';
+    var btn=this; btn.textContent='Yuborilmoqda...'; btn.disabled=true;
+    var payload={event:'phone_captured', phone:phone, full_name:name, asset_key:'kurs_landing', tariff:q('#tariffName').textContent};
+    try{
+      fetch(CONFIG.leadEndpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).catch(function(){});
+    }catch(e){}
+    setTimeout(function(){
+      q('#okphone').textContent=phone;
+      q('.form-view').style.display='none'; q('.success').style.display='block';
+      btn.textContent='Qo\'ng\'iroqni kutaman'; btn.disabled=false;
+    },500);
+  });
+})();
+</script>
+</body>
+</html>

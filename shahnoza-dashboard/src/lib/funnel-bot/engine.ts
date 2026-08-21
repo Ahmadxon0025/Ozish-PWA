@@ -321,29 +321,8 @@ export async function handleUpdate(update: Loose): Promise<void> {
     const text = String(msg.text ?? "").trim();
     if (!text) return;
 
-    // /start [payload]
-    // FUNNEL DISCONNECTED — switched to ChatPlace. Re-enable by restoring the block below.
+    // /start [payload] — FUNNEL DISCONNECTED, switched to ChatPlace
     if (/^\/start(\s|$)/i.test(text)) return;
-    /*
-    if (/^\/start(\s|$)/i.test(text)) {
-      const payload = text.replace(/^\/start\s*/i, "").trim() || null;
-      const sub = await upsertSubscriber(db, msg.from, chatId);
-      if (!sub) return;
-      try {
-        await ingestFunnelEvent(db, {
-          event: "bot_start",
-          telegramId: sub.telegram_id,
-          telegramUsername: sub.username,
-          fullName: sub.first_name ?? null,
-          payload,
-        });
-      } catch {
-        /* best-effort attribution */
-      }
-      await startFlow(db, sub, resolveStartKey(payload)); // deep link picks the funnel
-      return;
-    }
-    */
 
     // any other text → capture (city) or human takeover
     const sub = await getSubscriberByTgId(db, msg.from.id);

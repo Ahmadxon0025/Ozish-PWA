@@ -3,7 +3,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { env } from "@/lib/env";
 import type { Database } from "@/types/database";
 
-const PUBLIC_PATHS = ["/login", "/auth"];
+// "/kurs" and "/akademiya" are public marketing landing pages (served from
+// public/) — ad traffic must reach them without logging into the dashboard.
+const PUBLIC_PATHS = ["/login", "/auth", "/kurs", "/akademiya"];
 
 /**
  * Refreshes the Supabase session cookie on every request and gates access to

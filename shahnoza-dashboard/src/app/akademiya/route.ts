@@ -2,7 +2,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { NextResponse } from "next/server";
 
-export const dynamic = "force-dynamic";
+export const dynamic = "force-static";
 
 export async function GET() {
   const html = readFileSync(join(process.cwd(), "public/akademiya/index.html"), "utf-8");

@@ -3,6 +3,44 @@
 <head>
   <meta charset="utf-8">
   <title>Bolalar massaji kursi — Shahnoza Akademiyasi</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>
+  /* Fit the fixed 500px design to any screen: scale-to-fit on phones narrower
+     than 500px (no right-edge cutoff), natural centered artboard at 500px+. */
+  (function(){
+    try{
+      if(!(typeof screen!=="undefined" && screen.width && screen.width < 500)) return;
+      var content = "width=500";
+      function apply(){
+        var metas = document.querySelectorAll('meta[name="viewport"]');
+        if(metas.length===0){
+          var m=document.createElement("meta");
+          m.setAttribute("name","viewport"); m.setAttribute("content",content);
+          (document.head||document.documentElement).appendChild(m); return;
+        }
+        for(var i=0;i<metas.length;i++){
+          if(i===0){ if(metas[i].getAttribute("content")!==content) metas[i].setAttribute("content",content); }
+          else if(metas[i].parentNode){ metas[i].parentNode.removeChild(metas[i]); }
+        }
+      }
+      apply();
+      if(document.head){
+        new MutationObserver(function(muts){
+          for(var a=0;a<muts.length;a++){
+            var added=muts[a].addedNodes;
+            for(var b=0;b<added.length;b++){
+              var n=added[b];
+              if(n && n.tagName==="META" && (n.getAttribute("name")||"").toLowerCase()==="viewport"){ apply(); return; }
+            }
+          }
+        }).observe(document.head,{childList:true});
+      }
+      document.addEventListener("DOMContentLoaded",apply);
+      window.addEventListener("load",apply);
+      setTimeout(apply,600); setTimeout(apply,2000);
+    }catch(e){}
+  })();
+  </script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { background: #fce9f0; display: flex; align-items: center; justify-content: center; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }

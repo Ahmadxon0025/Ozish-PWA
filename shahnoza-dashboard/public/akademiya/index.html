@@ -9,6 +9,8 @@
 <meta property="og:title" content="Shahnoza Akademiyasi — Bolalar massaji bepul darsi">
 <meta property="og:description" content="Bolalar massaji orqali oyiga 10 mln so'm daromadga chiqishni o'rganing — 1 soatlik bepul dars.">
 <meta property="og:type" content="website">
+<meta property="og:url" content="https://shahnoza-dashboard.vercel.app/akademiya">
+<meta property="og:image" content="https://shahnoza-dashboard.vercel.app/akademiya/vsl_poster.webp">
 <!-- Meta Pixel Code -->
 <script>
 !function(f,b,e,v,n,t,s)
@@ -131,8 +133,8 @@ h1,h2,h3{font-family:'Montserrat',sans-serif;line-height:1.14;letter-spacing:-.0
   <div class="topbar">Ko'p ishlash va kam pul topishdan charchagan hamshiralar uchun — <b>1 soatlik bepul dars</b></div>
 
   <header class="hero">
-    <h1>Hamshira maoshiga qanoat qilmang — bolalar massaji bilan oyiga <em>10 mln so'm</em>ga chiqing</h1>
-    <p class="sub">Siz kam maosh olmaysiz — bilimingizni pulga aylantirishni hech kim o'rgatmagan</p>
+    <h1>Hamshira maoshi bilan cheklanib qolmang — bolalar massaji bilan oyiga <em>10 mln so'm</em>ga chiqing</h1>
+    <p class="sub">Muammo maoshda emas — bilimingizni pulga aylantirishni hech kim o'rgatmagan</p>
     <div class="vsl-wrap">
       <div class="vsl-label"><span class="vsl-dot"></span>Avval bu videoni ko'ring 👇</div>
       <div class="vsl-box">
@@ -153,7 +155,7 @@ h1,h2,h3{font-family:'Montserrat',sans-serif;line-height:1.14;letter-spacing:-.0
     <div class="stats">
       <div class="stat"><b>17 yil</b><span>tajriba</span></div>
       <div class="stat"><b>Oliy</b><span>toifali hamshira</span></div>
-      <div class="stat"><b>Uydan</b><span>bola yonida</span></div>
+      <div class="stat"><b>30 000+</b><span>bola bilan ishlagan</span></div>
     </div>
   </section>
 
@@ -175,10 +177,10 @@ h1,h2,h3{font-family:'Montserrat',sans-serif;line-height:1.14;letter-spacing:-.0
   </section>
 
   <section class="sec wrap center" style="padding-top:0">
-    <button class="btn btn-pink" data-open>Bepul darsni boshlash</button>
-    <div class="cta-note">10 mln ga yo'l xaritani knopka orqali olasiz 👆🏻</div>
+    <button class="btn btn-pink" data-open>🎁 Bepul darsni olish →</button>
+    <div class="cta-note">10 mln so'mga yo'l xaritasini yuqoridagi tugma orqali olasiz 👆🏻</div>
     <div class="legal">
-      <p>Natijalar kafolatlanmaydi. Ko'rsatilgan raqamlar real o'quvchilarimizning natijalari va soxta natija emas. Daromadingiz mehnatingiz va rizqingizga bog'liq. Darsni ko'rib daromadga chiqasiz degan vada yo'q, biz sizga pul topish uchun sababini a'lo darajada qilishni o'rgatamiz.</p>
+      <p>Natijalar kafolatlanmaydi. Ko'rsatilgan raqamlar — real o'quvchilarimizning natijalari. Daromadingiz mehnatingiz va rizqingizga bog'liq. "Darsni ko'rsangiz daromadga chiqasiz" degan va'da yo'q — biz sizga daromadga olib boradigan kasbni professional darajada o'rgatamiz.</p>
       <p style="margin-top:8px">Bolalar massaji shifokor tavsiyasi bilan, uning o'rniga emas — bola sog'lig'iga yordam beradi.</p>
     </div>
   </section>
@@ -226,7 +228,11 @@ h1,h2,h3{font-family:'Montserrat',sans-serif;line-height:1.14;letter-spacing:-.0
   function qa(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s))}
   var modal=q('#modal');
   function openModal(){
-    if(CONFIG.telegramUrl){if(typeof fbq==='function')fbq('track','Lead');window.open(CONFIG.telegramUrl,'_blank');return;}
+    if(CONFIG.telegramUrl){
+      if(typeof fbq==='function')fbq('track','Lead');
+      setTimeout(function(){window.location.href=CONFIG.telegramUrl;},250);
+      return;
+    }
     q('.form-view').style.display='block'; q('.success').style.display='none';
     modal.classList.add('open'); document.body.style.overflow='hidden';
     setTimeout(function(){var n=q('#lead-name'); if(n)n.focus();},200);

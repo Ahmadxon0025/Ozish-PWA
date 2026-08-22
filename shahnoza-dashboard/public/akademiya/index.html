@@ -60,8 +60,8 @@ h1,h2,h3{font-family:'Montserrat',sans-serif;line-height:1.14;letter-spacing:-.0
 .hero h1{font-size:25px;font-weight:900;margin:8px 0 8px;color:#3A2C26}
 .hero h1 em{font-style:normal;color:var(--pink)}
 .hero .sub{color:var(--ink-soft);font-size:15px;font-weight:600;max-width:34ch;margin:0 auto 12px}
-.hero-video{position:relative;max-width:340px;margin:0 auto 16px;border-radius:22px;overflow:hidden;box-shadow:var(--shadow-lg);background:#000}
-.hero-video video{width:100%;display:block;border-radius:22px}
+.hero-video{max-width:280px;aspect-ratio:3/4;margin:0 auto 16px;border-radius:22px;overflow:hidden;box-shadow:var(--shadow-lg);background:#000}
+.hero-video video{width:100%;height:100%;object-fit:cover;display:block}
 .hero .lead{color:var(--ink-soft);font-size:14px;max-width:36ch;margin:12px auto 0}
 .hero .lead b{color:var(--ink)}
 .trust{font-size:12.5px;color:var(--muted);margin-top:14px;line-height:1.5}
@@ -126,7 +126,7 @@ h1,h2,h3{font-family:'Montserrat',sans-serif;line-height:1.14;letter-spacing:-.0
     <h1>Bolalar massaji orqali oyiga <em>10 mln so'm</em> daromadga chiqishni o'rganing</h1>
     <p class="sub">Siz kam maosh olmaysiz — bilimingizni pulga aylantirishni hech kim o'rgatmagan</p>
     <div class="hero-video">
-      <video src="hero.mp4" poster="ak_hero.webp" controls playsinline preload="none" style="width:100%;display:block;border-radius:22px"></video>
+      <video src="hero.mp4" poster="ak_hero.webp" controls playsinline preload="none"></video>
     </div>
     <button class="btn btn-gold" data-open>🎁 Bepul darsni olish →</button>
     <p class="trust">🎁 Dars mutlaqo bepul · Hech qanday majburiyat yo'q</p>

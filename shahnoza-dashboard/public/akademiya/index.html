@@ -67,6 +67,9 @@ h1,h2,h3{font-family:'Montserrat',sans-serif;line-height:1.14;letter-spacing:-.0
 @keyframes blink-dot{0%,100%{opacity:1}50%{opacity:.25}}
 .vsl-box{position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:14px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.22);border:3px solid #e8d5c0}
 .vsl-box video{width:100%;height:100%;object-fit:contain;display:block}
+.vsl-sound{position:absolute;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.18);cursor:pointer;border:0;padding:0}
+.vsl-sound span{background:rgba(20,14,10,.82);color:#fff;font-family:'Manrope';font-weight:800;font-size:14px;padding:13px 22px;border-radius:999px;display:flex;align-items:center;gap:8px;animation:pulse-sound 1.5s ease-in-out infinite;letter-spacing:.02em}
+@keyframes pulse-sound{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
 .hero .lead{color:var(--ink-soft);font-size:14px;max-width:36ch;margin:12px auto 0}
 .hero .lead b{color:var(--ink)}
 .trust{font-size:12.5px;color:var(--muted);margin-top:14px;line-height:1.5}
@@ -128,12 +131,13 @@ h1,h2,h3{font-family:'Montserrat',sans-serif;line-height:1.14;letter-spacing:-.0
   <div class="topbar">Ko'p ishlash va kam pul topishdan charchagan hamshiralar uchun — <b>1 soatlik bepul dars</b></div>
 
   <header class="hero">
-    <h1>Bolalar massaji orqali oyiga <em>10 mln so'm</em> daromadga chiqishni o'rganing</h1>
+    <h1>Hamshira maoshiga qanoat qilmang — bolalar massaji bilan oyiga <em>10 mln so'm</em>ga chiqing</h1>
     <p class="sub">Siz kam maosh olmaysiz — bilimingizni pulga aylantirishni hech kim o'rgatmagan</p>
     <div class="vsl-wrap">
       <div class="vsl-label"><span class="vsl-dot"></span>Avval bu videoni ko'ring 👇</div>
       <div class="vsl-box">
-        <video src="hero.mp4" poster="vsl_poster.webp" controls playsinline preload="metadata"></video>
+        <video id="vslv" src="hero.mp4" poster="vsl_poster.webp" autoplay muted loop playsinline preload="auto"></video>
+        <button class="vsl-sound" id="vslo" type="button" aria-label="Ovozni yoqish"><span>🔊 Ovozni yoqish uchun bosing</span></button>
       </div>
     </div>
     <button class="btn btn-gold" data-open>🎁 Bepul darsni olish →</button>
@@ -243,6 +247,17 @@ h1,h2,h3{font-family:'Montserrat',sans-serif;line-height:1.14;letter-spacing:-.0
       q('.form-view').style.display='none'; q('.success').style.display='block';
       btn.textContent='Darsni yuboring'; btn.disabled=false;
     },500);
+  });
+})();
+(function(){
+  var v=document.getElementById('vslv'), o=document.getElementById('vslo');
+  if(!v||!o)return;
+  v.play().catch(function(){});
+  o.addEventListener('click',function(){
+    v.pause(); v.currentTime=0; v.muted=false; v.loop=false; v.controls=true;
+    o.style.display='none';
+    v.play().catch(function(){});
+    if(typeof fbq==='function')fbq('track','ViewContent');
   });
 })();
 (function(){

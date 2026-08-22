@@ -61,8 +61,10 @@ h1,h2,h3{font-family:'Montserrat',sans-serif;line-height:1.14;letter-spacing:-.0
 .hero h1 em{font-style:normal;color:var(--pink)}
 .hero .sub{color:var(--ink-soft);font-size:15px;font-weight:600;max-width:34ch;margin:0 auto 12px}
 .vsl-wrap{margin:18px 0 16px}
-.vsl-label{font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);text-align:center;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:6px}
-.vsl-label::before,.vsl-label::after{content:'';flex:1;height:1px;background:var(--line)}
+.vsl-label{font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--pink-deep);text-align:center;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:7px}
+.vsl-label::before,.vsl-label::after{content:'';flex:1;height:1px;background:var(--pink)}
+.vsl-dot{width:9px;height:9px;border-radius:50%;background:#E5484D;flex:none;animation:blink-dot 1.1s ease-in-out infinite}
+@keyframes blink-dot{0%,100%{opacity:1}50%{opacity:.25}}
 .vsl-box{position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:14px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.22);border:3px solid #e8d5c0}
 .vsl-box video{width:100%;height:100%;object-fit:contain;display:block}
 .hero .lead{color:var(--ink-soft);font-size:14px;max-width:36ch;margin:12px auto 0}
@@ -129,9 +131,9 @@ h1,h2,h3{font-family:'Montserrat',sans-serif;line-height:1.14;letter-spacing:-.0
     <h1>Bolalar massaji orqali oyiga <em>10 mln so'm</em> daromadga chiqishni o'rganing</h1>
     <p class="sub">Siz kam maosh olmaysiz — bilimingizni pulga aylantirishni hech kim o'rgatmagan</p>
     <div class="vsl-wrap">
-      <div class="vsl-label">🔊 Bosing va tomosha qiling</div>
+      <div class="vsl-label"><span class="vsl-dot"></span>Avval bu videoni ko'ring 👇</div>
       <div class="vsl-box">
-        <video src="hero.mp4" controls playsinline preload="metadata"></video>
+        <video src="hero.mp4" poster="vsl_poster.webp" controls playsinline preload="metadata"></video>
       </div>
     </div>
     <button class="btn btn-gold" data-open>🎁 Bepul darsni olish →</button>

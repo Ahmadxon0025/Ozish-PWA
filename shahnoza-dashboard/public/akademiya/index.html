@@ -185,7 +185,7 @@ h1,h2,h3{font-family:'Montserrat',sans-serif;line-height:1.14;letter-spacing:-.0
   <div class="sticky">
     <div class="sticky-in">
       <div class="info"><b>1 soatlik bepul dars</b><span>Bolalar massaji orqali daromad</span></div>
-      <span id="cdt" style="font-size:13px;font-weight:800;color:var(--pink-deep);font-variant-numeric:tabular-nums;white-space:nowrap;flex-shrink:0">⏱ 0:20</span>
+      <span id="cdt" style="font-size:13px;font-weight:800;color:var(--pink-deep);font-variant-numeric:tabular-nums;white-space:nowrap;flex-shrink:0">⏱ 2:00</span>
       <button class="btn btn-gold" data-open>Olish</button>
     </div>
   </div>
@@ -244,12 +244,14 @@ h1,h2,h3{font-family:'Montserrat',sans-serif;line-height:1.14;letter-spacing:-.0
   });
 })();
 (function(){
-  var s=20,el=document.getElementById('cdt');
+  var s=120,el=document.getElementById('cdt');
   if(!el)return;
+  el.textContent='⏱ 2:00';
   var iv=setInterval(function(){
     s--;
     if(s<=0){s=0;el.textContent='⏱ 0:00';clearInterval(iv);return;}
-    el.textContent='⏱ 0:'+(s<10?'0':'')+s;
+    var m=Math.floor(s/60),sec=s%60;
+    el.textContent='⏱ '+m+':'+(sec<10?'0':'')+sec;
   },1000);
 })();
 </script>

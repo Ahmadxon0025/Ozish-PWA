@@ -109,7 +109,15 @@ async def _fetch(target: str, from_date, to_date, limit: int):
 
 
 async def _fetch_inner(target: str, from_date, to_date, limit: int):
-    entity = await client.get_entity(target.strip())
+    t = target.strip()
+    try:
+        entity = await client.get_entity(t)
+    except ValueError:
+        # Entity not in local cache — account may have been recently added to
+        # a private group. Refresh dialogs so Telethon learns the access hash.
+        print(f"telegram: entity '{t}' not cached — refreshing dialogs")
+        await client.get_dialogs()
+        entity = await client.get_entity(t)
     title = getattr(entity, "title", None) or getattr(entity, "username", None)
     kwargs = {}
     if to_date:

@@ -114,10 +114,22 @@ async def _fetch_inner(target: str, from_date, to_date, limit: int):
         entity = await client.get_entity(t)
     except ValueError:
         # Entity not in local cache — account may have been recently added to
-        # a private group. Refresh dialogs so Telethon learns the access hash.
-        print(f"telegram: entity '{t}' not cached — refreshing dialogs")
-        await client.get_dialogs()
-        entity = await client.get_entity(t)
+        # a private group. Refresh ALL dialogs so Telethon learns every access hash.
+        print(f"telegram: entity '{t}' not cached — refreshing all dialogs")
+        await client.get_dialogs(limit=None)
+        try:
+            entity = await client.get_entity(t)
+        except ValueError:
+            # Telegram supergroups can be addressed as -504866501 or -1001504866501.
+            # Try the -100 prefixed form if the bare negative ID fails.
+            raw = t.lstrip("-")
+            if raw.isdigit() and not t.startswith("-100"):
+                t2 = f"-100{raw}"
+                print(f"telegram: retrying with supergroup id {t2}")
+                entity = await client.get_entity(t2)
+                t = t2
+            else:
+                raise
     title = getattr(entity, "title", None) or getattr(entity, "username", None)
     kwargs = {}
     if to_date:
@@ -667,7 +679,20 @@ async def images(req: ImagesReq, x_reader_secret: str = Header(default="")) -> d
         frm = _parse_day(req.from_date)
         to = _parse_day(req.to_date, end=True)
         await _ensure_connected()
-        entity = await client.get_entity(req.target.strip())
+        tgt = req.target.strip()
+        try:
+            entity = await client.get_entity(tgt)
+        except ValueError:
+            await client.get_dialogs(limit=None)
+            try:
+                entity = await client.get_entity(tgt)
+            except ValueError:
+                raw = tgt.lstrip("-")
+                if raw.isdigit() and not tgt.startswith("-100"):
+                    tgt = f"-100{raw}"
+                    entity = await client.get_entity(tgt)
+                else:
+                    raise
         title = getattr(entity, "title", None) or getattr(entity, "username", None)
         kwargs = {}
         if to:

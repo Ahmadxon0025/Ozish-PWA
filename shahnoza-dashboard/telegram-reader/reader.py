@@ -200,6 +200,20 @@ async def health() -> dict:
     }
 
 
+@app.get("/me")
+async def me() -> dict:
+    """Show which Telegram account owns the session string."""
+    await _ensure_connected()
+    user = await client.get_me()
+    return {
+        "id": user.id,
+        "username": user.username,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "phone": user.phone,
+    }
+
+
 @app.post("/telegram/read")
 async def read(req: ReadReq, x_reader_secret: str = Header(default="")) -> dict:
     if not hmac.compare_digest(x_reader_secret, SECRET):

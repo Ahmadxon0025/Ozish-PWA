@@ -1288,7 +1288,7 @@ export async function handleTelegramUpdate(update: unknown): Promise<void> {
     !msg.reply_to_message &&
     !msg.from?.is_bot &&
     !text.startsWith("/") &&
-    (/@[A-Za-z][A-Za-z0-9_]{3,}\b/.test(text) || /t\.me\/\S+/i.test(text)) &&
+    (/@[A-Za-z][A-Za-z0-9_]{3,}\b/.test(text) || /t\.me\/\S+/i.test(text) || /-\d{6,}\b/.test(text)) &&
     (/(tahlil|eksport|export|yuklab|skachat|download)/i.test(text) ||
       /o['’ʻ`]?q(i|ib|ing)\b/i.test(text) ||
       /ko['’ʻ`]?chir/i.test(text))

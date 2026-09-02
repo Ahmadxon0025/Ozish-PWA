@@ -2,6 +2,7 @@ FROM python:3.13-slim
 WORKDIR /app
 # fonts-dejavu-core → DejaVuSans.ttf so PDF exports render Uzbek/Cyrillic text.
 RUN apt-get update \
+    && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt .

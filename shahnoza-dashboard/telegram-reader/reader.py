@@ -53,6 +53,23 @@ MAX_MEDIA_BYTES = 200 * 1024 * 1024  # 200 MB
 app = FastAPI(title="Telegram Reader")
 client = TelegramClient(StringSession(SESSION), API_ID, API_HASH)
 
+# Dialog-refresh cooldown: GetContactsRequest is triggered when fetching more
+# dialogs than one batch (especially limit=None).  Cap at 300 and enforce a
+# 30-minute gap between refreshes to stay under Telegram's flood limits.
+_last_dialogs_refresh: float = 0.0
+_DIALOGS_REFRESH_INTERVAL = 1800  # seconds
+
+
+async def _refresh_dialogs() -> None:
+    global _last_dialogs_refresh
+    now = time.monotonic()
+    if now - _last_dialogs_refresh < _DIALOGS_REFRESH_INTERVAL:
+        print("telegram: dialog refresh skipped (cooldown active)")
+        return
+    print("telegram: refreshing dialogs (up to 300)")
+    await client.get_dialogs(limit=300)
+    _last_dialogs_refresh = now
+
 
 class ReadReq(BaseModel):
     target: str  # @username | t.me/... link | numeric id
@@ -116,7 +133,7 @@ async def _fetch_inner(target: str, from_date, to_date, limit: int):
         # Entity not in local cache — account may have been recently added to
         # a private group. Refresh ALL dialogs so Telethon learns every access hash.
         print(f"telegram: entity '{t}' not cached — refreshing all dialogs")
-        await client.get_dialogs(limit=None)
+        await _refresh_dialogs()
         try:
             entity = await client.get_entity(t)
         except ValueError:
@@ -683,7 +700,7 @@ async def images(req: ImagesReq, x_reader_secret: str = Header(default="")) -> d
         try:
             entity = await client.get_entity(tgt)
         except ValueError:
-            await client.get_dialogs(limit=None)
+            await _refresh_dialogs()
             try:
                 entity = await client.get_entity(tgt)
             except ValueError:

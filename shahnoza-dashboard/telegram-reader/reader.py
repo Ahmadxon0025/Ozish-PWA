@@ -95,8 +95,20 @@ async def _ensure_connected() -> None:
 
 
 async def _fetch(target: str, from_date, to_date, limit: int):
-    """Fetch messages, optionally bounded to [from_date, to_date). Chronological."""
+    """Fetch messages, optionally bounded to [from_date, to_date). Chronological.
+    Retries once on ConnectionError: is_connected() can report True on a socket
+    the server already dropped, so force a fresh connection and try again."""
     await _ensure_connected()
+    try:
+        return await _fetch_inner(target, from_date, to_date, limit)
+    except ConnectionError:
+        print("telegram: stale connection — reconnecting and retrying once")
+        await client.disconnect()
+        await client.connect()
+        return await _fetch_inner(target, from_date, to_date, limit)
+
+
+async def _fetch_inner(target: str, from_date, to_date, limit: int):
     entity = await client.get_entity(target.strip())
     title = getattr(entity, "title", None) or getattr(entity, "username", None)
     kwargs = {}
@@ -165,9 +177,19 @@ async def _startup() -> None:
         print(f"funnel cron pinger active → {DASHBOARD_URL}/api/cron/funnel-bot every 5 min")
 
 
+# Railway injects the deployed commit; surfacing it lets anyone confirm which
+# build is live by opening the service URL in a browser.
+COMMIT = (os.environ.get("RAILWAY_GIT_COMMIT_SHA") or "")[:7] or "unknown"
+
+
 @app.get("/")
 async def health() -> dict:
-    return {"ok": True, "service": "telegram-reader"}
+    return {
+        "ok": True,
+        "service": "telegram-reader",
+        "commit": COMMIT,
+        "telegram_connected": client.is_connected(),
+    }
 
 
 @app.post("/telegram/read")
@@ -486,6 +508,24 @@ async def export(
     sig: str = Query(...),
 ):
     _verify(target, frm, to, fmt, media, exp, sig)
+    try:
+        return await _export(target, frm, to, fmt, media)
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        # Surface the real cause instead of a bare "Internal Server Error":
+        # full traceback to the Railway log, type + message to the browser.
+        import traceback
+
+        traceback.print_exc()
+        return Response(
+            content=f"export failed: {type(e).__name__}: {e}",
+            status_code=500,
+            media_type="text/plain; charset=utf-8",
+        )
+
+
+async def _export(target: str, frm: str | None, to: str | None, fmt: str, media: str):
     fmt = fmt if fmt in ("txt", "csv", "rtf", "json", "pdf", "html") else "csv"
     from_d = _parse_day(frm)
     to_d = _parse_day(to, end=True)
@@ -604,6 +644,7 @@ async def images(req: ImagesReq, x_reader_secret: str = Header(default="")) -> d
         limit = max(1, min(int(req.limit or 6), 12))
         frm = _parse_day(req.from_date)
         to = _parse_day(req.to_date, end=True)
+        await _ensure_connected()
         entity = await client.get_entity(req.target.strip())
         title = getattr(entity, "title", None) or getattr(entity, "username", None)
         kwargs = {}

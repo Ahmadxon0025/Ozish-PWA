@@ -87,8 +87,16 @@ def _sender_name(m) -> str | None:
     return getattr(m, "post_author", None)  # channel post signature, if any
 
 
+async def _ensure_connected() -> None:
+    if not client.is_connected():
+        await client.connect()
+    if not await client.is_user_authorized():
+        raise RuntimeError("Telegram session not authorized — re-run make_session.py and update TELEGRAM_SESSION_STRING.")
+
+
 async def _fetch(target: str, from_date, to_date, limit: int):
     """Fetch messages, optionally bounded to [from_date, to_date). Chronological."""
+    await _ensure_connected()
     entity = await client.get_entity(target.strip())
     title = getattr(entity, "title", None) or getattr(entity, "username", None)
     kwargs = {}

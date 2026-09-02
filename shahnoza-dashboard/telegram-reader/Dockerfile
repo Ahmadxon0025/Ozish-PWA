@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.13-slim
 WORKDIR /app
 # fonts-dejavu-core → DejaVuSans.ttf so PDF exports render Uzbek/Cyrillic text.
 RUN apt-get update \

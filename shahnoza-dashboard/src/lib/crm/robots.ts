@@ -4,7 +4,6 @@ import { configNarxForTarif } from "./pricing";
 import type { Tarif } from "@/types/crm";
 
 /** Service-role client (same shape as crmAdmin). */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type CrmServiceClient = any;
 
 export type RobotResult = {

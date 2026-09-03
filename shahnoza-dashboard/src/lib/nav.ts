@@ -31,7 +31,6 @@ import {
   Columns3,
   GraduationCap,
   Star,
-  BarChart3,
   SlidersHorizontal,
   type LucideIcon,
 } from "lucide-react";
@@ -66,6 +65,23 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    label: "CRM",
+    items: [
+      { label: "Bugun", href: "/crm/bugun", icon: Sun, roles: SALES_VIEW },
+      { label: "Voronka", href: "/crm/sotuv", icon: Columns3, roles: SALES_VIEW },
+      { label: "Bitimlar", href: "/crm/lead", icon: HeartPulse, roles: SALES_VIEW },
+      {
+        label: "O'quvchilar",
+        href: "/crm/oquvchi",
+        icon: GraduationCap,
+        roles: SALES_VIEW,
+        also: ["/crm/student"],
+      },
+      { label: "NPS", href: "/crm/nps", icon: Star, roles: SALES_VIEW },
+      { label: "CRM Sozlama", href: "/crm/config", icon: SlidersHorizontal, roles: OWNER_ROLES },
+    ],
+  },
+  {
     label: "Sotuv",
     items: [
       { label: "Sotuv sharhi", href: "/sales", icon: TrendingUp, roles: SALES_VIEW },
@@ -74,23 +90,6 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "Sotuv jamoasi", href: "/sales/team", icon: Users2, roles: SALES_VIEW },
       { label: "Leadlar", href: "/leads", icon: UserSquare2 },
       { label: "Qo'ng'iroq tahlili", href: "/sales/calls", icon: Headphones, roles: SALES_VIEW },
-    ],
-  },
-  {
-    label: "Million Massaj",
-    items: [
-      { label: "Bugun", href: "/crm/bugun", icon: Sun },
-      { label: "Sotuv", href: "/crm/sotuv", icon: Columns3 },
-      { label: "Akademiya leadlari", href: "/crm/lead", icon: HeartPulse },
-      {
-        label: "Oquvchilar",
-        href: "/crm/oquvchi",
-        icon: GraduationCap,
-        also: ["/crm/student"],
-      },
-      { label: "NPS", href: "/crm/nps", icon: Star },
-      { label: "Shahnoza", href: "/crm/shahnoza", icon: BarChart3 },
-      { label: "Config", href: "/crm/config", icon: SlidersHorizontal },
     ],
   },
   {

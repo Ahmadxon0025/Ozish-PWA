@@ -88,7 +88,12 @@ export default async function LeadListPage({
   const bosqich = searchParams.bosqich?.trim() ?? "";
   const tarif = searchParams.tarif?.trim() ?? "";
   const crmUser = await getCrmUser();
-  const closerId = crmUser?.role === "closer" ? crmUser.id : undefined;
+  const closerId =
+    crmUser?.role === "admin"
+      ? undefined
+      : crmUser?.role === "closer"
+        ? crmUser.id
+        : undefined;
 
   let leads: Awaited<ReturnType<typeof loadLeads>> = [];
   let loadError: string | null = null;

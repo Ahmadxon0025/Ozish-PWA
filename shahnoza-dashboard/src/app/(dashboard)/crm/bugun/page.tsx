@@ -104,7 +104,12 @@ async function loadToday(closerId?: string) {
 
 export default async function BugunPage() {
   const crmUser = await getCrmUser();
-  const closerId = crmUser?.role === "closer" ? crmUser.id : undefined;
+  const closerId =
+    crmUser?.role === "admin"
+      ? undefined
+      : crmUser?.role === "closer"
+        ? crmUser.id
+        : undefined;
 
   let newToday: CrmLead[] = [];
   let followUps: FollowUp[] = [];

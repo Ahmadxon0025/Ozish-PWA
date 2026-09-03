@@ -91,7 +91,12 @@ async function loadBoardLeads(closerId?: string): Promise<BoardLead[]> {
 
 export default async function SotuvPage() {
   const crmUser = await getCrmUser();
-  const closerId = crmUser?.role === "closer" ? crmUser.id : undefined;
+  const closerId =
+    crmUser?.role === "admin"
+      ? undefined
+      : crmUser?.role === "closer"
+        ? crmUser.id
+        : undefined;
 
   let leads: BoardLead[] = [];
   let loadError: string | null = null;

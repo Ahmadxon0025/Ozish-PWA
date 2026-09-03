@@ -1,5 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
-import type { UserRole } from "@/types/crm";
+import { getSessionContext } from "@/lib/auth";
+import type { UserRole as AppRole } from "@/types/database";
 import { crmAdmin } from "./db";
 
 export type CrmSessionUser = {
@@ -8,27 +8,32 @@ export type CrmSessionUser = {
   name: string;
 };
 
+function mapAppRoleToCrm(role: AppRole): CrmSessionUser["role"] | null {
+  if (
+    role === "super_admin" ||
+    role === "owner" ||
+    role === "sales_manager" ||
+    role === "sales"
+  ) {
+    return "admin";
+  }
+  return null;
+}
+
 export async function getCrmUser(): Promise<CrmSessionUser | null> {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user?.email) return null;
+  const session = await getSessionContext();
+  if (!session?.appUser) return null;
 
-  const db = crmAdmin();
-  const { data, error } = await db
-    .from("crm_users")
-    .select("id, role, name")
-    .ilike("email", user.email)
-    .maybeSingle();
+  const appUser = session.appUser;
+  if (!appUser.role || appUser.is_active === false) return null;
 
-  if (error) throw new Error(error.message);
-  if (!data?.id) return null;
+  const role = mapAppRoleToCrm(appUser.role);
+  if (!role) return null;
 
   return {
-    id: data.id as string,
-    role: data.role as UserRole,
-    name: (data.name as string) ?? "",
+    id: appUser.id,
+    role,
+    name: appUser.full_name ?? "",
   };
 }
 

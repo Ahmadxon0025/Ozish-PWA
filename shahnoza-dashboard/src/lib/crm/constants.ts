@@ -26,6 +26,19 @@ export const CLOSED_STAGES: LeadStage[] = [
 
 export const ALL_STAGES: LeadStage[] = [...PIPELINE_STAGES, ...CLOSED_STAGES];
 
+/** Top-border accent for Bitrix-style pipeline columns. */
+export const STAGE_ACCENT: Record<LeadStage, string> = {
+  yangi_lead: "border-t-blue-500",
+  aloqa_kutilmoqda: "border-t-sky-500",
+  birinchi_aloqa: "border-t-indigo-500",
+  malumot_yuborildi: "border-t-violet-500",
+  qiziqarli: "border-t-amber-500",
+  to_lov_qilinmoqda: "border-t-orange-500",
+  yutuq: "border-t-emerald-500",
+  muvaffaqiyatsizlik: "border-t-red-500",
+  vozvrat: "border-t-zinc-400",
+};
+
 export const BOSQICH_LABELS: Record<LeadStage, string> = {
   yangi_lead: "Yangi lead",
   aloqa_kutilmoqda: "Aloqa kutilmoqda",

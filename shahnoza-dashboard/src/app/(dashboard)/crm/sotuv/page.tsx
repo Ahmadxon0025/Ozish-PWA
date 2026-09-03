@@ -1,20 +1,11 @@
 import { differenceInCalendarDays, parseISO } from "date-fns";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { formatUzs } from "@/lib/format";
 import { todayKey } from "@/lib/dates";
 import { assignedLeadIds, getCrmUser } from "@/lib/crm/auth";
 import { crmAdmin } from "@/lib/crm/db";
 import { maskPhone } from "@/lib/crm/phone";
-import {
-  BOSQICH_LABELS,
-  CLOSED_STAGES,
-  PIPELINE_STAGES,
-  TARIF_BADGE_CLASS,
-  initials,
-} from "@/lib/crm/constants";
+import { BOSQICH_LABELS, CLOSED_STAGES, PIPELINE_STAGES } from "@/lib/crm/constants";
 import type { CrmLead, LeadStage, Tarif } from "@/types/crm";
-import { MoveStage } from "./move-stage";
+import { SotuvBoard, type SotuvBoardLead, type SotuvColumn } from "./board";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +19,19 @@ function daysInStage(iso: string | null | undefined): number {
   } catch {
     return 0;
   }
+}
+
+function toCard(lead: BoardLead): SotuvBoardLead {
+  return {
+    id: lead.id,
+    ism: lead.ism,
+    telefon: maskPhone(lead.telefon),
+    tarif: lead.tarif as Tarif,
+    narx: lead.narx != null ? Number(lead.narx) : null,
+    bosqich: lead.bosqich as LeadStage,
+    closer_name: lead.closer_name,
+    days_in_stage: daysInStage(lead.bosqich_updated_at),
+  };
 }
 
 async function loadBoardLeads(closerId?: string): Promise<BoardLead[]> {
@@ -45,7 +49,6 @@ async function loadBoardLeads(closerId?: string): Promise<BoardLead[]> {
   }
 
   const { data: rows, error } = await query;
-
   if (error) throw new Error(error.message);
 
   const leads = (rows ?? []) as CrmLead[];
@@ -89,6 +92,19 @@ async function loadBoardLeads(closerId?: string): Promise<BoardLead[]> {
   }));
 }
 
+function groupColumns(leads: BoardLead[]): SotuvColumn[] {
+  return PIPELINE_STAGES.map((stage) => {
+    const cards = leads.filter((l) => l.bosqich === stage).map(toCard);
+    return {
+      stage,
+      label: BOSQICH_LABELS[stage],
+      leads: cards,
+      count: cards.length,
+      sum: cards.reduce((acc, l) => acc + Number(l.narx ?? 0), 0),
+    };
+  });
+}
+
 export default async function SotuvPage() {
   const crmUser = await getCrmUser();
   const closerId =
@@ -98,10 +114,11 @@ export default async function SotuvPage() {
         ? crmUser.id
         : undefined;
 
-  let leads: BoardLead[] = [];
+  let columns: SotuvColumn[] = groupColumns([]);
   let loadError: string | null = null;
   try {
-    leads = await loadBoardLeads(closerId);
+    const leads = await loadBoardLeads(closerId);
+    columns = groupColumns(leads);
   } catch (err) {
     loadError = err instanceof Error ? err.message : "Yuklash xatosi";
   }
@@ -109,73 +126,17 @@ export default async function SotuvPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Sotuv</h1>
-        <p className="text-sm text-muted-foreground">Pipeline — ochiq leadlar</p>
+        <h1 className="text-2xl font-semibold tracking-tight">Voronka</h1>
+        <p className="text-sm text-muted-foreground">
+          Kartani bosqichdan bosqichga torting
+        </p>
       </div>
 
       {loadError ? (
         <p className="text-sm text-destructive">{loadError}</p>
       ) : null}
 
-      <div className="flex gap-4 overflow-x-auto pb-4">
-        {PIPELINE_STAGES.map((stage) => {
-          const column = leads.filter((l) => l.bosqich === stage);
-          const sum = column.reduce((acc, l) => acc + Number(l.narx ?? 0), 0);
-          return (
-            <section
-              key={stage}
-              className="min-w-[280px] max-w-[280px] shrink-0 rounded-xl border bg-muted/30"
-            >
-              <header className="border-b px-3 py-3">
-                <div className="text-sm font-semibold">{BOSQICH_LABELS[stage]}</div>
-                <div className="text-xs text-muted-foreground">
-                  {column.length} · {formatUzs(sum)}
-                </div>
-              </header>
-              <div className="space-y-2 p-2">
-                {column.length === 0 ? (
-                  <p className="px-1 py-6 text-center text-xs text-muted-foreground">
-                    Bo&apos;sh
-                  </p>
-                ) : (
-                  column.map((lead) => <LeadCard key={lead.id} lead={lead} />)
-                )}
-              </div>
-            </section>
-          );
-        })}
-      </div>
+      <SotuvBoard columns={columns} />
     </div>
-  );
-}
-
-function LeadCard({ lead }: { lead: BoardLead }) {
-  const days = daysInStage(lead.bosqich_updated_at);
-  const tarif = lead.tarif as Tarif;
-  return (
-    <article className="rounded-lg border bg-card p-3 shadow-sm">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="truncate text-sm font-medium">{lead.ism}</div>
-          <div className="text-xs text-muted-foreground">{maskPhone(lead.telefon)}</div>
-        </div>
-        <Avatar className="h-7 w-7 bg-muted">
-          <AvatarFallback className="bg-muted text-[10px] text-muted-foreground">
-            {initials(lead.closer_name)}
-          </AvatarFallback>
-        </Avatar>
-      </div>
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <Badge className={TARIF_BADGE_CLASS[tarif] ?? TARIF_BADGE_CLASS.noma_lum}>
-          {tarif}
-        </Badge>
-        <span className={days > 2 ? "text-xs font-medium text-red-600" : "text-xs text-muted-foreground"}>
-          {days} kun
-        </span>
-      </div>
-      <div className="mt-2">
-        <MoveStage leadId={lead.id} current={lead.bosqich as LeadStage} />
-      </div>
-    </article>
   );
 }

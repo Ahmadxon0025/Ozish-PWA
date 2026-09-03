@@ -26,6 +26,13 @@ import {
   Clapperboard,
   Filter,
   Bot,
+  HeartPulse,
+  Sun,
+  Columns3,
+  GraduationCap,
+  Star,
+  BarChart3,
+  SlidersHorizontal,
   type LucideIcon,
 } from "lucide-react";
 
@@ -34,6 +41,8 @@ export interface NavItem {
   href: string;
   icon: LucideIcon;
   roles?: UserRole[]; // undefined = all roles
+  /** Extra path prefixes that should mark this item active. */
+  also?: string[];
 }
 
 export interface NavGroup {
@@ -65,6 +74,23 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "Sotuv jamoasi", href: "/sales/team", icon: Users2, roles: SALES_VIEW },
       { label: "Leadlar", href: "/leads", icon: UserSquare2 },
       { label: "Qo'ng'iroq tahlili", href: "/sales/calls", icon: Headphones, roles: SALES_VIEW },
+    ],
+  },
+  {
+    label: "Million Massaj",
+    items: [
+      { label: "Bugun", href: "/crm/bugun", icon: Sun },
+      { label: "Sotuv", href: "/crm/sotuv", icon: Columns3 },
+      { label: "Akademiya leadlari", href: "/crm/lead", icon: HeartPulse },
+      {
+        label: "Oquvchilar",
+        href: "/crm/oquvchi",
+        icon: GraduationCap,
+        also: ["/crm/student"],
+      },
+      { label: "NPS", href: "/crm/nps", icon: Star },
+      { label: "Shahnoza", href: "/crm/shahnoza", icon: BarChart3 },
+      { label: "Config", href: "/crm/config", icon: SlidersHorizontal },
     ],
   },
   {
@@ -110,6 +136,14 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
 ];
+
+export function navItemActive(pathname: string, item: Pick<NavItem, "href" | "also">): boolean {
+  if (item.href === "/dashboard") return pathname === item.href;
+  if (pathname === item.href || pathname.startsWith(`${item.href}/`)) return true;
+  return (item.also ?? []).some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
 
 /** Filter nav groups/items by the current role. */
 export function visibleNav(role: UserRole | null): NavGroup[] {

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { cn } from "@/lib/utils";
-import { visibleNav } from "@/lib/nav";
+import { navItemActive, visibleNav } from "@/lib/nav";
 import { APP_NAME } from "@/lib/constants";
 import { Stethoscope } from "lucide-react";
 import type { UserRole } from "@/types/database";
@@ -15,11 +15,6 @@ const MAX_W = 440;
 const DEFAULT_W = 256;
 const WIDTH_KEY = "sidebar-width";
 const clamp = (v: number) => Math.min(MAX_W, Math.max(MIN_W, v));
-
-function isActive(pathname: string, href: string) {
-  if (href === "/dashboard") return pathname === href;
-  return pathname === href || pathname.startsWith(href + "/");
-}
 
 export function Sidebar({ role }: { role: UserRole | null }) {
   const pathname = usePathname();
@@ -83,7 +78,7 @@ export function Sidebar({ role }: { role: UserRole | null }) {
             </div>
             <ul className="space-y-1">
               {group.items.map((item) => {
-                const active = isActive(pathname, item.href);
+                const active = navItemActive(pathname, item);
                 const Icon = item.icon;
                 return (
                   <li key={item.href}>

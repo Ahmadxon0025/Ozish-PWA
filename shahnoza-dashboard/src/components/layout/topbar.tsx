@@ -9,15 +9,10 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/lib/trpc/react";
 import { UserMenu, type SessionUser } from "./user-menu";
 import { useSidebarCollapsed } from "./sidebar-store";
-import { visibleNav } from "@/lib/nav";
+import { navItemActive, visibleNav } from "@/lib/nav";
 import { APP_NAME } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/types/database";
-
-function isActive(pathname: string, href: string) {
-  if (href === "/dashboard") return pathname === href;
-  return pathname === href || pathname.startsWith(href + "/");
-}
 
 /** Notification bell — links to the in-app inbox with a live count. */
 function InboxBell() {
@@ -87,7 +82,7 @@ export function Topbar({
                   </div>
                   <ul className="space-y-1">
                     {group.items.map((item) => {
-                      const active = isActive(pathname, item.href);
+                      const active = navItemActive(pathname, item);
                       const Icon = item.icon;
                       return (
                         <li key={item.href}>

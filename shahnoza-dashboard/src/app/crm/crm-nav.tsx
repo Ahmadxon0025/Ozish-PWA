@@ -9,6 +9,8 @@ const LINKS = [
   { href: "/crm/sotuv", label: "Sotuv" },
   { href: "/crm/lead", label: "Leadlar" },
   { href: "/crm/oquvchi", label: "Oquvchilar", also: "/crm/student" },
+  { href: "/crm/nps", label: "NPS" },
+  { href: "/crm/shahnoza", label: "Shahnoza" },
   { href: "/crm/config", label: "Config" },
 ] as const;
 

@@ -8,9 +8,13 @@ import type { Tarif } from "@/types/crm";
 export function ConvertButton({
   leadId,
   tarif,
+  amount,
+  priceMissing,
 }: {
   leadId: string;
   tarif: Tarif;
+  amount: number;
+  priceMissing?: boolean;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -25,7 +29,7 @@ export function ConvertButton({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           tarif,
-          amount: 0,
+          amount,
           payment_type: "Naqd",
         }),
       });
@@ -55,6 +59,11 @@ export function ConvertButton({
       >
         Oquvchi qil →
       </Button>
+      {priceMissing ? (
+        <p className="text-xs text-amber-600">
+          Narx topilmadi — to&apos;lov keyinroq qo&apos;shing.
+        </p>
+      ) : null}
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
     </div>
   );

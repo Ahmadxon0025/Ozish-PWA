@@ -14,7 +14,16 @@ function isAuthorized(request: Request): boolean {
   return request.headers.get("authorization") === `Bearer ${secret}`;
 }
 
+/** Vercel Cron sends GET; config panel POSTs. Same handler. */
+export async function GET(request: Request) {
+  return runCron(request);
+}
+
 export async function POST(request: Request) {
+  return runCron(request);
+}
+
+async function runCron(request: Request) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

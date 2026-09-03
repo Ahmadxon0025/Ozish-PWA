@@ -44,3 +44,6 @@ export function createServerSupabase(): SupabaseClient<Database> {
     },
   ) as unknown as SupabaseClient<Database>;
 }
+
+/** Alias used by CRM auth (`getCrmUser`). Same cookie-bound server client. */
+export const createClient = createServerSupabase;

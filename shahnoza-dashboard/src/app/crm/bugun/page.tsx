@@ -2,10 +2,12 @@ import { differenceInCalendarDays, parseISO } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { formatPct100 } from "@/lib/format";
+import { formatPct100, formatUzs } from "@/lib/format";
 import { todayKey, todayRange } from "@/lib/dates";
+import { assignedLeadIds, getCrmUser } from "@/lib/crm/auth";
 import { crmAdmin } from "@/lib/crm/db";
 import { maskPhone } from "@/lib/crm/phone";
+import { getRevenueToday } from "@/lib/crm/stats";
 import { CLOSED_STAGES, TARIF_BADGE_CLASS } from "@/lib/crm/constants";
 import type { CrmLead, CrmLog, Manba, Tarif } from "@/types/crm";
 
@@ -13,53 +15,46 @@ export const dynamic = "force-dynamic";
 
 type FollowUp = CrmLead & { overdue_days: number; last_log: string | null };
 
-async function assignedLeadIds(sotuvchiId: string | undefined): Promise<string[] | null> {
-  if (!sotuvchiId) return null;
-  const db = crmAdmin();
-  const { data, error } = await db
-    .from("crm_lead_sotuvchi")
-    .select("lead_id")
-    .eq("sotuvchi_id", sotuvchiId)
-    .eq("birlamchi", true);
-  if (error) throw new Error(error.message);
-  return ((data ?? []) as { lead_id: string }[]).map((r) => r.lead_id);
-}
-
-function applyCloserFilter<T extends { id: string }>(
-  rows: T[],
-  ids: string[] | null,
-): T[] {
-  if (!ids) return rows;
-  const set = new Set(ids);
-  return rows.filter((r) => set.has(r.id));
-}
-
-async function loadToday(sotuvchiId?: string) {
+async function loadToday(closerId?: string) {
   const db = crmAdmin();
   const range = todayRange();
   const today = todayKey();
-  const assigned = await assignedLeadIds(sotuvchiId);
+  const assigned = closerId ? await assignedLeadIds(closerId) : null;
+  if (assigned && assigned.length === 0) {
+    return {
+      newToday: [] as CrmLead[],
+      followUps: [] as FollowUp[],
+      closedToday: 0,
+      revenueToday: await getRevenueToday(db),
+    };
+  }
 
-  const { data: createdRows, error: createdError } = await db
+  let createdQuery = db
     .from("crm_leads")
     .select("*")
     .gte("yaratilgan", range.from)
     .lt("yaratilgan", range.to)
     .order("yaratilgan", { ascending: false });
+  if (assigned) createdQuery = createdQuery.in("id", assigned);
+
+  const { data: createdRows, error: createdError } = await createdQuery;
   if (createdError) throw new Error(createdError.message);
 
-  const newToday = applyCloserFilter((createdRows ?? []) as CrmLead[], assigned);
+  const newToday = (createdRows ?? []) as CrmLead[];
 
-  const { data: openRows, error: openError } = await db
+  let openQuery = db
     .from("crm_leads")
     .select("*")
     .not("bosqich", "in", `(${CLOSED_STAGES.join(",")})`)
     .not("keyingi_aloqa", "is", null)
     .lte("keyingi_aloqa", range.to)
     .order("keyingi_aloqa", { ascending: true });
+  if (assigned) openQuery = openQuery.in("id", assigned);
+
+  const { data: openRows, error: openError } = await openQuery;
   if (openError) throw new Error(openError.message);
 
-  const followRaw = applyCloserFilter((openRows ?? []) as CrmLead[], assigned);
+  const followRaw = (openRows ?? []) as CrmLead[];
 
   const followIds = followRaw.map((l) => l.id);
   const lastLog = new Map<string, string>();
@@ -89,39 +84,40 @@ async function loadToday(sotuvchiId?: string) {
     };
   });
 
-  const { data: wonRows, error: wonError } = await db
+  let wonQuery = db
     .from("crm_leads")
     .select("id, bosqich, yaratilgan")
     .eq("bosqich", "yutuq")
     .gte("yaratilgan", range.from)
     .lt("yaratilgan", range.to);
+  if (assigned) wonQuery = wonQuery.in("id", assigned);
+
+  const { data: wonRows, error: wonError } = await wonQuery;
   if (wonError) throw new Error(wonError.message);
 
-  const closedToday = applyCloserFilter(
-    (wonRows ?? []) as Pick<CrmLead, "id">[],
-    assigned,
-  ).length;
+  const closedToday = ((wonRows ?? []) as Pick<CrmLead, "id">[]).length;
 
-  return { newToday, followUps, closedToday };
+  const revenueToday = await getRevenueToday(db);
+
+  return { newToday, followUps, closedToday, revenueToday };
 }
 
-export default async function BugunPage({
-  searchParams,
-}: {
-  searchParams: { sotuvchi_id?: string };
-}) {
-  const sotuvchiId = searchParams.sotuvchi_id?.trim() || undefined;
+export default async function BugunPage() {
+  const crmUser = await getCrmUser();
+  const closerId = crmUser?.role === "closer" ? crmUser.id : undefined;
 
   let newToday: CrmLead[] = [];
   let followUps: FollowUp[] = [];
   let closedToday = 0;
+  let revenueToday = 0n;
   let loadError: string | null = null;
 
   try {
-    const data = await loadToday(sotuvchiId);
+    const data = await loadToday(closerId);
     newToday = data.newToday;
     followUps = data.followUps;
     closedToday = data.closedToday;
+    revenueToday = data.revenueToday;
   } catch (err) {
     loadError = err instanceof Error ? err.message : "Yuklash xatosi";
   }
@@ -134,7 +130,10 @@ export default async function BugunPage({
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Bugun</h1>
         <p className="text-sm text-muted-foreground">
-          Closer kuni{sotuvchiId ? ` · ${sotuvchiId.slice(0, 8)}…` : " · barcha closerlar"}
+          Closer kuni
+          {crmUser?.role === "closer"
+            ? ` · ${crmUser.name}`
+            : " · barcha closerlar"}
         </p>
       </div>
 
@@ -205,7 +204,7 @@ export default async function BugunPage({
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Bugungi raqamlar</h2>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -230,6 +229,16 @@ export default async function BugunPage({
             </CardHeader>
             <CardContent className="text-2xl font-semibold">
               {formatPct100(conversion)}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Daromad bugun
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-2xl font-semibold">
+              {formatUzs(Number(revenueToday))}
             </CardContent>
           </Card>
         </div>

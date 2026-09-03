@@ -79,6 +79,20 @@ export default async function LeadDetailPage({
   const days = daysInStage(lead.bosqich_updated_at);
   const hasPrice = price.narx > 0 || lead.narx != null;
 
+  let convertAmount = 0;
+  let priceMissing = true;
+  if (lead.cohort_id) {
+    try {
+      const window = await getPriceWindow(lead.cohort_id, lead.tarif);
+      if (window.narx > 0) {
+        convertAmount = window.narx;
+        priceMissing = false;
+      }
+    } catch {
+      priceMissing = true;
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
@@ -102,7 +116,12 @@ export default async function LeadDetailPage({
             </div>
 
             {lead.bosqich === "yutuq" && !existingStudent ? (
-              <ConvertButton leadId={lead.id} tarif={tarif} />
+              <ConvertButton
+                leadId={lead.id}
+                tarif={tarif}
+                amount={convertAmount}
+                priceMissing={priceMissing}
+              />
             ) : null}
 
             <div>

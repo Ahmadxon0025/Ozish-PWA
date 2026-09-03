@@ -1,4 +1,13 @@
-import type { LeadStage, PaymentStatus, PaymentType, StudentStage, Tarif } from "@/types/crm";
+import type {
+  CloserLevel,
+  LeadStage,
+  Manba,
+  NpsStage,
+  PaymentStatus,
+  PaymentType,
+  StudentStage,
+  Tarif,
+} from "@/types/crm";
 
 export const PIPELINE_STAGES: LeadStage[] = [
   "yangi_lead",
@@ -62,6 +71,7 @@ export const HARAKAT_LABELS: Record<string, string> = {
   ogohlantirish: "Ogohlantirish",
   qarz_eslatma: "Qarz eslatmasi",
   nps_boshlandi: "NPS boshlandi",
+  nps_javob: "NPS javob",
 };
 
 export const STUDENT_STAGES: StudentStage[] = [
@@ -91,6 +101,18 @@ export const STUDENT_STAGE_BADGE_CLASS: Record<StudentStage, string> = {
   xulosa_yozildi: "border-transparent bg-teal-100 text-teal-800",
 };
 
+export const NPS_STAGE_LABELS: Record<NpsStage, string> = {
+  nps_soraladi: "NPS so'raladi",
+  yuqori_ball: "Yuqori ball",
+  past_ball: "Past ball",
+};
+
+export const NPS_STAGE_BADGE_CLASS: Record<NpsStage, string> = {
+  nps_soraladi: "border-transparent bg-amber-100 text-amber-800",
+  yuqori_ball: "border-transparent bg-green-100 text-green-800",
+  past_ball: "border-transparent bg-red-100 text-red-800",
+};
+
 export const PAYMENT_TYPES: PaymentType[] = ["Naqd", "Uzum", "Ichki"];
 
 export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
@@ -106,6 +128,26 @@ export const PAYMENT_STATUS_BADGE_CLASS: Record<PaymentStatus, string> = {
 };
 
 export const TARIF_OPTIONS: Tarif[] = ["BAZA", "KASB", "BIZNES", "noma_lum"];
+
+export const MANBA_OPTIONS: Manba[] = [
+  "Konsultatsiya",
+  "Predzapis",
+  "Bot",
+  "DM",
+  "Tanish",
+  "Referral",
+  "Meta",
+  "Efir",
+  "Boshqa",
+];
+
+export const CLOSER_LEVEL_LABELS: Record<CloserLevel, string> = {
+  junior_closer: "Junior",
+  closer: "Closer",
+  senior_closer: "Senior",
+  off_calendar: "Off calendar",
+  terminated: "Terminated",
+};
 
 export const TARIF_BADGE_CLASS: Record<Tarif, string> = {
   BAZA: "border-transparent bg-blue-100 text-blue-800",

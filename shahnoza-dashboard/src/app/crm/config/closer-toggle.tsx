@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
 export function CloserToggle({
@@ -10,20 +11,28 @@ export function CloserToggle({
   closerId: string;
   isActive: boolean;
 }) {
+  const router = useRouter();
+  const [active, setActive] = useState(isActive);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function toggle() {
+    const next = !active;
     setPending(true);
     setError(null);
     try {
       const res = await fetch(`/api/crm/config/closer/${closerId}/toggle`, {
         method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_active: next }),
       });
-      const json = (await res.json()) as { error?: string };
+      const json = (await res.json()) as { error?: string; is_active?: boolean };
       if (!res.ok) {
         setError(json.error ?? "Yangilanmadi");
+        return;
       }
+      setActive(json.is_active ?? next);
+      router.refresh();
     } catch {
       setError("Yangilanmadi");
     } finally {
@@ -36,11 +45,11 @@ export function CloserToggle({
       <Button
         type="button"
         size="sm"
-        variant={isActive ? "default" : "outline"}
+        variant={active ? "default" : "outline"}
         disabled={pending}
         onClick={() => void toggle()}
       >
-        {isActive ? "Faol" : "Nofaol"}
+        {active ? "Faol" : "Nofaol"}
       </Button>
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
     </div>

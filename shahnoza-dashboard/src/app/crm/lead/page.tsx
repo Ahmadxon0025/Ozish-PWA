@@ -10,6 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { assignedLeadIds, getCrmUser } from "@/lib/crm/auth";
 import { crmAdmin } from "@/lib/crm/db";
 import { maskPhone } from "@/lib/crm/phone";
 import { closerNamesByLeadIds } from "@/lib/crm/leads";
@@ -41,6 +42,7 @@ async function loadLeads(filters: {
   q: string;
   bosqich: string;
   tarif: string;
+  closerId?: string;
 }): Promise<(CrmLead & { closer_name: string | null })[]> {
   const db = crmAdmin();
   let query = db
@@ -48,6 +50,12 @@ async function loadLeads(filters: {
     .select("*")
     .order("yaratilgan", { ascending: false })
     .limit(50);
+
+  if (filters.closerId) {
+    const ids = await assignedLeadIds(filters.closerId);
+    if (ids.length === 0) return [];
+    query = query.in("id", ids);
+  }
 
   if (filters.bosqich && ALL_STAGES.includes(filters.bosqich as LeadStage)) {
     query = query.eq("bosqich", filters.bosqich);
@@ -79,11 +87,13 @@ export default async function LeadListPage({
   const q = searchParams.q?.trim() ?? "";
   const bosqich = searchParams.bosqich?.trim() ?? "";
   const tarif = searchParams.tarif?.trim() ?? "";
+  const crmUser = await getCrmUser();
+  const closerId = crmUser?.role === "closer" ? crmUser.id : undefined;
 
   let leads: Awaited<ReturnType<typeof loadLeads>> = [];
   let loadError: string | null = null;
   try {
-    leads = await loadLeads({ q, bosqich, tarif });
+    leads = await loadLeads({ q, bosqich, tarif, closerId });
   } catch (err) {
     loadError = err instanceof Error ? err.message : "Yuklash xatosi";
   }

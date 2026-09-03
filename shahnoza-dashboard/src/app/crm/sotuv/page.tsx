@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { formatUzs } from "@/lib/format";
 import { todayKey } from "@/lib/dates";
+import { assignedLeadIds, getCrmUser } from "@/lib/crm/auth";
 import { crmAdmin } from "@/lib/crm/db";
 import { maskPhone } from "@/lib/crm/phone";
 import {
@@ -29,13 +30,21 @@ function daysInStage(iso: string | null | undefined): number {
   }
 }
 
-async function loadBoardLeads(): Promise<BoardLead[]> {
+async function loadBoardLeads(closerId?: string): Promise<BoardLead[]> {
   const db = crmAdmin();
-  const { data: rows, error } = await db
+  let query = db
     .from("crm_leads")
     .select("*")
     .not("bosqich", "in", `(${CLOSED_STAGES.join(",")})`)
     .order("yaratilgan", { ascending: false });
+
+  if (closerId) {
+    const ids = await assignedLeadIds(closerId);
+    if (ids.length === 0) return [];
+    query = query.in("id", ids);
+  }
+
+  const { data: rows, error } = await query;
 
   if (error) throw new Error(error.message);
 
@@ -81,10 +90,13 @@ async function loadBoardLeads(): Promise<BoardLead[]> {
 }
 
 export default async function SotuvPage() {
+  const crmUser = await getCrmUser();
+  const closerId = crmUser?.role === "closer" ? crmUser.id : undefined;
+
   let leads: BoardLead[] = [];
   let loadError: string | null = null;
   try {
-    leads = await loadBoardLeads();
+    leads = await loadBoardLeads(closerId);
   } catch (err) {
     loadError = err instanceof Error ? err.message : "Yuklash xatosi";
   }

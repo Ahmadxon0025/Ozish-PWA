@@ -39,6 +39,19 @@ export const STAGE_ACCENT: Record<LeadStage, string> = {
   vozvrat: "border-t-zinc-400",
 };
 
+/** Filled header strip — same palette as STAGE_ACCENT. */
+export const STAGE_STRIP: Record<LeadStage, string> = {
+  yangi_lead: "bg-blue-500",
+  aloqa_kutilmoqda: "bg-sky-500",
+  birinchi_aloqa: "bg-indigo-500",
+  malumot_yuborildi: "bg-violet-500",
+  qiziqarli: "bg-amber-500",
+  to_lov_qilinmoqda: "bg-orange-500",
+  yutuq: "bg-emerald-500",
+  muvaffaqiyatsizlik: "bg-red-500",
+  vozvrat: "bg-zinc-400",
+};
+
 export const BOSQICH_LABELS: Record<LeadStage, string> = {
   yangi_lead: "Yangi lead",
   aloqa_kutilmoqda: "Aloqa kutilmoqda",

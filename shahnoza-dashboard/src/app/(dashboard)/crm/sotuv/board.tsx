@@ -20,10 +20,12 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { formatUzs } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import {
   initials,
   PIPELINE_STAGES,
   STAGE_ACCENT,
+  STAGE_STRIP,
   TARIF_BADGE_CLASS,
 } from "@/lib/crm/constants";
 import type { LeadStage, Tarif } from "@/types/crm";
@@ -88,27 +90,35 @@ function DealCardBody({
   dragHandle?: React.ReactNode;
 }) {
   const tarif = lead.tarif;
+  const assigned = Boolean(lead.closer_name?.trim());
   return (
-    <article className="rounded-lg border bg-card p-2.5 shadow-sm transition-shadow hover:shadow-md">
-      <div className="flex items-start gap-1.5">
+    <article className="rounded-md border bg-card p-2 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+      <div className="flex items-start gap-1">
         {dragHandle}
         <div className="min-w-0 flex-1">
           <Link
             href={`/crm/lead/${lead.id}`}
             onPointerDown={stop}
-            className="block truncate text-sm font-semibold hover:underline"
+            className="block truncate text-sm font-bold hover:underline"
           >
             {lead.ism}
           </Link>
-          <p className="truncate text-xs text-muted-foreground">{lead.telefon}</p>
+          <p className="text-xs font-semibold">{formatUzs(lead.narx)}</p>
         </div>
-        <Avatar className="h-6 w-6 shrink-0 bg-muted">
-          <AvatarFallback className="bg-muted text-[9px] text-muted-foreground">
-            {initials(lead.closer_name)}
+        <Avatar className="h-6 w-6 shrink-0">
+          <AvatarFallback
+            className={cn(
+              "text-[9px] font-medium",
+              assigned
+                ? "bg-emerald-100 text-emerald-800"
+                : "bg-muted text-muted-foreground",
+            )}
+          >
+            {assigned ? initials(lead.closer_name) : "?"}
           </AvatarFallback>
         </Avatar>
       </div>
-      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+      <div className="mt-1.5 flex flex-wrap items-center gap-1">
         <Badge
           className={
             TARIF_BADGE_CLASS[tarif] ?? TARIF_BADGE_CLASS.noma_lum
@@ -116,7 +126,6 @@ function DealCardBody({
         >
           {tarif}
         </Badge>
-        <span className="text-xs font-medium">{formatUzs(lead.narx)}</span>
         <span
           className={
             lead.days_in_stage > 2
@@ -166,20 +175,25 @@ function Column({
   return (
     <section
       ref={setNodeRef}
-      className={`flex w-[300px] shrink-0 flex-col rounded-xl border border-t-4 bg-muted/30 ${
-        STAGE_ACCENT[column.stage]
-      } ${isOver ? "bg-primary/10 ring-2 ring-primary" : ""}`}
+      className={cn(
+        "flex w-[272px] shrink-0 flex-col overflow-hidden rounded-xl border bg-muted/25 shadow-sm",
+        STAGE_ACCENT[column.stage],
+        isOver && "bg-primary/10 ring-2 ring-primary",
+      )}
     >
-      <header className="border-b px-3 py-2.5">
+      <div className={cn("h-1.5 w-full", STAGE_STRIP[column.stage])} />
+      <header className="border-b bg-card/80 px-2.5 py-2">
         <div className="flex items-center justify-between gap-2">
           <h2 className="truncate text-sm font-semibold">{column.label}</h2>
-          <Badge variant="secondary" className="shrink-0">
+          <Badge variant="secondary" className="h-5 shrink-0 px-1.5 text-[11px]">
             {column.count}
           </Badge>
         </div>
-        <p className="mt-0.5 text-xs text-muted-foreground">Σ {formatUzs(column.sum)}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          Σ {formatUzs(column.sum)}
+        </p>
       </header>
-      <div className="min-h-[8rem] flex-1 space-y-2 overflow-y-auto p-2">{children}</div>
+      <div className="min-h-[8rem] flex-1 space-y-1.5 overflow-y-auto p-1.5">{children}</div>
     </section>
   );
 }
@@ -258,7 +272,7 @@ export function SotuvBoard({ columns: initial }: { columns: SotuvColumn[] }) {
       }}
     >
       <div className="overflow-x-auto overflow-y-hidden">
-        <div className="flex min-h-[calc(100dvh-14rem)] gap-3 pb-2">
+        <div className="flex min-h-[calc(100dvh-14rem)] gap-2 pb-2">
           {columns.map((column) => (
             <Column key={column.stage} column={column}>
               {column.leads.length === 0 ? (

@@ -14,6 +14,7 @@ import { assignedLeadIds, getCrmUser } from "@/lib/crm/auth";
 import { crmAdmin } from "@/lib/crm/db";
 import { maskPhone } from "@/lib/crm/phone";
 import { closerNamesByLeadIds } from "@/lib/crm/leads";
+import { listActiveCohorts, listClosers } from "@/lib/crm/users";
 import {
   ALL_STAGES,
   BOSQICH_LABELS,
@@ -21,6 +22,7 @@ import {
   TARIF_OPTIONS,
 } from "@/lib/crm/constants";
 import type { CrmLead, LeadStage, Tarif } from "@/types/crm";
+import { NewDealDialog } from "../new-deal-dialog";
 import { LeadToolbar } from "./lead-toolbar";
 
 export const dynamic = "force-dynamic";
@@ -97,17 +99,33 @@ export default async function LeadListPage({
 
   let leads: Awaited<ReturnType<typeof loadLeads>> = [];
   let loadError: string | null = null;
+  let closers: Awaited<ReturnType<typeof listClosers>> = [];
+  let cohorts: Awaited<ReturnType<typeof listActiveCohorts>> = [];
   try {
-    leads = await loadLeads({ q, bosqich, tarif, closerId });
+    const [leadRows, closerRows, cohortRows] = await Promise.all([
+      loadLeads({ q, bosqich, tarif, closerId }),
+      listClosers(),
+      listActiveCohorts(),
+    ]);
+    leads = leadRows;
+    closers = closerRows;
+    cohorts = cohortRows;
   } catch (err) {
     loadError = err instanceof Error ? err.message : "Yuklash xatosi";
   }
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Leadlar</h1>
-        <p className="text-sm text-muted-foreground">Ro&apos;yxat — oxirgi 50</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Leadlar</h1>
+          <p className="text-sm text-muted-foreground">Ro&apos;yxat — oxirgi 50</p>
+        </div>
+        <NewDealDialog
+          closers={closers}
+          cohorts={cohorts}
+          defaultCohortId={cohorts[0]?.id ?? ""}
+        />
       </div>
 
       <LeadToolbar q={q} bosqich={bosqich} tarif={tarif} />

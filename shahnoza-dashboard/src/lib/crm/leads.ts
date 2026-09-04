@@ -2,6 +2,11 @@ import { differenceInCalendarDays, parseISO } from "date-fns";
 import { todayKey } from "@/lib/dates";
 import { crmAdmin } from "./db";
 
+export type AssignedCloser = {
+  id: string;
+  full_name: string;
+};
+
 export function daysInStage(iso: string | null | undefined): number {
   if (!iso) return 0;
   const day = iso.slice(0, 10);
@@ -12,10 +17,10 @@ export function daysInStage(iso: string | null | undefined): number {
   }
 }
 
-export async function closerNamesByLeadIds(
+export async function closerAssignmentsByLeadIds(
   leadIds: string[],
-): Promise<Map<string, string>> {
-  const result = new Map<string, string>();
+): Promise<Map<string, AssignedCloser>> {
+  const result = new Map<string, AssignedCloser>();
   if (leadIds.length === 0) return result;
 
   const db = crmAdmin();
@@ -32,21 +37,32 @@ export async function closerNamesByLeadIds(
   if (sotuvchiIds.length === 0) return result;
 
   const { data: users, error: userError } = await db
-    .from("crm_users")
-    .select("id, name")
+    .from("users")
+    .select("id, full_name")
     .in("id", sotuvchiIds);
 
   if (userError) throw new Error(userError.message);
 
   const names = new Map<string, string>();
-  for (const u of (users ?? []) as { id: string; name: string }[]) {
-    names.set(u.id, u.name);
+  for (const u of (users ?? []) as { id: string; full_name: string }[]) {
+    names.set(u.id, u.full_name ?? "");
   }
 
   for (const a of rows) {
-    const name = names.get(a.sotuvchi_id);
-    if (name) result.set(a.lead_id, name);
+    const full_name = names.get(a.sotuvchi_id);
+    if (full_name) result.set(a.lead_id, { id: a.sotuvchi_id, full_name });
   }
 
+  return result;
+}
+
+export async function closerNamesByLeadIds(
+  leadIds: string[],
+): Promise<Map<string, string>> {
+  const assignments = await closerAssignmentsByLeadIds(leadIds);
+  const result = new Map<string, string>();
+  for (const [leadId, closer] of assignments) {
+    result.set(leadId, closer.full_name);
+  }
   return result;
 }

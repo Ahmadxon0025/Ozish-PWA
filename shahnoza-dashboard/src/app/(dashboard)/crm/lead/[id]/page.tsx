@@ -5,12 +5,14 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { formatUzs } from "@/lib/format";
 import { crmAdmin } from "@/lib/crm/db";
-import { closerNamesByLeadIds, daysInStage } from "@/lib/crm/leads";
+import { closerAssignmentsByLeadIds, daysInStage } from "@/lib/crm/leads";
 import { fetchLeadLogs } from "@/lib/crm/log";
 import { getPriceWindow, type PriceWindow } from "@/lib/crm/pricing";
+import { listClosers } from "@/lib/crm/users";
 import { initials, TARIF_BADGE_CLASS } from "@/lib/crm/constants";
 import type { CrmCohort, CrmLead, LeadStage, Tarif } from "@/types/crm";
 import { AddLogForm } from "./add-log-form";
+import { AssigneeSelect } from "./assignee-select";
 import { LogTimeline } from "./log-timeline";
 import { NextContactInput } from "./next-contact";
 import { ConvertButton } from "./convert-button";
@@ -74,8 +76,9 @@ export default async function LeadDetailPage({
   if (!data?.id) notFound();
 
   const lead = data as CrmLead;
-  const [closers, logs, price, existingStudent, cohort] = await Promise.all([
-    closerNamesByLeadIds([lead.id]),
+  const [assignments, closerOptions, logs, price, existingStudent, cohort] = await Promise.all([
+    closerAssignmentsByLeadIds([lead.id]),
+    listClosers(),
     fetchLeadLogs(lead.id, 50),
     loadPrice(lead),
     db
@@ -101,7 +104,8 @@ export default async function LeadDetailPage({
       : Promise.resolve(null),
   ]);
 
-  const closerName = closers.get(lead.id) ?? null;
+  const assigned = assignments.get(lead.id) ?? null;
+  const closerName = assigned?.full_name ?? null;
   const tarif = lead.tarif as Tarif;
   const days = daysInStage(lead.bosqich_updated_at);
   const displayNarx = price.narx > 0 ? price.narx : Number(lead.narx ?? 0);
@@ -139,10 +143,11 @@ export default async function LeadDetailPage({
                 {initials(closerName)}
               </AvatarFallback>
             </Avatar>
-            <div className="leading-tight">
-              <p className="text-xs text-muted-foreground">Mas&apos;ul</p>
-              <p className="font-medium">{closerName ?? "tayinlanmagan"}</p>
-            </div>
+            <AssigneeSelect
+              leadId={lead.id}
+              closers={closerOptions}
+              currentId={assigned?.id ?? null}
+            />
           </div>
           <div className="leading-tight text-right">
             <p className="text-xs text-muted-foreground">Yaratilgan</p>

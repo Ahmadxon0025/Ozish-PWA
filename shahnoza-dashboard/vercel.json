@@ -23,7 +23,7 @@
     },
     {
       "path": "/api/crm/cron",
-      "schedule": "0 * * * *"
+      "schedule": "0 6 * * *"
     }
   ]
 }

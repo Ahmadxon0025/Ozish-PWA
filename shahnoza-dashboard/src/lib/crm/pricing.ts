@@ -74,7 +74,11 @@ export async function getPriceWindow(
 
   if (!windowRow || windowPrice == null) {
     if (base == null) {
-      throw new Error(`Narx topilmadi: cohort=${cohortId} tarif=${tarif}`);
+      // No price configured for this tarif (e.g. noma_lum — a lead that has not
+      // picked a tariff yet). This is not an error: the lead simply has no price
+      // until a closer sets the tarif. Return 0 instead of throwing so intake
+      // from forms/webhooks (which default to noma_lum) succeeds.
+      return { narx: 0, eski_narx: null, chegirma_foiz: null };
     }
     return { narx: base, eski_narx: null, chegirma_foiz: null };
   }

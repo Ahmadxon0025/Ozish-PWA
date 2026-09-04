@@ -5,7 +5,7 @@ import type { Database } from "@/types/database";
 
 // "/kurs" and "/akademiya" are public marketing landing pages (served from
 // public/) — ad traffic must reach them without logging into the dashboard.
-const PUBLIC_PATHS = ["/login", "/auth", "/kurs", "/akademiya"];
+const PUBLIC_PATHS = ["/login", "/auth", "/kurs", "/akademiya", "/crm/f"];
 
 /**
  * Refreshes the Supabase session cookie on every request and gates access to
@@ -51,7 +51,12 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
-  const isPublic = PUBLIC_PATHS.some((p) => path.startsWith(p));
+  // "/crm/f" is the public form prefix — do not treat "/crm/forms" as public.
+  const isPublic = PUBLIC_PATHS.some((p) =>
+    p === "/crm/f"
+      ? path === "/crm/f" || path.startsWith("/crm/f/")
+      : path.startsWith(p),
+  );
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();

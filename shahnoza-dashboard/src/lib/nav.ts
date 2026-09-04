@@ -32,6 +32,7 @@ import {
   GraduationCap,
   Star,
   SlidersHorizontal,
+  FileText,
   type LucideIcon,
 } from "lucide-react";
 
@@ -78,6 +79,7 @@ export const NAV_GROUPS: NavGroup[] = [
         also: ["/crm/student"],
       },
       { label: "NPS", href: "/crm/nps", icon: Star, roles: SALES_VIEW },
+      { label: "Formalar", href: "/crm/forms", icon: FileText, roles: OWNER_ROLES },
       { label: "CRM Sozlama", href: "/crm/config", icon: SlidersHorizontal, roles: OWNER_ROLES },
     ],
   },

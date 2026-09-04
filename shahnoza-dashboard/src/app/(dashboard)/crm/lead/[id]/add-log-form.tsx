@@ -3,23 +3,20 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  HARAKAT_LABELS,
-  MANUAL_LOG_HARAKAT,
-  type ManualLogHarakat,
-} from "@/lib/crm/constants";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
+
+const TABS = [
+  { id: "izoh", label: "Izoh" },
+  { id: "qongiroq", label: "Qo'ng'iroq" },
+  { id: "vazifa", label: "Vazifa" },
+] as const;
+
+type TabId = (typeof TABS)[number]["id"];
 
 export function AddLogForm({ leadId }: { leadId: string }) {
   const router = useRouter();
-  const [harakat, setHarakat] = useState<ManualLogHarakat>("qongiroq");
+  const [tab, setTab] = useState<TabId>("izoh");
   const [izoh, setIzoh] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +30,7 @@ export function AddLogForm({ leadId }: { leadId: string }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          harakat,
+          harakat: tab,
           izoh: izoh.trim() || undefined,
         }),
       });
@@ -43,7 +40,6 @@ export function AddLogForm({ leadId }: { leadId: string }) {
         return;
       }
       setIzoh("");
-      setHarakat("qongiroq");
       router.refresh();
     } catch {
       setError("Yozilmadi");
@@ -53,42 +49,46 @@ export function AddLogForm({ leadId }: { leadId: string }) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-3 rounded-xl border bg-card p-4">
-      <div className="grid gap-3 sm:grid-cols-[200px_1fr_auto] sm:items-end">
-        <div className="space-y-1.5">
-          <Label>Harakat</Label>
-          <Select
-            value={harakat}
-            onValueChange={(v) => setHarakat(v as ManualLogHarakat)}
+    <form onSubmit={onSubmit} className="rounded-lg border bg-card">
+      <div className="flex border-b">
+        {TABS.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => setTab(item.id)}
+            className={cn(
+              "px-3 py-2 text-xs font-medium",
+              tab === item.id
+                ? "border-b-2 border-primary text-foreground"
+                : "text-muted-foreground hover:text-foreground",
+            )}
           >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {MANUAL_LOG_HARAKAT.map((action) => (
-                <SelectItem key={action} value={action}>
-                  {HARAKAT_LABELS[action]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="log-izoh">Izoh</Label>
-          <textarea
-            id="log-izoh"
-            value={izoh}
-            onChange={(e) => setIzoh(e.target.value)}
-            rows={2}
-            placeholder="Ixtiyoriy izoh..."
-            className="flex min-h-[44px] w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-          />
-        </div>
-        <Button type="submit" disabled={pending}>
-          Qo&apos;shish
-        </Button>
+            {item.label}
+          </button>
+        ))}
       </div>
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      <div className="space-y-2 p-3">
+        <Textarea
+          value={izoh}
+          onChange={(e) => setIzoh(e.target.value)}
+          rows={3}
+          placeholder={
+            tab === "vazifa"
+              ? "Vazifa matni..."
+              : tab === "qongiroq"
+                ? "Qo'ng'iroq izohi..."
+                : "Izoh yozing..."
+          }
+          className="min-h-[72px] text-sm"
+          disabled={pending}
+        />
+        <div className="flex items-center justify-end gap-2">
+          {error ? <p className="mr-auto text-xs text-destructive">{error}</p> : null}
+          <Button type="submit" size="sm" disabled={pending}>
+            Qo&apos;shish
+          </Button>
+        </div>
+      </div>
     </form>
   );
 }

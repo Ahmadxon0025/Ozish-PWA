@@ -72,6 +72,7 @@ export const HARAKAT_LABELS: Record<string, string> = {
   whatsapp: "WhatsApp",
   telegram: "Telegram",
   izoh: "Izoh",
+  vazifa: "Vazifa",
   created: "Yaratildi",
   call_attempt: "Qo'ng'iroq urinishi",
   call_connected: "Qo'ng'iroq ulandi",
